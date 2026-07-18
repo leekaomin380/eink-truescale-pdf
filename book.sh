@@ -125,9 +125,11 @@ print -r -- "   已生成 PDF 大纲（书签）与正文目录页"
 # ---- 可选投递 ---------------------------------------------------------------
 if (( DELIVER )); then
   [[ -d "$QUADERNO_APP" ]] || die "未找到 QUADERNO 客户端"
-  # 客户端会在上传后删除源文件，故投递副本，保留原始产物
-  COPY="$WORKDIR/${OUT:t}"
-  cp "$OUT" "$COPY"
+  # 客户端会在上传后删除源文件，故投递副本，保留原始产物。
+  # 副本名必须与 OUT 不同 —— 若 OUT 本身就落在 WORKDIR 内（如 -o /tmp/x.pdf），
+  # 同名会导致 cp 自拷贝失败，客户端随后把原始产物吃掉，等于静默数据丢失。
+  COPY="$WORK/deliver_${OUT:t}"
+  cp "$OUT" "$COPY" || die "无法创建投递副本"
   print -r -- "→ 投递到设备…"
   open -gj -na "$QUADERNO_APP" --args --print "$COPY"
   for i in $(seq 1 300); do [[ -f "$COPY" ]] || break; sleep 0.2; done
