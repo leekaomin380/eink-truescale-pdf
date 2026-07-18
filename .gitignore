@@ -1,0 +1,5 @@
+# 投递/渲染临时产物（正常落 /tmp，此处兜底）
+quaderno_delivery_*.pdf
+quaderno_render_*.log
+*.png
+.DS_Store
