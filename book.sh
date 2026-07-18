@@ -33,11 +33,32 @@ while (( $# )); do
   case "$1" in
     --deliver|-d) DELIVER=1 ;;
     --lang)       shift; DOC_LANG="${1:-zh}" ;;
+    --size)       shift; BODY_SIZE="${1:-10pt}" ;;
+    --font)       shift; FONTS=("${(@s:,:)1}") ;;      # 逗号分隔：拉丁在前，CJK 在后
+    --margin)     shift; PAGE_MARGIN="${1:-10mm}" ;;
+    --leading)    shift; LEADING="${1:-0.85em}" ;;
     -o)           shift; OUT="${1:-}" ;;
     -h|--help)
       print -r -- "用法: book.sh <书文件> [-o 输出.pdf] [--deliver]"
       print -r -- "支持: epub / fb2 / html / md（mobi/azw 需安装 calibre）"
-      print -r -- "选项: --lang zh|en   文档语言，影响目录标题与断行（默认 zh）"
+      print -r -- ""
+      print -r -- "选项:"
+      print -r -- "  --lang zh|en      文档语言，影响目录标题与 CJK 断行（默认 zh）"
+      print -r -- "  --size 11pt       正文字号（默认 $BODY_SIZE）"
+      print -r -- "  --font \"A,B\"      字体 fallback，逗号分隔，拉丁在前 CJK 在后"
+      print -r -- "  --margin 12mm     页边距（默认 $PAGE_MARGIN）"
+      print -r -- "  --leading 0.9em   行距（默认 $LEADING）"
+      print -r -- ""
+      print -r -- "建议范围（页宽 $PAGE_W，1:1 无缩放前提下）:"
+      print -r -- "  中文  10-12pt  —— 10.5pt 即传统五号，中文书正文标准字号"
+      print -r -- "                    目标 32-40 字/行；黑体类优于宋体（见下）"
+      print -r -- "  英文  11-12.5pt —— 拉丁字符窄，同样版心下字号需比中文大，"
+      print -r -- "                    否则每行超 75 字符，超出理想行长上限"
+      print -r -- "  边距  10-14mm   行距 0.8-1.0em"
+      print -r -- ""
+      print -r -- "字体选择：墨水屏 227ppi 且对比度低于印刷，高笔画对比度的字体"
+      print -r -- "（宋体/明朝体、Didone 类衬线）细横笔会被抗锯齿冲淡，显灰发虚。"
+      print -r -- "宜选笔画均匀的黑体/无衬线，或低对比度衬线（如 Charter）。"
       exit 0 ;;
     *)            SRC="$1" ;;
   esac
