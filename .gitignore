@@ -1,5 +1,7 @@
 # 投递/渲染临时产物（正常落 /tmp，此处兜底）
 quaderno_delivery_*.pdf
 quaderno_render_*.log
-*.png
 .DS_Store
+
+# 根目录下的临时预览图不入库，但 docs/assets 下的文档插图必须保留
+/*.png
