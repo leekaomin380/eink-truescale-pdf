@@ -97,6 +97,7 @@ cd "$WORK" || die "无法进入工作目录"     # 铁律：pandoc 需可写沙�
 if ! pandoc "$INPUT" -f "$FROM" \
       --template="$TEMPLATE" \
       --toc --toc-depth=3 -V "lang=$DOC_LANG" \
+      --lua-filter="$SCRIPT_DIR/book-filter.lua" \
       -M date="" \
       "${FONTARGS[@]}" \
       -V "pagewidth=$PAGE_W" -V "pageheight=$PAGE_H" -V "pagemargin=$PAGE_MARGIN" \

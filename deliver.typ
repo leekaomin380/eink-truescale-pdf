@@ -39,12 +39,6 @@ $header-includes$
 
 $endfor$
 #show: doc => conf(
-$if(title)$
-  title: [$title$],
-$endif$
-$if(subtitle)$
-  subtitle: [$subtitle$],
-$endif$
 $if(author)$
   authors: (
 $for(author)$
@@ -119,17 +113,6 @@ $endif$
   doc,
 )
 
-$for(include-before)$
-$include-before$
-
-$endfor$
-$if(toc)$
-#outline(
-  title: auto,
-  depth: $toc-depth$
-);
-$endif$
-
 $if(pagewidth)$
 #set page(width: $pagewidth$, height: $pageheight$$if(pagemargin)$, margin: $pagemargin$$endif$)
 $endif$
@@ -142,6 +125,24 @@ $endif$
 $if(leading)$
 #set par(leading: $leading$)
 $endif$
+$if(title)$
+#align(center)[
+  #block(above: 1.2em, below: 0.6em)[#text(1.5em, weight: "bold")[$title$]]
+$if(subtitle)$  #block(below: 0.6em)[#text(1.05em)[$subtitle$]]
+$endif$$if(author)$  #block(below: 1.6em)[#text(0.95em)[$for(author)$$author$$sep$, $endfor$]]
+$endif$]
+$endif$
+$for(include-before)$
+$include-before$
+
+$endfor$
+$if(toc)$
+#outline(
+  title: auto,
+  depth: $toc-depth$
+);
+$endif$
+
 $body$
 
 $if(citations)$
