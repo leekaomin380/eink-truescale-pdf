@@ -33,6 +33,7 @@ while (( $# )); do
   case "$1" in
     --deliver|-d) DELIVER=1 ;;
     --lang)       shift; DOC_LANG="${1:-zh}" ;;
+    --page)       shift; PAGE_W="${1}"; shift; PAGE_H="${1}" ;;
     --size)       shift; BODY_SIZE="${1:-10pt}" ;;
     --font)       shift; FONTS=("${(@s:,:)1}") ;;      # 逗号分隔：拉丁在前，CJK 在后
     --margin)     shift; PAGE_MARGIN="${1:-10mm}" ;;

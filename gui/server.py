@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
 BOOK_SH = REPO / "book.sh"
 CONFIG_SH = REPO / "config.sh"
+DEVICES_JSON = REPO / "devices.json"
 WORK = Path(tempfile.gettempdir()) / "p2q_gui"
 WORK.mkdir(exist_ok=True)
 
@@ -58,6 +59,14 @@ def read_config():
         "lang": grab("DOC_LANG", "zh"),
         "fonts": font_list,
     }
+
+
+def load_devices():
+    """设备档案 —— 显示区尺寸不再硬编码，便于扩展与社区贡献。"""
+    try:
+        return json.loads(DEVICES_JSON.read_text(encoding="utf-8"))["devices"]
+    except Exception:
+        return []
 
 
 def list_fonts():
@@ -127,7 +136,8 @@ def convert(src: Path, cfg, out: Path):
     cmd = [str(BOOK_SH), str(src), "-o", str(out),
            "--size", cfg["size"], "--margin", cfg["margin"],
            "--leading", cfg["leading"], "--lang", cfg["lang"],
-           "--font", ",".join(cfg["fonts"])]
+           "--font", ",".join(cfg["fonts"]),
+           "--page", cfg["page_w"], cfg["page_h"]]
     return sh(cmd)
 
 
@@ -170,6 +180,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(html)
         elif path == "/api/init":
             self._json({"config": read_config(), "fonts": list_fonts(),
+                        "devices": load_devices(),
                         "has_poppler": bool(shutil.which("pdftoppm"))})
         elif path.startswith("/preview.png"):
             f = WORK / "current_preview.png"
@@ -217,17 +228,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"ok": False, "error": err}); return
             shutil.copy(img, WORK / "current_preview.png")
             self._json({"ok": True, "url": "/preview.png?p=" + str(page)})
-
-        elif path == "/api/deliver":
-            pdf = Path(payload["pdf"])
-            app = "/Applications/QUADERNO PC App.app"
-            if not Path(app).exists():
-                self._json({"ok": False, "error": "未找到 QUADERNO 客户端"}); return
-            # 客户端上传后会 unlink 源文件 —— 必须投递副本，保护产物（不变量 I2）
-            copy = WORK / ("deliver_" + pdf.name)
-            shutil.copy(pdf, copy)
-            sh(["open", "-gj", "-na", app, "--args", "--print", str(copy)])
-            self._json({"ok": True})
 
         elif path == "/api/save":
             pdf = Path(payload["pdf"])
