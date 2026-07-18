@@ -136,6 +136,9 @@ $endif$
 $if(bodysize)$
 #set text(size: $bodysize$)
 $endif$
+$if(chapterbreak)$
+#show heading.where(level: 1): it => { pagebreak(weak: true); it }
+$endif$
 $if(leading)$
 #set par(leading: $leading$)
 $endif$

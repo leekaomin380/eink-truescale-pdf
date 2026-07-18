@@ -7,31 +7,6 @@
 # 设计依据见项目 README。作者约定的铁律：强制 /tmp 沙盒、指令与数据物理隔离。
 # =============================================================================
 
-# ---- 配置区（未来只改这里）------------------------------------------------
-# 字体 fallback 列表：第一个覆盖拉丁，后续覆盖中文/其它。加字体只需往数组追加。
-# 中英统一无衬线，质感一致（对照 Bear 导出效果调校）。
-FONTS=("Helvetica Neue" "PingFang SC")
-
-# 版面：按 Quaderno A5 显示区物理尺寸出纸，实现 1:1 显示、零缩放、零留边。
-# 依据 FMVDP51 规格 1404×1872 px @ 227dpi → 157.1mm × 209.5mm（宽高比 3:4）。
-# 若改用 A4 机型，只需替换这两个值为该机型显示区尺寸。
-PAGE_W="157.1mm"
-PAGE_H="209.5mm"
-PAGE_MARGIN="10mm"                   # 屏幕阅读无需装订位，窄边距换取更大版心
-BODY_SIZE="10pt"                     # 1:1 已实测确认（尺子量 100mm 基准线正好 100mm），
-                                     # 故此值即屏幕上的真实物理字号。pt = point = 1/72 英寸。
-LEADING="0.85em"                     # 行距，墨水屏宜宽松
-
-# Markdown 方言：载荷是"任意粘贴的对话文本"，必须关掉两个会误伤的默认扩展：
-#   -citations        : 否则 "@227dpi"/"@某人"/邮箱 会被当文献引用 → typst 报
-#                       "the document does not contain a bibliography" 直接渲染失败
-#   -tex_math_dollars : 否则正文里的 $PATH / $1 / $mainfont$ 会被当数学公式吃掉
-MD_FORMAT="markdown-citations-tex_math_dollars"
-
-QUADERNO_APP="/Applications/QUADERNO PC App.app"
-WORKDIR="/tmp"                       # 铁律：只读根目录规避，pandoc 临时文件须落沙盒
-DELIVER_TIMEOUT=15                   # 监听送达结果的最长秒数
-# ---------------------------------------------------------------------------
 
 set -uo pipefail
 
@@ -45,6 +20,8 @@ export LC_ALL="en_US.UTF-8"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 SCRIPT_DIR="${0:A:h}"
+source "$SCRIPT_DIR/config.sh"   # 页面几何、字体、方言等共享配置
+DELIVER_TIMEOUT=15                 # 监听送达结果的最长秒数
 TEMPLATE="$SCRIPT_DIR/deliver.typ"
 OUT="$WORKDIR/quaderno_delivery_$$.pdf"     # PID 命名，隔离并发
 ERRLOG="$WORKDIR/quaderno_render_$$.log"

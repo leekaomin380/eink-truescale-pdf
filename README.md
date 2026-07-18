@@ -117,11 +117,52 @@ watches that log so that a failed send cannot masquerade as a successful one.
 
 ---
 
+## Converting ebooks
+
+QUADERNO only accepts PDF, but most ebooks are EPUB. Converting them usually looks bad —
+and now we know why: the output gets rendered at A4 or Letter, then squeezed onto a smaller
+screen, shrinking the text and blurring every glyph. Same root cause as everything else here.
+
+`book.sh` converts at the display's exact physical size instead:
+
+```bash
+./book.sh some-book.epub                 # writes some-book.pdf next to it
+./book.sh some-book.epub --deliver       # convert and send to the device
+./book.sh some-book.epub --lang en       # English book (affects TOC title, line breaking)
+./book.sh some-book.epub -o out.pdf      # explicit output path
+```
+
+You get:
+
+- **1:1 rendering** at the device's physical dimensions — no downscaling, no resampling
+- **PDF outline (bookmarks)** generated automatically from the heading hierarchy
+- **A table of contents page** with page numbers, up to three levels deep
+- **Each chapter starts on a new page**
+- **Title and author carried over** from the ebook's metadata
+
+| Format | How |
+|---|---|
+| `.epub` `.fb2` `.html` `.md` | Directly, via pandoc |
+| `.mobi` `.azw` `.azw3` | Via Calibre (`brew install --cask calibre`), converted to EPUB first |
+
+> DRM-protected files cannot be converted. That is not a limitation we can work around.
+
+It's a separate script from `deliver.sh` on purpose: a clipboard snippet renders in half a
+second and is thrown away, while a book takes far longer, needs chapters and a TOC, and
+should be kept. Different lifecycles, different tools.
+
+**Does your device show PDF bookmarks?** We generate them, but whether QUADERNO's reader
+exposes an outline navigator is not yet confirmed. If you find out, please tell us.
+
+---
+
 ## Configuration
 
-Everything lives in a single block at the top of `deliver.sh`.
+Shared page geometry and typography live in `config.sh`, sourced by both scripts — the
+measured display dimensions are this project's core asset and must not drift between them.
 
 ```zsh
+# config.sh
 FONTS=("Helvetica Neue" "PingFang SC")   # Latin first, then CJK fallback
 PAGE_W="157.1mm"                         # QUADERNO A5 display area
 PAGE_H="209.5mm"
