@@ -82,7 +82,7 @@ $if(thanks)$
   thanks: [$thanks$],
 $endif$
 $if(margin)$
-  margin: ($for(margin/pairs)$$margin.key$: $margin.value$,$endfor$),
+  margin: $margin$,
 $endif$
 $if(papersize)$
   paper: "$papersize$",
@@ -130,6 +130,15 @@ $if(toc)$
 );
 $endif$
 
+$if(pagewidth)$
+#set page(width: $pagewidth$, height: $pageheight$$if(pagemargin)$, margin: $pagemargin$$endif$)
+$endif$
+$if(bodysize)$
+#set text(size: $bodysize$)
+$endif$
+$if(leading)$
+#set par(leading: $leading$)
+$endif$
 $body$
 
 $if(citations)$
