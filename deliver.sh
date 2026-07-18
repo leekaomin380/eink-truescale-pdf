@@ -18,7 +18,8 @@ FONTS=("Helvetica Neue" "PingFang SC")
 PAGE_W="157.1mm"
 PAGE_H="209.5mm"
 PAGE_MARGIN="10mm"                   # 屏幕阅读无需装订位，窄边距换取更大版心
-BODY_SIZE="12pt"                     # 1:1 显示下即为真实 12pt，接近纸质书体感
+BODY_SIZE="10pt"                     # 1:1 已实测确认（尺子量 100mm 基准线正好 100mm），
+                                     # 故此值即屏幕上的真实物理字号。pt = point = 1/72 英寸。
 LEADING="0.85em"                     # 行距，墨水屏宜宽松
 
 # Markdown 方言：载荷是"任意粘贴的对话文本"，必须关掉两个会误伤的默认扩展：

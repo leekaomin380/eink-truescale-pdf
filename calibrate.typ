@@ -64,10 +64,10 @@
 
 // ── 字号实样：确认 12pt 的真实观感 ───────────────────────────────────
 #place(top + left, dx: 38mm, dy: 84mm, text(9pt, weight: "bold")[字号实样（应等同纸上打印）])
-#place(top + left, dx: 38mm, dy: 92mm, text(10pt)[10pt　这是十号字的中文与 English 混排])
+#place(top + left, dx: 38mm, dy: 92mm,
+      text(10pt)[10pt　*当前正文字号* 中文与 English])
 #place(top + left, dx: 38mm, dy: 101mm, text(11pt)[11pt　这是十一号字的中文与 English])
-#place(top + left, dx: 38mm, dy: 111mm,
-      text(12pt)[12pt　*当前正文字号* 中文与 English])
+#place(top + left, dx: 38mm, dy: 111mm, text(12pt)[12pt　这是十二号字的中文与 English])
 #place(top + left, dx: 38mm, dy: 122mm, text(13pt)[13pt　这是十三号字的中文])
 #place(top + left, dx: 38mm, dy: 134mm, text(14pt)[14pt　这是十四号字])
 
