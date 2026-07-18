@@ -189,7 +189,7 @@ Sizes 8–14pt, each with its characters-per-line count. Whatever looks right on
 
 ### Adapting to the A4 model
 
-Change two values in `deliver.sh`:
+Change two values in `config.sh`:
 
 ```zsh
 PAGE_W="202.7mm"
