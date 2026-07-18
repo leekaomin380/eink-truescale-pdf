@@ -1,37 +1,91 @@
 {
+  "_schema": "size-class-first-v3",
   "_comment": [
-    "电子墨水设备显示区物理参数库。",
-    "display_mm 由 分辨率 ÷ ppi × 25.4 推算，ppi 由 √(W²+H²) ÷ 对角线英寸 得出。",
-    "verified=true 表示已用实体尺子在真机上量过 100mm 基准线（见 calibrate.typ）。",
-    "verified=false 的条目仅为推算值，使用前请自行校准。",
-    "欢迎补充其他设备 —— 一次测量约五分钟。"
+    "电子墨水设备物理参数库。",
+    "",
+    "【核心事实：显示区物理尺寸不依赖分辨率与 ppi】",
+    "对角线 D 英寸、宽高比 r 的屏幕，其物理尺寸唯一确定：",
+    "    宽 = D × r / √(1+r²)      高 = D / √(1+r²)",
+    "r = 0.75（3:4，绝大多数电子墨水设备）时简化为：",
+    "    宽 = 0.6 × D              高 = 0.8 × D",
+    "分辨率与 ppi 在推导中被完全约掉。",
+    "因此 10.3 英寸 3:4 的屏幕一律是 156.97 × 209.30 mm —— ",
+    "无论它是 227 ppi 的老面板还是 300 ppi 的新面板，无论哪个厂商。",
+    "",
+    "【于是数据库以「尺寸类」为键，而非面板或设备】",
+    "  · 电子墨水面板受上游供应约束，市面尺寸集中在 6 / 7 / 7.8 / 10.3 / 13.3 英寸",
+    "  · 一次实测覆盖整个尺寸类，包括未来采用同尺寸的新设备",
+    "  · 尺寸类参数是几何常量，永不失效",
+    "devices 表只把型号映射到尺寸类，每条一行。",
+    "",
+    "【ppi 的作用】",
+    "ppi 不影响版面尺寸，只影响笔画渲染质量：",
+    "227 ppi 下约 1/30 em 的发丝衬线会跌破一个像素而发虚，300 ppi 下则安全。",
+    "详见 docs/typography-for-eink.md。故 ppi 记录在设备条目中，供排版建议参考。",
+    "",
+    "【两个独立维度，不可混为一谈】",
+    "  display_mm       —— 屏幕多大（属于尺寸类，几何决定）",
+    "  display_behavior —— 设备拿到 PDF 会怎么显示（属于设备/固件，须实测）",
+    "     exact-fit : 整页满屏，无缩放无留边（QUADERNO A5 已实测）",
+    "     letterbox : 保持宽高比但四周留边",
+    "     crop      : 裁切边缘",
+    "     unknown   : 未测",
+    "只有 exact-fit 时，按 display_mm 出页才真正得到 1:1。",
+    "",
+    "【验证法】见 calibrate.typ —— 渲染校准页，用实体尺量 100mm 基准线。",
+    "每个尺寸类只需任意一人测一次，永久受益。"
   ],
-  "devices": [
+
+  "size_classes": [
     {
-      "id": "quaderno-a5",
-      "name": "QUADERNO A5",
-      "models": ["FMVDP51 (Gen.2)", "FMVDP53CA5 (Gen.3C)"],
+      "id": "10.3in-3x4",
       "diagonal_in": 10.3,
-      "resolution_px": [1404, 1872],
-      "ppi": 227.18,
-      "display_mm": [156.97, 209.30],
       "aspect": 0.75,
+      "display_mm": [156.97, 209.30],
       "verified": true,
-      "verified_note": "钢尺实测 100mm 基准线正好 100mm，四角标记完整，无缩放无裁切",
+      "verified_by": "QUADERNO A5 (FMVDP51)，钢尺实测 100mm 基准线正好 100mm，四角标记完整",
       "verified_date": "2026-07-18",
-      "note": "Gen.2 与 Gen.3C 分辨率与机身尺寸相同，本参数对两代通用。Gen.3C 彩色模式等效 ppi 较低，但正文为单色渲染。"
+      "common_resolutions": [
+        {"px": [1404, 1872], "ppi": 227.18, "note": "老一代，Quaderno / reMarkable 2 等"},
+        {"px": [1860, 2480], "ppi": 300.97, "note": "新一代高分面板"}
+      ],
+      "note": "两种分辨率的物理尺寸完全相同，本条实测对二者均适用。"
     },
     {
-      "id": "quaderno-a4",
-      "name": "QUADERNO A4",
-      "models": ["FMVDP41 (Gen.2)"],
+      "id": "13.3in-3x4",
       "diagonal_in": 13.3,
+      "aspect": 0.75,
+      "display_mm": [202.69, 270.26],
+      "verified": false,
+      "common_resolutions": [
+        {"px": [1650, 2200], "ppi": 206.77, "note": "Quaderno A4 等"},
+        {"px": [1920, 2560], "ppi": 240.6, "note": "部分新机型"}
+      ],
+      "note": "推算值，未实测。唯一不确定处是对角线是否确为 13.3 英寸；ppi 与分辨率不影响本尺寸。"
+    }
+  ],
+
+  "devices": [
+    {
+      "name": "QUADERNO A5",
+      "vendor": "Fujitsu",
+      "models": ["FMVDP51 (Gen.2)", "FMVDP53CA5 (Gen.3C)"],
+      "size_class": "10.3in-3x4",
+      "resolution_px": [1404, 1872],
+      "ppi": 227.18,
+      "display_behavior": "exact-fit",
+      "behavior_verified": true,
+      "note": "Gen.2 与 Gen.3C 分辨率与机身尺寸相同，参数通用。Gen.3C 增加彩色滤光片（8 色），彩色模式等效 ppi 较低，正文单色渲染不受影响。"
+    },
+    {
+      "name": "QUADERNO A4",
+      "vendor": "Fujitsu",
+      "models": ["FMVDP41 (Gen.2)"],
+      "size_class": "13.3in-3x4",
       "resolution_px": [1650, 2200],
       "ppi": 206.77,
-      "display_mm": [202.69, 270.26],
-      "aspect": 0.75,
-      "verified": false,
-      "note": "推算值，未实测。存在竞争假设：若与 A5 同为 227.18 ppi，则显示区应为 184.48 × 245.97 mm。但该假设隐含对角线 12.10″（与官方 13.3″ 矛盾），且要求左右边框各 19.2mm（A5 实测仅 8.1mm），不合常理。现有证据偏向本条数值，但两者差 9%，须实测定夺。"
+      "display_behavior": "unknown",
+      "behavior_verified": false
     }
   ]
 }

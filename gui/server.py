@@ -62,11 +62,26 @@ def read_config():
 
 
 def load_devices():
-    """设备档案 —— 显示区尺寸不再硬编码，便于扩展与社区贡献。"""
+    """设备档案。显示区尺寸来自「尺寸类」——由对角线与宽高比几何决定，
+    与分辨率、ppi 无关，故一个尺寸类覆盖所有同尺寸设备。"""
     try:
-        return json.loads(DEVICES_JSON.read_text(encoding="utf-8"))["devices"]
+        data = json.loads(DEVICES_JSON.read_text(encoding="utf-8"))
     except Exception:
         return []
+    classes = {c["id"]: c for c in data.get("size_classes", [])}
+    out = []
+    for d in data.get("devices", []):
+        c = classes.get(d.get("size_class"))
+        if not c:
+            continue
+        out.append({
+            **d,
+            "display_mm": c["display_mm"],
+            "diagonal_in": c["diagonal_in"],
+            "size_verified": c.get("verified", False),
+            "size_verified_by": c.get("verified_by", ""),
+        })
+    return out
 
 
 def list_fonts():
