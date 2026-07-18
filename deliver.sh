@@ -21,6 +21,12 @@ PAGE_MARGIN="10mm"                   # 屏幕阅读无需装订位，窄边距�
 BODY_SIZE="12pt"                     # 1:1 显示下即为真实 12pt，接近纸质书体感
 LEADING="0.85em"                     # 行距，墨水屏宜宽松
 
+# Markdown 方言：载荷是"任意粘贴的对话文本"，必须关掉两个会误伤的默认扩展：
+#   -citations        : 否则 "@227dpi"/"@某人"/邮箱 会被当文献引用 → typst 报
+#                       "the document does not contain a bibliography" 直接渲染失败
+#   -tex_math_dollars : 否则正文里的 $PATH / $1 / $mainfont$ 会被当数学公式吃掉
+MD_FORMAT="markdown-citations-tex_math_dollars"
+
 QUADERNO_APP="/Applications/QUADERNO PC App.app"
 WORKDIR="/tmp"                       # 铁律：只读根目录规避，pandoc 临时文件须落沙盒
 DELIVER_TIMEOUT=15                   # 监听送达结果的最长秒数
@@ -76,7 +82,7 @@ LAYOUTARGS=(
 )
 cd "$WORKDIR" || fail "无法进入沙盒 $WORKDIR" 3
 if ! printf '%s' "$PAYLOAD" \
-    | pandoc -f markdown --template="$TEMPLATE" "${FONTARGS[@]}" "${LAYOUTARGS[@]}" \
+    | pandoc -f "$MD_FORMAT" --template="$TEMPLATE" "${FONTARGS[@]}" "${LAYOUTARGS[@]}" \
              -o "$OUT" --pdf-engine=typst 2>"$ERRLOG"; then
   fail "渲染失败: $(tail -1 "$ERRLOG" | cut -c1-120)" 2
 fi
