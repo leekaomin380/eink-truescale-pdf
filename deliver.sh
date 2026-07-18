@@ -61,6 +61,74 @@ notify() {
 
 fail() { notify "Quaderno ❌" "$1" "Basso"; rm -f "$OUT"; exit "${2:-1}"; }
 
+# ---- --check：全链路自检 ---------------------------------------------------
+# 存在理由：本管道有 5 个彼此独立的环节，且大多数环节失败时是「静默」的
+# （客户端不提示、快捷指令不报错）。把开发期踩过的坑固化成一条可运行的诊断。
+if [[ "${1:-}" == "--check" || "${1:-}" == "-c" ]]; then
+  ok=0; bad=0
+  pass() { print -r -- "  ✅ $1"; ((ok++)); }
+  warn() { print -r -- "  ⚠️  $1"; }
+  nope() { print -r -- "  ❌ $1"; ((bad++)); }
+
+  print -r -- "print-to-quaderno · self check"
+  print -r -- ""
+  print -r -- "Environment"
+  print -r -- "  ·  LANG=$LANG  PATH includes Homebrew: $([[ ":$PATH:" == *":/opt/homebrew/bin:"* ]] && echo yes || echo no)"
+
+  print -r -- ""
+  print -r -- "Dependencies"
+  if command -v pandoc >/dev/null 2>&1; then pass "pandoc $(pandoc --version | head -1 | awk '{print $2}')"
+  else nope "pandoc not found  →  brew install pandoc"; fi
+  if command -v typst  >/dev/null 2>&1; then pass "typst $(typst --version | awk '{print $2}')"
+  else nope "typst not found  →  brew install typst"; fi
+
+  print -r -- ""
+  print -r -- "Files"
+  [[ -f "$TEMPLATE" ]] && pass "template deliver.typ" || nope "deliver.typ missing next to deliver.sh"
+  [[ -w "$WORKDIR"  ]] && pass "sandbox $WORKDIR writable" || nope "$WORKDIR not writable"
+
+  print -r -- ""
+  print -r -- "QUADERNO client"
+  if [[ -d "$QUADERNO_APP" ]]; then pass "app installed"
+  else nope "QUADERNO PC App not found in /Applications"; fi
+  if pgrep -f "QUADERNO PC App" >/dev/null 2>&1; then pass "client is running"
+  else warn "client not running — it will be launched on demand, but the device must be connected"; fi
+  LOGPROBE=$(find "$HOME/Library/Application Support/Fujitsu" -name logfile.log -type f 2>/dev/null | head -1)
+  [[ -f "$LOGPROBE" ]] && pass "client log found (used to confirm delivery)" \
+                       || warn "client log not found — delivery result cannot be verified"
+
+  print -r -- ""
+  print -r -- "Clipboard"
+  if command -v pbpaste >/dev/null 2>&1; then
+    CB=$(pbpaste 2>/dev/null | wc -m | tr -d ' ')
+    [[ "$CB" -gt 0 ]] && pass "readable, currently $CB chars" || warn "readable, but currently empty"
+  else nope "pbpaste unavailable"; fi
+
+  print -r -- ""
+  print -r -- "Render test"
+  PROBE="$WORKDIR/quaderno_selftest_$$.pdf"
+  if printf '# self test\n\n中文 CJK check, \$PATH and @mention must survive.\n' \
+     | pandoc -f "$MD_FORMAT" --template="$TEMPLATE" \
+              -V "mainfont=${FONTS[1]}" -V "mainfont=${FONTS[2]}" \
+              -V "pagewidth=$PAGE_W" -V "pageheight=$PAGE_H" -V "pagemargin=$PAGE_MARGIN" \
+              -V "bodysize=$BODY_SIZE" -V "leading=$LEADING" \
+              -o "$PROBE" --pdf-engine=typst 2>/dev/null; then
+    pass "pipeline renders a PDF ($(stat -f%z "$PROBE" 2>/dev/null) bytes)"
+    rm -f "$PROBE"
+  else
+    nope "render pipeline failed — run deliver.sh with text copied to see the error"
+  fi
+
+  print -r -- ""
+  if (( bad > 0 )); then
+    print -r -- "$bad problem(s) found. Fix the ❌ items above, then run --check again."
+    exit 10
+  fi
+  print -r -- "All checks passed. Copy some Markdown and press your hotkey."
+  print -r -- "Note: a connected device is still required — confirm the client shows \"Connected\"."
+  exit 0
+fi
+
 # ---- 0. 前置检查 -----------------------------------------------------------
 [[ -x "$(command -v pandoc)" ]] || fail "未找到 pandoc" 10
 [[ -x "$(command -v typst)"  ]] || fail "未找到 typst"  10

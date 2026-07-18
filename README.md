@@ -1,125 +1,299 @@
-# print-to-quaderno · 剪贴板 → Quaderno 墨水屏 · 零 GUI 投递管道
+# print-to-quaderno
 
-一个全局热键,把系统剪贴板里的 Markdown 源码瞬间渲染成排版精良的 PDF,静默打入
-Quaderno 同步队列。无头、后台、不抢焦点。彻底消灭「复制 → 开 Bear → 粘贴 → Cmd+P →
-在下拉菜单里找 Print to QUADERNO」这条 GUI 摩擦链。
+**Copy text → press a hotkey → it appears on your e-ink device.** No GUI, no windows, nothing steals your focus.
+
+Turns whatever Markdown is on your clipboard into a properly typeset PDF and delivers it
+straight into your Fujitsu QUADERNO's sync queue — entirely in the background.
 
 ```
-复制 Markdown  ──►  按热键 (⌃⌥⌘P)  ──►  墨水屏出现
+Copy Markdown  ──►  ⌃⌥⌘P  ──►  it's on your e-ink screen
 ```
 
----
-
-## 快速使用
-
-1. 复制一段 Markdown(通常来自 Claude / Gemini 等对话产出)
-2. 按全局热键
-3. 右上角通知 `Quaderno ✅ 已投递 · N 字`,几秒后墨水屏显示
-
-热键由 macOS「快捷指令」托管:一个「运行 Shell 脚本」动作,内容仅一行
-`/Users/km/projects/print-to-quaderno/deliver.sh`,在详细信息里绑键盘快捷键。
+Built for people who read long-form text on e-ink and are tired of this dance:
+*copy → open a note app → paste → Cmd+P → hunt for "Print to QUADERNO" in a dropdown.*
 
 ---
 
-## 依赖
+## Does this apply to you?
 
-| 组件 | 角色 | 安装 |
-|---|---|---|
-| `pandoc` | Markdown 语法树解析 | `brew install pandoc` |
-| `typst` | PDF 光栅化引擎(极速 Rust,替代 pdflatex) | `brew install typst` |
-| QUADERNO PC App | 投递客户端(直连设备上传) | 官方 |
-| macOS 快捷指令 | 全局热键托管外壳 | 系统自带 |
+**Please read this before installing.** This tool is narrow on purpose, and it is better
+that you find out in 30 seconds than after twenty minutes of setup.
 
-字体:`Charter`(拉丁,Matthew Carter 为低分辨率屏设计)+ `PingFang SC`(中文,苹方)
-——均为系统自带,墨水屏边缘干净。
+You need **all** of the following:
+
+- [ ] **macOS** (tested on Sequoia / Darwin 24)
+- [ ] **A Fujitsu QUADERNO device** — A5 (FMVDP51) or A4 (FMVDP41)
+- [ ] **QUADERNO PC App** installed, and your device paired and showing *Connected*
+- [ ] **Homebrew**, to install two small dependencies
+
+If you don't own a QUADERNO, this tool cannot help you — but
+[the calibration method](docs/quaderno-display-metrics.md) probably can, and it works on
+any e-ink device.
+
+> **Currently tuned for the A5 model.** A4 owners: everything works, but you must change two
+> values first — see [Adapting to the A4 model](#adapting-to-the-a4-model).
 
 ---
 
-## 文件清单
+## Install
 
-| 文件 | 作用 |
+```bash
+brew install pandoc typst
+git clone https://github.com/leekaomin380/print-to-quaderno.git
+cd print-to-quaderno
+chmod +x deliver.sh
+./deliver.sh --check     # verify every link in the chain
+```
+
+`--check` matters more than it looks. This tool has five independent moving parts and
+**most of them fail silently** when broken. Run it first; run it again any time something
+seems off.
+
+There is deliberately **no `curl | sh` installer**. This script reads your clipboard and
+calls system APIs — you should be able to read it before you run it.
+It's short, and every non-obvious line is commented.
+
+---
+
+## Bind the hotkey
+
+This is the one step that cannot be automated. Apple does not allow programs to create
+Shortcuts or register global hotkeys on your behalf, so you have to click through it once.
+It takes about a minute.
+
+1. Open **Shortcuts.app** → click **+** to create a new shortcut
+2. Search the action list for **Run Shell Script** and add it
+3. Replace the contents of the script box with **the absolute path to `deliver.sh`**, and nothing else:
+   ```
+   /full/path/to/print-to-quaderno/deliver.sh
+   ```
+   Run `pwd` in the repo folder if you're not sure of the path.
+
+   > Paste the **path**, not the script's contents. The script locates its template file
+   > relative to its own location, which only works when it is invoked by path.
+
+4. Confirm the settings:
+
+   | Setting | Value |
+   |---|---|
+   | Shell | `zsh` |
+   | Input | *(leave as default)* |
+   | Pass input | *(leave as default)* |
+   | Run as administrator | **unchecked** |
+
+   The input settings genuinely don't matter — the script reads the clipboard itself via
+   `pbpaste` and ignores stdin entirely.
+
+5. Name it something like **Send to Quaderno**
+6. Click **ⓘ** (Details) → **Add Keyboard Shortcut** → press your combination.
+   `⌃⌥⌘P` is a good choice — almost nothing else uses it.
+7. Close the window. Shortcuts saves automatically.
+
+The first time you trigger it, macOS may ask for permission. Allow it once.
+
+---
+
+## Use it
+
+1. Copy some Markdown
+2. Press your hotkey
+3. A notification confirms delivery; the document appears on your device shortly after
+
+Your current window never loses focus. Nothing opens. Nothing flashes.
+
+### What the notifications mean
+
+| Notification | Meaning |
 |---|---|
-| `deliver.sh` | 主管道:抓剪贴板 → 渲染 → 后台投递 → 监听送达 → 通知反馈 |
-| `deliver.typ` | 定制 pandoc typst 模板;字体行改成 `for` 循环,由脚本注入 fallback 列表 |
-| `README.md` | 本文档 + 开发日志 |
+| ✅ Delivered · N chars | The client accepted the upload |
+| ❌ Clipboard is empty | Nothing to send |
+| ❌ Render failed: … | Markdown could not be typeset (reason included) |
+| ❌ Device offline or cancelled | The client could not reach your device |
+| ⚠️ Handed off but unconfirmed | Sent, but delivery could not be verified — check the device connection |
+
+The failure notifications exist for a specific reason: **the QUADERNO client fails silently.**
+If your device is offline it writes a line to a log file and tells you nothing. This script
+watches that log so that a failed send cannot masquerade as a successful one.
 
 ---
 
-## 数据流架构
+## Configuration
 
+Everything lives in a single block at the top of `deliver.sh`.
+
+```zsh
+FONTS=("Helvetica Neue" "PingFang SC")   # Latin first, then CJK fallback
+PAGE_W="157.1mm"                         # QUADERNO A5 display area
+PAGE_H="209.5mm"
+PAGE_MARGIN="10mm"
+BODY_SIZE="10pt"
+LEADING="0.85em"
 ```
-pbpaste ──► [空检测] ──► pandoc -f markdown --template=deliver.typ
-                                   │  -V mainfont=Charter -V mainfont="PingFang SC"
-                                   ▼
-                          typst 引擎渲染 PDF  ──► /tmp/quaderno_delivery_$$.pdf
-                                   │  [渲染失败拦截]
-                                   ▼
-              open -gj -na "QUADERNO PC App" --args --print <pdf>   (后台/不抢焦点)
-                                   │
-                                   ▼  客户端 device.printDocument() 上传设备,并 unlink 源文件
-                          [监听日志 + 源文件消费] ──► ✅ / ❌ / ⚠️ 系统通知
+
+### Choosing a font size
+
+Because pages are rendered at the display's exact physical size, the device shows them
+**1:1 with no scaling** — so `10pt` here is a real, physical 10pt on the glass, the same size
+it would be on paper. (This is measured, not assumed; see below.)
+
+That means you can simply look at a printed size menu and pick:
+
+```bash
+typst compile font-menu.typ menu.pdf
+open -gj -na "/Applications/QUADERNO PC App.app" --args --print "$PWD/menu.pdf"
 ```
 
-底层协议来自逆向 `/Library/PDF Services/Print to QUADERNO.workflow` 里的
-`document.wflow`,挖出 `open -na "…QUADERNO PC App.app" --args --print "$1"`,
-从而绕过 macOS 打印总线直呼客户端。
+Sizes 8–14pt, each with its characters-per-line count. Whatever looks right on your screen
+*is* what you'll get. Put that number in `BODY_SIZE`.
+
+### Adapting to the A4 model
+
+Change two values in `deliver.sh`:
+
+```zsh
+PAGE_W="202.7mm"
+PAGE_H="270.3mm"
+```
+
+> ⚠️ These A4 numbers are **derived, not yet measured.** If you own an A4, please
+> [run the calibration](#verifying-11-display) and tell us — you'd be the first.
 
 ---
 
-## 开发日志
+## Verifying 1:1 display
 
-### 2026-07-18 · 从裸命令到生产级管道(建立 + 定型)
+Rendering at the display's physical size only works if the device shows PDFs at exactly
+100% with no letterboxing. Don't take our word for it — measure:
 
-**起点**:已有跑通的原子命令
-`cd /tmp && pbpaste | pandoc -f markdown -o x.pdf --pdf-engine=typst && open -na "…" --args --print x.pdf`。
-本次目标:固化成健壮、可被全局热键托管的外壳,并实测所有未知量。
+```bash
+typst compile calibrate.typ calibration.pdf
+open -gj -na "/Applications/QUADERNO PC App.app" --args --print "$PWD/calibration.pdf"
+```
 
-**真相测试(实测,非推断)**
-- **是否弹窗** —— 触发投递后截屏观察:客户端**完全不弹窗**(无对话框/预览/确认)。零 GUI 成立。
-- **中文 CJK** —— typst 0.15 在 macOS 上自动 fallback 到系统中文字体,**开箱即用零豆腐块**,无需手动配字体。
-- **是否真送达** —— 受控投递(唯一文件名 + 日志行数基线):源文件被客户端 `unlink` 消费、
-  日志零新增 error → 静默上传成功。物理墨水屏肉眼确认无误。
+Hold a real ruler against the screen and measure the line marked **100 mm**.
 
-**从客户端日志(`~/Library/Application Support/Fujitsu/QUADERNO PC App/…/logfile.log`)挖出的底层真相**
-1. 投递是 **`device.printDocument()` 直连设备上传**,不是"扔进云队列不管"。
-   → 成败取决于按键当刻设备是否已连接;离线则 `E_MW_DEVICE_NOT_FOUND` **静默失败**(只写日志)。
-2. 客户端上传后会 **`unlink` 源 PDF**。→ 临时文件自清理,无需处理文件名冲突;但投递后源即消失。
-3. 客户端**只在失败时**往日志写 error。→ 这成了脚本判定送达结果的依据。
-
-**踩过的坑(全部已修,勿重蹈)**
-| 坑 | 现象 | 根因 | 修复 |
-|---|---|---|---|
-| **只读根目录** | pandoc 崩 `Read-only file system` | 带图 MD 在 `/` 建临时目录 | 强制 `cd /tmp` 沙盒 |
-| **中文乱码** | 设备中文全乱、ASCII 正常 | 最小化环境 `LANG=` 空,pandoc 回退 latin1 | 脚本内 `export LANG/LC_ALL=en_US.UTF-8` |
-| **找不到 pandoc** | 热键触发即 ❌ | 快捷指令的 PATH 仅 `/usr/bin:/bin`,无 Homebrew | 脚本内 `export PATH` 补 `/opt/homebrew/bin` |
-| **抢焦点/端口冲突** | 弹前台 + 日志 `EADDRINUSE:808x` | `open -na` 的 `-n` 硬启新实例 | 改 `open -gj -na`(后台+隐藏,靠单实例句柄转交) |
-| **静默失败** | "以为发了其实没到" | 设备离线时客户端只记日志不提示 | 脚本监听日志 error + 源文件消费,给 ✅/❌/⚠️ 通知 |
-| **冯·诺依曼死锁** | 手动复制脚本会覆盖待渲染文本 | 指令与数据共用剪贴板 | 独立外壳 + 全局热键托管,指令/数据物理隔离 |
-
-**字体决策**:对比 `Charter+苹方` 与 `Charter+宋体` 两版投到设备 A/B —— 两者皆可,
-默认取**苹方**(无衬线、边缘最干净),字体做成可扩展 fallback 列表保留后续切换。
-放弃 typst 默认的 New Computer Modern:发丝笔画在 16 级灰阶墨水屏上糊成毛边。
-
-**验证方式备忘**:本机 Bash 沙盒**跨调用不保留系统剪贴板**;测试时用
-`osascript -e 'set the clipboard to (read POSIX file "…" as «class utf8»)'` 直写系统剪贴板,
-再 `pbpaste` 读回;用 `env -i HOME=… PATH=/usr/bin:/bin …` 模拟快捷指令最小环境验证自愈。
-
----
-
-## 排错手册
-
-| 通知 | 含义 | 处理 |
+| Result | Meaning | Fix |
 |---|---|---|
-| `✅ 已投递 · N 字` | 客户端已接收上传 | 正常,等墨水屏同步 |
-| `❌ 剪贴板为空` | 没复制内容 | 先复制 |
-| `❌ 渲染失败: …` | pandoc/typst 报错(含原因摘要) | 看 Markdown 语法 |
-| `❌ 设备离线或投递被取消` | 日志出现 device-not-found/cancelled | 确认 Quaderno 已连接客户端 |
-| `⚠️ 已交客户端但未确认送达` | 超时未见消费也未见 error | 检查设备连接/客户端状态 |
+| Exactly 100 mm | True 1:1 | Nothing to do |
+| L mm | Scaled | Multiply `PAGE_W`/`PAGE_H` by `100 / L` |
+| Corner marks missing | Device crops the page | Needs separate compensation |
+| Horizontal ≠ vertical | Aspect ratio is wrong | Re-check the resolution figures |
+
+**Measured result for QUADERNO A5: exactly 100 mm.** Confirmed 1:1, no scaling, no cropping.
+
+The full method — including how the physical millimetre dimensions were derived from
+published pixel counts — is written up in
+**[E-Ink Display Metrics](docs/quaderno-display-metrics.md)**. It applies to any e-ink
+device, not just QUADERNO.
 
 ---
 
-## 未来扩展
+## Troubleshooting
 
-- **加/换字体**:只改 `deliver.sh` 顶部 `FONTS=("Charter" "PingFang SC")`,往数组追加 fallback。
-- **富文本源**:当前吃纯文本 Markdown。若要吃网页 HTML,pandoc 加 `-f html` 分支即可。
-- **保留副本**:客户端会删源 PDF;如需留底,在投递前 `cp` 一份到别处。
+The script exits with a distinct code for each failure mode, so you can tell what happened
+without guessing.
+
+| Exit code | Cause | What to do |
+|---|---|---|
+| `1` | Clipboard empty | Copy something first |
+| `2` | Render failed | Read `/tmp/quaderno_render_<PID>.log` — it has pandoc's actual error |
+| `4` | Device offline or upload cancelled | Open the client, confirm it says *Connected* |
+| `10` | Missing dependency | Run `./deliver.sh --check` |
+
+### Known pitfalls (all already handled — documented so you recognise them)
+
+These were all found the hard way. The script defends against each one, but if you fork or
+modify it, these are the traps:
+
+- **Garbled CJK text.** Shortcuts runs scripts with no locale set, so pandoc decides the
+  input isn't UTF-8 and falls back to latin1. The script forces `LANG`/`LC_ALL`.
+- **"pandoc not found"** even though it's installed. Shortcuts provides a minimal `PATH`
+  without Homebrew. The script prepends `/opt/homebrew/bin`.
+- **Text containing `@` crashes the render.** Pandoc's Markdown reader treats `@something`
+  as a citation; with no bibliography, typst aborts. The script disables that extension —
+  along with `$…$` math, which would otherwise eat shell variables like `$PATH` in your text.
+- **Text looks small or blurry.** Almost always a page-size mismatch causing the device to
+  downscale. See [Verifying 1:1 display](#verifying-11-display).
+
+---
+
+## How it works
+
+```
+pbpaste ──► [empty check] ──► pandoc ──► typst ──► PDF in /tmp
+                                                      │
+                                    open -gj -na QUADERNO --args --print
+                                                      │
+                        client uploads to device, then deletes the source file
+                                                      │
+                              [watch log + watch file] ──► notification
+```
+
+A few notes on why it's built this way:
+
+- **The delivery protocol** (`open -na … --args --print`) was recovered by unpacking
+  `/Library/PDF Services/Print to QUADERNO.workflow`. It's the client's own headless entry
+  point, which lets us skip the macOS print subsystem entirely.
+- **`-n` is mandatory.** macOS won't pass `--args` to an already-running application. This
+  was tested; without `-n` nothing is delivered.
+- **`-g -j`** keep the app backgrounded and hidden so your focus is never stolen.
+- **Success is inferred** from the client consuming (deleting) the source file with no new
+  errors in its log. The client provides no success signal of its own.
+- **`/tmp` is mandatory** for rendering — pandoc tries to create temp directories in the
+  read-only root otherwise, and crashes on Markdown containing images.
+
+---
+
+## Contributing
+
+**Device measurements are the most valuable thing you can contribute.**
+
+The physical display dimensions of e-ink devices are not published by manufacturers — only
+pixel counts and diagonal inches. We derive the millimetres and verify them with a ruler.
+Right now this database has exactly one verified entry.
+
+If you own **any** e-ink device — QUADERNO A4, reMarkable, BOOX, Kindle Scribe, anything —
+the calibration page works on all of them, and measuring takes about five minutes.
+
+Send us:
+
+- The exact model name and SKU
+- What you measured, in millimetres
+- A photo of the ruler against the screen
+
+Open a pull request, or just email it. Contributors are credited.
+
+Code contributions are welcome too, especially A4 support and English error messages.
+
+---
+
+## Contact
+
+- **Email** — leekaomin@foxmail.com
+- **WeChat** — leekaomin
+- **Issues** — bug reports and questions are welcome on GitHub
+
+---
+
+## Credits and licence
+
+Built with [pandoc](https://pandoc.org) (syntax tree) and [typst](https://typst.app)
+(typesetting). Neither is bundled; both are installed via Homebrew.
+
+Not affiliated with or endorsed by Fujitsu. QUADERNO is their trademark.
+
+Released under the [MIT License](LICENSE) — do what you like with it.
+
+The device measurement data is released under **CC0**: public domain, no attribution
+required. We would rather it spread than be credited.
+
+---
+
+## Also in this repository
+
+| Document | |
+|---|---|
+| [E-Ink Display Metrics](docs/quaderno-display-metrics.md) | How to derive and verify any e-ink device's physical display size |
+| [Development log (中文)](docs/development-log-zh.md) | The full investigation, every dead end and fix |
+| [`calibrate.typ`](calibrate.typ) | 1:1 calibration page source |
+| [`font-menu.typ`](font-menu.typ) | Font size menu source |
