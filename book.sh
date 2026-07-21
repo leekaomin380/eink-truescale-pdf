@@ -150,7 +150,11 @@ print(max(int(x) for x in m) if m else '?')" 2>/dev/null || echo "?")
 print -r -- ""
 print -r -- "✅ 完成：$OUT"
 print -r -- "   ${PAGES} 页 · $(( SIZE / 1024 )) KB · 耗时 ${ELAPSED}s"
-print -r -- "   已生成 PDF 大纲（书签）与正文目录页"
+if (( PLAIN )); then
+  print -r -- "   plain 模式：无目录页、无强制分章"
+else
+  print -r -- "   已生成 PDF 大纲（书签）与正文目录页"
+fi
 
 # ---- 可选投递 ---------------------------------------------------------------
 if (( DELIVER )); then
