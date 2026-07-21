@@ -5,3 +5,6 @@ quaderno_render_*.log
 
 # 根目录下的临时预览图不入库，但 docs/assets 下的文档插图必须保留
 /*.png
+
+# GUI 打包产物（由 gui/build-app.sh 重建）
+gui/*.app/

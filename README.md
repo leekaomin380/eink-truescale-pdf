@@ -285,6 +285,21 @@ A few notes on why it's built this way:
 
 ---
 
+## 打包成 App
+
+本项目提供了一个原生 macOS .app，双击即可启动，无需终端。
+
+```bash
+./gui/build-app.sh    # 编译并组装 .app
+```
+
+产出 `gui/Quaderno Converter.app`，双击访达中的图标即可使用。
+
+App 内部启动与 `./gui.sh` 相同的 Python 服务，但用原生窗口（WKWebView）显示界面，
+退出时自动关闭后台进程。
+
+---
+
 ## Contributing
 
 **Device measurements are the most valuable thing you can contribute.**
