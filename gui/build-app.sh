@@ -29,9 +29,8 @@ swiftc \
     -framework UniformTypeIdentifiers \
     -target arm64-apple-macos14.0
 
-echo ">>> 更新 Info.plist（可执行文件名改为 QuadernoConverter）"
-sed 's|<string>AppShell</string>|<string>QuadernoConverter</string>|' \
-    "$MAC_DIR/Info.plist" > "$APP_DIR/Contents/Info.plist"
+echo ">>> 复制 Info.plist"
+cp "$MAC_DIR/Info.plist" "$APP_DIR/Contents/Info.plist"
 
 ICON_SRC="$MAC_DIR/AppIcon.icns"
 if [ -f "$ICON_SRC" ]; then

@@ -295,8 +295,9 @@ A few notes on why it's built this way:
 
 产出 `gui/Quaderno Converter.app`，双击访达中的图标即可使用。
 
-App 内部启动与 `./gui.sh` 相同的 Python 服务，但用原生窗口（WKWebView）显示界面，
-退出时自动关闭后台进程。
+Pure native SwiftUI (PDFKit for preview) — no Python server, no browser engine.
+It shells out to the same `book.sh` / `deliver.sh` used by the CLI, so behavior
+stays identical across all three entry points.
 
 ---
 
