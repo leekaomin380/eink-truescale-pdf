@@ -1,4 +1,4 @@
-# 产品需求文档 · print-to-quaderno
+# 产品需求文档 · eink-truescale
 
 | | |
 |---|---|

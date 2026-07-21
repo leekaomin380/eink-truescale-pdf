@@ -1,6 +1,14 @@
-# print-to-quaderno
+# eink-truescale
 
 **Copy text → press a hotkey → it appears on your e-ink device.** No GUI, no windows, nothing steals your focus.
+
+The core finding here: most "PDF looks blurry on e-ink" complaints trace back to the
+device silently rescaling a page sized for paper (A4/Letter) down to its actual screen —
+losing sharpness in the process. Render at the screen's true physical size instead, and
+227 ppi looks as clean as commercial e-readers. The delivery integration below targets
+Fujitsu QUADERNO specifically (the reverse-engineered protocol is device-specific), but
+the calibration method and typography findings apply to any e-ink device — see
+[E-Ink Display Metrics](docs/quaderno-display-metrics.md).
 
 Turns whatever Markdown is on your clipboard into a properly typeset PDF and delivers it
 straight into your Fujitsu QUADERNO's sync queue — entirely in the background.
@@ -39,8 +47,8 @@ any e-ink device.
 
 ```bash
 brew install pandoc typst
-git clone https://github.com/leekaomin380/print-to-quaderno.git
-cd print-to-quaderno
+git clone https://github.com/leekaomin380/eink-truescale.git
+cd eink-truescale
 chmod +x deliver.sh
 ./deliver.sh --check     # verify every link in the chain
 ```
@@ -65,7 +73,7 @@ It takes about a minute.
 2. Search the action list for **Run Shell Script** and add it
 3. Replace the contents of the script box with **the absolute path to `deliver.sh`**, and nothing else:
    ```
-   /full/path/to/print-to-quaderno/deliver.sh
+   /full/path/to/eink-truescale/deliver.sh
    ```
    Run `pwd` in the repo folder if you're not sure of the path.
 

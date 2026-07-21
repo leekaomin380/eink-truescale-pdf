@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>电子书转换 · Quaderno</string>
     <key>CFBundleIdentifier</key>
-    <string>com.print-to-quaderno.gui</string>
+    <string>com.eink-truescale.gui</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundleShortVersionString</key>
