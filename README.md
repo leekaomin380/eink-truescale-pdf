@@ -299,6 +299,15 @@ Pure native SwiftUI (PDFKit for preview) — no Python server, no browser engine
 It shells out to the same `book.sh` / `deliver.sh` used by the CLI, so behavior
 stays identical across all three entry points.
 
+### Lightweight alternative (no Xcode required)
+
+If you don't have Xcode installed and don't want to build the native app,
+`./gui.sh` starts the same GUI as a local web page (Python standard library
+HTTP server, no third-party dependencies). Same features, same underlying
+`book.sh`/`deliver.sh` — just rendered in a browser tab instead of a native
+window. This path is kept intentionally minimal and is not the primary target
+for new GUI features; the native app is where GUI development happens first.
+
 ---
 
 ## Contributing
