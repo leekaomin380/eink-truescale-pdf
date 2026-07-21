@@ -85,7 +85,7 @@
   <label>语言</label>
   <select id="lang"><option value="zh">中文</option><option value="en">English</option></select>
 
-  <button id="go" disabled>转换</button>
+  <button id="preview" disabled>预览</button>
   <button id="send" class="sec" disabled hidden>发送到 Quaderno</button>
   <button id="save" class="sec" disabled>另存 PDF…</button>
 
@@ -126,6 +126,21 @@ const LEADS = [['0.7em','紧凑'],['0.8em','较紧'],['0.85em','标准'],
 
 const st = (msg,kind)=>{const e=$('#st');e.className='st show '+(kind||'');e.textContent=msg};
 
+const CJK_NAMES = {
+  'PingFang SC': '苹方', 'Songti SC': '宋体', 'Heiti SC': '黑体',
+  'STSong': '华文宋体', 'Hiragino Sans GB': '冬青黑体',
+  'Noto Serif CJK SC': '思源宋体', 'Source Han Sans SC': '思源黑体',
+  'Source Han Serif SC': '思源宋体',
+};
+
+function fillCjk(sel, list, cur){
+  sel.innerHTML = list.map(name=>{
+    const label = CJK_NAMES[name];
+    const text = label ? `${label}（${name}）` : name;
+    return `<option value="${name}" ${name===cur?'selected':''}>${text}</option>`;
+  }).join('');
+}
+
 function fill(sel, list, cur){
   sel.innerHTML = list.map(x=>{
     const [v,label] = Array.isArray(x)?x:[x,''];
@@ -139,13 +154,13 @@ async function init(){
   DEVS = r.devices;
   $('#dev').innerHTML = DEVS.map((d,i)=>
     `<option value="${i}">${d.name}</option>`).join('');
-  fill($('#cjk'),  r.fonts.cjk.length?r.fonts.cjk:['PingFang SC'],  r.config.fonts[1]);
+  fillCjk($('#cjk'),  r.fonts.cjk.length?r.fonts.cjk:['PingFang SC'],  r.config.fonts[1]);
   fill($('#latin'),r.fonts.latin.length?r.fonts.latin:['Helvetica Neue'], r.config.fonts[0]);
   fill($('#size'), SIZES, r.config.size);
   fill($('#margin'), MARGINS, r.config.margin);
   fill($('#leading'), LEADS, r.config.leading);
   $('#lang').value = r.config.lang;
-  if(r.has_quaderno) $('#send').hidden = false;   // 检测到客户端才显示
+  if(r.has_quaderno) $('#send').hidden = false;
   if(!r.has_poppler) st('预览需要 poppler：brew install poppler。不装仍可转换与保存。','info');
   pickDevice();
 }
@@ -193,7 +208,7 @@ function update(){
       ? `页面尺寸 <b>全书统一</b>` : `<span class="warn">页面尺寸不一致：${window.__sizes.join(' / ')}</span>`);
   $('#tech').innerHTML = t.join('');
 
-  if(PDF){ DIRTY = true; st('参数已修改，点「转换」后预览才会更新','info'); }
+  if(PDF){ DIRTY = true; st('参数已修改，点「预览」后才会更新','info'); }
 }
 ['#size','#margin','#leading','#cjk','#latin','#lang'].forEach(s=>$(s).onchange=update);
 $('#dev').onchange = pickDevice;
@@ -213,27 +228,29 @@ async function take(f){
   let bin=''; for(let i=0;i<b.length;i+=8192) bin+=String.fromCharCode.apply(null,b.subarray(i,i+8192));
   const r = await (await fetch('/api/upload',{method:'POST',
     body:JSON.stringify({name:f.name,data:btoa(bin)})})).json();
-  SRC=r.path; $('#fname').textContent=r.name; $('#go').disabled=false;
-  st('已载入，可以转换','ok');
+  SRC=r.path; $('#fname').textContent=r.name;
+  $('#preview').disabled=false;
+  st('已载入，点「预览」查看排版','ok');
 }
 
-// ── 转换（与预览分开：转换产出 PDF，预览只是翻看它）────────
-$('#go').onclick = async ()=>{
+// ── 预览（整本渲染，缓存产物）────────────────────────
+$('#preview').onclick = async ()=>{
   if(!SRC) return;
-  $('#go').disabled=true; st('转换中…一本书通常 1–3 秒','run');
+  $('#preview').disabled=true; st('渲染中…','run');
   const r = await (await fetch('/api/convert',{method:'POST',
     body:JSON.stringify({path:SRC,config:cfg()})})).json();
-  $('#go').disabled=false;
-  if(!r.ok){ st('转换失败：'+r.error,'err'); return; }
-  PDF=r.pdf; PAGES=r.metrics.pages; window.__sizes=r.metrics.page_sizes; DIRTY=false;
+  $('#preview').disabled=false;
+  if(!r.ok){ st('渲染失败：'+r.error,'err'); return; }
+  PDF=r.pdf; PAGES=r.metrics.pages; window.__sizes=r.metrics.page_sizes;
+  DIRTY=false;
   $('#save').disabled=false; $('#send').disabled=false;
   ['#pg','#prev','#next'].forEach(s=>$(s).disabled=false);
   $('#pg').max=PAGES; $('#pgtot').textContent=`/ ${PAGES} 页`;
-  update(); st(`转换完成，共 ${PAGES} 页`,'ok');
+  update(); st(`渲染完成，共 ${PAGES} 页`,'ok');
   show(1);
 };
 
-// ── 预览（独立动作，不触发转换）──────────────────────
+// ── 预览（翻页，复用当前 PDF）──────────────────────────
 async function show(n){
   if(!PDF) return;
   n = Math.max(1, Math.min(PAGES||1, n));
@@ -248,16 +265,33 @@ $('#pg').onchange=()=>show(+$('#pg').value);
 $('#prev').onclick=()=>show((+$('#pg').value)-1);
 $('#next').onclick=()=>show((+$('#pg').value)+1);
 
+// ── 发送到设备（参数未变复用缓存，变了先重渲）─────────
 $('#send').onclick = async ()=>{
-  if(!PDF) return;
+  if(!SRC) return;
+  if(DIRTY){
+    st('参数已改，先重新渲染…','run');
+    const r = await (await fetch('/api/convert',{method:'POST',
+      body:JSON.stringify({path:SRC,config:cfg()})})).json();
+    if(!r.ok){ st('渲染失败：'+r.error,'err'); return; }
+    PDF=r.pdf; PAGES=r.metrics.pages; DIRTY=false;
+  }
   st('正在发送到 Quaderno…','run');
   const r = await (await fetch('/api/deliver',{method:'POST',
     body:JSON.stringify({pdf:PDF})})).json();
-  st(r.ok ? '已发送到 Quaderno（客户端需保持连接，稍后同步到设备）'
+  st(r.ok ? '已发送（客户端需保持连接，稍后同步到设备）'
           : '发送失败：'+r.error, r.ok?'ok':'err');
 };
 
+// ── 另存 PDF（参数未变复用缓存，变了先重渲）───────────
 $('#save').onclick = async ()=>{
+  if(!SRC) return;
+  if(DIRTY){
+    st('参数已改，先重新渲染…','run');
+    const r = await (await fetch('/api/convert',{method:'POST',
+      body:JSON.stringify({path:SRC,config:cfg()})})).json();
+    if(!r.ok){ st('渲染失败：'+r.error,'err'); return; }
+    PDF=r.pdf; PAGES=r.metrics.pages; DIRTY=false;
+  }
   const dest = prompt('另存为（完整路径）', (SRC||'').replace(/\.[^.]+$/,'')+'.pdf');
   if(!dest) return;
   const r = await (await fetch('/api/save',{method:'POST',

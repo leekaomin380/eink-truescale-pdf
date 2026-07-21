@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import UniformTypeIdentifiers
 
 let REPO = "/Users/km/projects/print-to-quaderno"
 let SERVER_PY = REPO + "/gui/server.py"
@@ -36,7 +37,7 @@ func killOrphans() {
     r.waitUntilExit()
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
     var window: NSWindow!
     var webView: WKWebView!
     var serverProcess: Process?
@@ -152,6 +153,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cfg.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
 
         webView = WKWebView(frame: .zero, configuration: cfg)
+        webView.uiDelegate = self
         webView.load(URLRequest(url: URL(string: "http://127.0.0.1:\(port)")!))
 
         window = NSWindow(
@@ -194,6 +196,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+
+    func webView(_ webView: WKWebView,
+                 runOpenPanelWith parameters: WKOpenPanelParameters,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping ([URL]?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "epub")!,
+            UTType(filenameExtension: "fb2")!,
+            UTType(filenameExtension: "html")!,
+            UTType(filenameExtension: "md")!,
+            UTType(filenameExtension: "markdown")!,
+        ]
+        panel.begin { result in
+            if result == .OK, let url = panel.url {
+                completionHandler([url])
+            } else {
+                completionHandler(nil)
+            }
+        }
+    }
 }
 
 let app = NSApplication.shared
