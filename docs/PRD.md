@@ -278,7 +278,7 @@ open -gj -na "/Applications/QUADERNO PC App.app" --args --print <pdf路径>
 - [x] 剪贴板投递管道
 - [x] EPUB 转换
 - [x] 排版参数可调
-- [ ] **F8 回归测试** ← 当前最高优先级
+- [x] **F8 回归测试**（test.sh，15 项断言，已验证能抓回归）
 - [ ] F10 字体缺失告警
 - [ ] F9 `book.sh --check`
 
