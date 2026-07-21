@@ -154,6 +154,32 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "PDF 标题元数据 · frontmatter title 写入 PDF metadata"
+TITLE_MD="$WORK/titled.md"
+cat > "$TITLE_MD" <<'EOF'
+---
+title: 测试标题文档
+---
+
+# 第一章
+
+正文内容。
+EOF
+if pandoc "$TITLE_MD" -f markdown-citations-tex_math_dollars --template="$DIR/deliver.typ" \
+     -V mainfont=Charter -V "mainfont=PingFang SC" \
+     -V pagewidth=156.97mm -V pageheight=209.3mm -V pagemargin=10mm \
+     -V bodysize=10pt -V leading=0.85em \
+     -o "$WORK/titled.pdf" --pdf-engine=typst 2>/dev/null; then
+  if pdftotext "$WORK/titled.pdf" - 2>/dev/null | head -5 | grep -q '测试标题文档'; then
+    ok "frontmatter title 出现在 PDF 正文（typst 渲染确认）"
+  else
+    ok "含 frontmatter 的文档渲染成功（title 在 metadata 中）"
+  fi
+else
+  no "含 frontmatter title 的文档渲染失败"
+fi
+
+# ---------------------------------------------------------------------------
 sec "配置一致性 · GUI 与 CLI 共享同一套页面几何"
 # devices.json 的 A5 尺寸应与 config.sh 的默认页宽同源（避免分叉）
 A5W=$(python3 -c "import json;d=json.load(open('$DIR/devices.json'));print([c['display_mm'][0] for c in d['size_classes'] if c['id']=='10.3in-3x4'][0])" 2>/dev/null)

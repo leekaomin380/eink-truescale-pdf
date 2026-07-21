@@ -7,6 +7,28 @@ let SERVER_PY = REPO + "/gui/server.py"
 let PYTHON = "/opt/homebrew/bin/python3"
 let TIMEOUT: TimeInterval = 10
 
+// WKWebView 子类：放行 Cmd+V/C/X/A 等文本编辑快捷键
+class PasteableWebView: WKWebView {
+    override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command),
+           let ch = event.charactersIgnoringModifiers {
+            let sel: Selector?
+            switch ch {
+            case "v": sel = Selector(("paste:"))
+            case "c": sel = Selector(("copy:"))
+            case "x": sel = Selector(("cut:"))
+            case "a": sel = Selector(("selectAll:"))
+            default: sel = nil
+            }
+            if let s = sel {
+                NSApp.sendAction(s, to: nil, from: self)
+                return
+            }
+        }
+        super.keyDown(with: event)
+    }
+}
+
 func pickFreePort() -> UInt16 {
     var addr = sockaddr_in()
     addr.sin_family = sa_family_t(AF_INET)
@@ -152,7 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate {
         let cfg = WKWebViewConfiguration()
         cfg.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
 
-        webView = WKWebView(frame: .zero, configuration: cfg)
+        webView = PasteableWebView(frame: .zero, configuration: cfg)
         webView.uiDelegate = self
         webView.load(URLRequest(url: URL(string: "http://127.0.0.1:\(port)")!))
 

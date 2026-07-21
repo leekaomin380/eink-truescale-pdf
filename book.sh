@@ -28,10 +28,11 @@ TEMPLATE="$SCRIPT_DIR/deliver.typ"
 die() { print -r -- "❌ $1" >&2; exit "${2:-1}"; }
 
 # ---- 参数解析 ---------------------------------------------------------------
-SRC=""; OUT=""; DELIVER=0
+SRC=""; OUT=""; DELIVER=0; PLAIN=0
 while (( $# )); do
   case "$1" in
     --deliver|-d) DELIVER=1 ;;
+    --plain)      PLAIN=1 ;;
     --lang)       shift; DOC_LANG="${1:-zh}" ;;
     --page)       shift; PAGE_W="${1}"; shift; PAGE_H="${1}" ;;
     --size)       shift; BODY_SIZE="${1:-10pt}" ;;
@@ -109,6 +110,12 @@ esac
 # ---- 渲染 -------------------------------------------------------------------
 FONTARGS=(); for f in "${FONTS[@]}"; do FONTARGS+=(-V "mainfont=$f"); done
 
+# --plain 模式不加目录与分章（粘贴文本用）
+EXTRA_ARGS=()
+if (( ! PLAIN )); then
+  EXTRA_ARGS+=(--toc --toc-depth=3 -V chapterbreak=true)
+fi
+
 print -r -- "→ 渲染中：${SRC:t}"
 print -r -- "   页面 $PAGE_W × $PAGE_H · 边距 $PAGE_MARGIN · 正文 $BODY_SIZE"
 print -r -- "   一本书可能需要数十秒，请稍候…"
@@ -118,13 +125,13 @@ cd "$WORK" || die "无法进入工作目录"     # 铁律：pandoc 需可写沙�
 
 if ! pandoc "$INPUT" -f "$FROM" \
       --template="$TEMPLATE" \
-      --toc --toc-depth=3 -V "lang=$DOC_LANG" \
+      "${EXTRA_ARGS[@]}" \
+      -V "lang=$DOC_LANG" \
       --lua-filter="$SCRIPT_DIR/book-filter.lua" \
       -M date="" \
       "${FONTARGS[@]}" \
       -V "pagewidth=$PAGE_W" -V "pageheight=$PAGE_H" -V "pagemargin=$PAGE_MARGIN" \
       -V "bodysize=$BODY_SIZE" -V "leading=$LEADING" \
-      -V chapterbreak=true \
       -o "$OUT" --pdf-engine=typst 2>"$WORK/err.log"; then
   print -r -- ""
   print -r -- "渲染失败，pandoc 报错："

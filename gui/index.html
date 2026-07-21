@@ -18,6 +18,12 @@
   .drop.on{border-color:var(--acc);background:#eef4fb;color:var(--acc)}
   .fname{font-size:12px;margin-top:7px;color:var(--fg);word-break:break-all}
 
+  .tabs{display:flex;gap:0;margin-bottom:12px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .tab{flex:1;padding:7px 0;border:0;background:#fff;font:inherit;font-size:12px;cursor:pointer;color:var(--mut)}
+  .tab.active{background:var(--acc);color:#fff;font-weight:500}
+  #textarea{width:100%;min-height:180px;padding:10px;border:1px solid var(--line);border-radius:6px;
+            font:13px/1.5 -apple-system,"PingFang SC",sans-serif;resize:vertical;background:#fff}
+
   label{display:block;font-size:12px;color:var(--mut);margin:15px 0 4px}
   select{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:5px;
          background:#fff;font:inherit;font-size:13px}
@@ -59,9 +65,24 @@
 
 <main>
 <aside>
-  <div class="drop" id="drop">拖入电子书<br><span style="font-size:11px">或点击选择（EPUB / FB2 / HTML）</span></div>
-  <input type="file" id="file" accept=".epub,.fb2,.html,.md" hidden>
-  <div class="fname" id="fname"></div>
+  <div class="tabs">
+    <button class="tab active" id="tab-epub">电子书转换</button>
+    <button class="tab" id="tab-text">粘贴文本</button>
+  </div>
+
+  <div id="mode-epub">
+    <div class="drop" id="drop">拖入电子书<br><span style="font-size:11px">或点击选择（EPUB / FB2 / HTML）</span></div>
+    <input type="file" id="file" accept=".epub,.fb2,.html,.md" hidden>
+    <div class="fname" id="fname"></div>
+  </div>
+
+  <div id="mode-text" style="display:none">
+    <label>标题 <span style="font-weight:400;color:var(--faint)">（PDF 元数据，用于设备内识别）</span></label>
+    <input type="text" id="doctitle" placeholder="可选，留空则自动提取第一个 # 标题"
+           style="width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:5px;
+                  background:#fff;font:inherit;font-size:13px;margin-bottom:2px">
+    <textarea id="textarea" placeholder="粘贴 Markdown 文本…" rows="10"></textarea>
+  </div>
 
   <label>目标设备</label>
   <select id="dev"></select>
@@ -114,7 +135,7 @@
 
 <script>
 const $ = s => document.querySelector(s);
-let DEV=null, DEVS=[], SRC=null, PDF=null, PAGES=0, DIRTY=false;
+let DEV=null, DEVS=[], SRC=null, PDF=null, PAGES=0, DIRTY=false, MODE='epub';
 
 const SIZES = [
   ['9pt','小五'],['10pt',''],['10.5pt','五号'],['11pt',''],
@@ -233,12 +254,69 @@ async function take(f){
   st('已载入，点「预览」查看排版','ok');
 }
 
+// ── 模式切换 ──────────────────────────────────────────
+function switchMode(mode){
+  MODE=mode;
+  $('#tab-epub').classList.toggle('active', mode==='epub');
+  $('#tab-text').classList.toggle('active', mode==='text');
+  $('#mode-epub').style.display = mode==='epub' ? '' : 'none';
+  $('#mode-text').style.display = mode==='text' ? '' : 'none';
+  // 重置状态，避免串味
+  SRC=null; PDF=null; PAGES=0; DIRTY=false;
+  $('#fname').textContent=''; $('#doctitle').value='';
+  $('#preview').disabled=true; $('#save').disabled=true; $('#send').disabled=true;
+  ['#pg','#prev','#next'].forEach(s=>$(s).disabled=true);
+  $('#pg').value=1; $('#pgtot').textContent='页';
+  $('#page').innerHTML='<div class="empty">转换后在此显示预览<br>按页面真实宽高比呈现</div>';
+  $('#tech').innerHTML=''; $('#pnote').textContent='';
+  if(mode==='text'){
+    const hasText = $('#textarea').value.trim().length > 0;
+    $('#preview').disabled = !hasText;
+    st(hasText?'粘贴 Markdown 文本后点「预览」':'粘贴 Markdown 文本后点「预览」','info');
+  }
+  else st('拖入或点击选择电子书文件','info');
+}
+$('#tab-epub').onclick=()=>switchMode('epub');
+$('#tab-text').onclick=()=>switchMode('text');
+
+// ── 文本框输入 → DIRTY + 启用预览 ──────────────────────
+$('#textarea').addEventListener('input', ()=>{
+  if(MODE==='text'){
+    DIRTY=true;
+    const hasText = $('#textarea').value.trim().length > 0;
+    $('#preview').disabled = !hasText;
+    if(hasText) st('文本已修改，请重新预览','info');
+  }
+});
+
+// ── textarea Cmd+A 全选（WKWebView 兼容）─────────────
+$('#textarea').addEventListener('keydown', e=>{
+  if((e.metaKey || e.ctrlKey) && e.key==='a'){
+    e.preventDefault();
+    $('#textarea').select();
+  }
+});
+
+// ── 构建 convert 请求体 ────────────────────────────────
+function buildConvertBody(){
+  const c = cfg();
+  if(MODE==='text'){
+    const text = $('#textarea').value;
+    if(!text.trim()) return null;
+    const title = $('#doctitle').value.trim();
+    return {text:text, plain:true, config:c, title:title||undefined};
+  }
+  if(!SRC) return null;
+  return {path:SRC, config:c};
+}
+
 // ── 预览（整本渲染，缓存产物）────────────────────────
 $('#preview').onclick = async ()=>{
-  if(!SRC) return;
+  const body = buildConvertBody();
+  if(!body){ st(MODE==='text'?'请先粘贴文本':'请先选择文件','err'); return; }
   $('#preview').disabled=true; st('渲染中…','run');
   const r = await (await fetch('/api/convert',{method:'POST',
-    body:JSON.stringify({path:SRC,config:cfg()})})).json();
+    body:JSON.stringify(body)})).json();
   $('#preview').disabled=false;
   if(!r.ok){ st('渲染失败：'+r.error,'err'); return; }
   PDF=r.pdf; PAGES=r.metrics.pages; window.__sizes=r.metrics.page_sizes;
@@ -265,13 +343,14 @@ $('#pg').onchange=()=>show(+$('#pg').value);
 $('#prev').onclick=()=>show((+$('#pg').value)-1);
 $('#next').onclick=()=>show((+$('#pg').value)+1);
 
-// ── 发送到设备（参数未变复用缓存，变了先重渲）─────────
+// ── 发送到设备（参数/文本未变复用缓存，变了先重渲）─────
 $('#send').onclick = async ()=>{
-  if(!SRC) return;
+  const body = buildConvertBody();
+  if(!body){ st('无可发送的内容','err'); return; }
   if(DIRTY){
-    st('参数已改，先重新渲染…','run');
+    st('内容已改，先重新渲染…','run');
     const r = await (await fetch('/api/convert',{method:'POST',
-      body:JSON.stringify({path:SRC,config:cfg()})})).json();
+      body:JSON.stringify(body)})).json();
     if(!r.ok){ st('渲染失败：'+r.error,'err'); return; }
     PDF=r.pdf; PAGES=r.metrics.pages; DIRTY=false;
   }
@@ -282,17 +361,24 @@ $('#send').onclick = async ()=>{
           : '发送失败：'+r.error, r.ok?'ok':'err');
 };
 
-// ── 另存 PDF（参数未变复用缓存，变了先重渲）───────────
+// ── 另存 PDF（参数/文本未变复用缓存，变了先重渲）───────
 $('#save').onclick = async ()=>{
-  if(!SRC) return;
+  const body = buildConvertBody();
+  if(!body){ st('无可保存的内容','err'); return; }
   if(DIRTY){
-    st('参数已改，先重新渲染…','run');
+    st('内容已改，先重新渲染…','run');
     const r = await (await fetch('/api/convert',{method:'POST',
-      body:JSON.stringify({path:SRC,config:cfg()})})).json();
+      body:JSON.stringify(body)})).json();
     if(!r.ok){ st('渲染失败：'+r.error,'err'); return; }
     PDF=r.pdf; PAGES=r.metrics.pages; DIRTY=false;
   }
-  const dest = prompt('另存为（完整路径）', (SRC||'').replace(/\.[^.]+$/,'')+'.pdf');
+  let defName = 'pasted.pdf';
+  if(MODE==='epub' && SRC) defName = SRC.replace(/\.[^.]+$/,'').split('/').pop()+'.pdf';
+  if(MODE==='text'){
+    const m=$('#textarea').value.match(/^#\s+(.+)/m);
+    if(m) defName = m[1].trim().substring(0,30).replace(/[\/\\:]/g,'_')+'.pdf';
+  }
+  const dest = prompt('另存为（完整路径）', defName);
   if(!dest) return;
   const r = await (await fetch('/api/save',{method:'POST',
     body:JSON.stringify({pdf:PDF,dest})})).json();

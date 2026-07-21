@@ -121,13 +121,26 @@ fi
 CHARS=$(printf '%s' "$PAYLOAD" | wc -m | tr -d ' ')
 
 # ---- 2. 渲染（失败拦截）----------------------------------------------------
+# 若剪贴板无 frontmatter，自动提取第一个 H1 作为 PDF 标题 ——
+# QUADERNO 客户端的「标题」列读取 PDF metadata，无标题时文件无法辨认。
+PAYLOAD_FINAL="$PAYLOAD"
+if ! printf '%s' "$PAYLOAD" | head -5 | grep -q '^---'; then
+  TITLE=$(printf '%s' "$PAYLOAD" | grep -m1 '^# ' | sed 's/^# //')
+  if [[ -n "$TITLE" ]]; then
+    SAFE_TITLE=$(printf '%s' "$TITLE" | sed 's/"/\\"/g')
+    PAYLOAD_FINAL="---"
+    PAYLOAD_FINAL+=$'\n'"title: \"$SAFE_TITLE\""
+    PAYLOAD_FINAL+=$'\n'"---"
+    PAYLOAD_FINAL+=$'\n\n'"$PAYLOAD"
+  fi
+fi
 FONTARGS=(); for f in "${FONTS[@]}"; do FONTARGS+=(-V "mainfont=$f"); done
 LAYOUTARGS=(
   -V "pagewidth=$PAGE_W" -V "pageheight=$PAGE_H" -V "pagemargin=$PAGE_MARGIN"
   -V "bodysize=$BODY_SIZE" -V "leading=$LEADING"
 )
 cd "$WORKDIR" || fail "无法进入沙盒 $WORKDIR" 3
-if ! printf '%s' "$PAYLOAD" \
+if ! printf '%s' "$PAYLOAD_FINAL" \
     | pandoc -f "$MD_FORMAT" --template="$TEMPLATE" "${FONTARGS[@]}" "${LAYOUTARGS[@]}" \
              -o "$OUT" --pdf-engine=typst 2>"$ERRLOG"; then
   fail "渲染失败: $(tail -1 "$ERRLOG" | cut -c1-120)" 2

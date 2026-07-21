@@ -147,12 +147,14 @@ def metrics(cfg, pages=None, sizes=None):
     return out
 
 
-def convert(src: Path, cfg, out: Path):
+def convert(src: Path, cfg, out: Path, plain=False):
     cmd = [str(BOOK_SH), str(src), "-o", str(out),
            "--size", cfg["size"], "--margin", cfg["margin"],
            "--leading", cfg["leading"], "--lang", cfg["lang"],
            "--font", ",".join(cfg["fonts"]),
            "--page", cfg["page_w"], cfg["page_h"]]
+    if plain:
+        cmd.append("--plain")
     return sh(cmd)
 
 
@@ -226,10 +228,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json({"ok": True, "path": str(dst), "name": name})
 
         elif path == "/api/convert":
-            src = Path(payload["path"])
             cfg = payload["config"]
-            out = WORK / (src.stem + ".pdf")
-            r = convert(src, cfg, out)
+            plain = payload.get("plain", False)
+            text = payload.get("text")
+            title = payload.get("title", "").strip()
+            if text:
+                # 粘贴文本模式：写成 .md 临时文件（后缀必须是 .md 才走 $MD_FORMAT）
+                # 注入 YAML frontmatter 使 PDF 元数据含标题（QUADERNO 客户端据此显示文件名）
+                if title and not re.match(r'^---\s*\n', text):
+                    safe_title = title.replace('"', '\\"')
+                    text = f'---\ntitle: "{safe_title}"\n---\n\n{text}'
+                import time, hashlib
+                slug = hashlib.md5(text.encode()).hexdigest()[:8]
+                src = WORK / f"paste_{slug}.md"
+                src.write_text(text, encoding="utf-8")
+                out = WORK / f"paste_{slug}.pdf"
+            else:
+                src = Path(payload["path"])
+                out = WORK / (src.stem + ".pdf")
+            r = convert(src, cfg, out, plain=plain)
             if r.returncode != 0 or not out.exists():
                 self._json({"ok": False, "error": (r.stderr or r.stdout)[-800:]})
                 return

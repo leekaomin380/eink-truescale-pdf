@@ -1,5 +1,5 @@
 #!/bin/zsh
-# gui/build-app.sh — 编译 Swift 外壳并组装 .app bundle
+# gui/build-app.sh — 编译原生 SwiftUI 应用并组装 .app bundle
 # 用法: ./gui/build-app.sh
 # 产出: gui/Quaderno Converter.app
 
@@ -14,18 +14,24 @@ APP_DIR="$SCRIPT_DIR/$APP_NAME.app"
 echo ">>> 清理旧 .app"
 rm -rf "$APP_DIR"
 
-echo ">>> 编译 AppShell.swift"
+echo ">>> 编译原生 SwiftUI 应用"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 
-swiftc "$MAC_DIR/AppShell.swift" \
-    -o "$APP_DIR/Contents/MacOS/AppShell" \
+swiftc \
+    "$MAC_DIR/QuadernoApp.swift" \
+    "$MAC_DIR/ContentView.swift" \
+    "$MAC_DIR/ConversionViewModel.swift" \
+    -o "$APP_DIR/Contents/MacOS/QuadernoConverter" \
+    -framework SwiftUI \
     -framework AppKit \
-    -framework WebKit \
+    -framework PDFKit \
+    -framework UniformTypeIdentifiers \
     -target arm64-apple-macos14.0
 
-echo ">>> 复制 Info.plist"
-cp "$MAC_DIR/Info.plist" "$APP_DIR/Contents/Info.plist"
+echo ">>> 更新 Info.plist（可执行文件名改为 QuadernoConverter）"
+sed 's|<string>AppShell</string>|<string>QuadernoConverter</string>|' \
+    "$MAC_DIR/Info.plist" > "$APP_DIR/Contents/Info.plist"
 
 ICON_SRC="$MAC_DIR/AppIcon.icns"
 if [ -f "$ICON_SRC" ]; then
