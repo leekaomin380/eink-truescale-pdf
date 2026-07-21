@@ -74,6 +74,7 @@ class ConversionViewModel: ObservableObject {
     // EPUB mode
     @Published var sourceFileURL: URL?
     @Published var sourceFileName = ""
+    @Published var pdfTitle = ""  // derived title for delivery filename
 
     enum StatusKind { case info, ok, err, run }
 
@@ -87,12 +88,28 @@ class ConversionViewModel: ObservableObject {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         repoURL = scriptDir
 
+        // File I/O only — fast, safe on main thread
         loadConfig()
         loadDevices()
-        listFonts()
         hasQuaderno = FileManager.default.fileExists(
             atPath: "/Applications/QUADERNO PC App.app")
-        hasPoppler = shellCommandExists("pdftoppm")
+
+        // Populate font lists with config defaults so pickers are immediately usable
+        if !config.fonts.isEmpty { latinFonts = [config.fonts[0]] }
+        if config.fonts.count >= 2 { cjkFonts = [config.fonts[1]] }
+
+        // Shell calls block — defer to background to avoid SwiftUI layout crash
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            let fonts = self.listFontsAsync()
+            let poppler = self.shellCommandExists("pdftoppm")
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.cjkFonts = fonts.cjk
+                self.latinFonts = fonts.latin
+                self.hasPoppler = poppler
+            }
+        }
     }
 
     // MARK: - Config & Devices
@@ -165,21 +182,30 @@ class ConversionViewModel: ObservableObject {
         }
     }
 
-    private func listFonts() {
+    private func listFontsAsync() -> (cjk: [String], latin: [String]) {
         let result = runShell(["typst", "fonts"])
-        guard result.exitCode == 0 else { return }
+        guard result.exitCode == 0 else {
+            return (
+                ["PingFang SC", "Songti SC", "Heiti SC", "Microsoft YaHei", "SimSun"],
+                ["Helvetica Neue", "Charter", "Georgia", "Times New Roman", "Calibri"]
+            )
+        }
         let allFonts = Set(result.stdout.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
 
         let cjkPref = ["PingFang SC", "Songti SC", "Heiti SC", "STSong",
                         "Hiragino Sans GB", "Noto Serif CJK SC",
-                        "Source Han Sans SC", "Source Han Serif SC"]
+                        "Source Han Sans SC", "Source Han Serif SC",
+                        "Microsoft YaHei", "SimSun"]
         let latinPref = ["Charter", "Iowan Old Style", "Georgia", "Palatino",
-                         "Times New Roman", "Helvetica Neue", "Arial", "Avenir Next"]
+                         "Times New Roman", "Helvetica Neue", "Arial", "Avenir Next",
+                         "Calibri"]
 
-        cjkFonts = cjkPref.filter { allFonts.contains($0) }
-        latinFonts = latinPref.filter { allFonts.contains($0) }
-        if cjkFonts.isEmpty { cjkFonts = ["PingFang SC"] }
-        if latinFonts.isEmpty { latinFonts = ["Helvetica Neue"] }
+        let cjk = cjkPref.filter { allFonts.contains($0) }
+        let latin = latinPref.filter { allFonts.contains($0) }
+        return (
+            cjk.isEmpty ? ["PingFang SC"] : cjk,
+            latin.isEmpty ? ["Helvetica Neue"] : latin
+        )
     }
 
     // MARK: - Metrics
@@ -340,9 +366,18 @@ class ConversionViewModel: ObservableObject {
         }
 
         // Deliver a copy to protect the original (invariant I2)
+        // Use title as filename — QUADERNO client displays file name in its list
+        let title = pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let copyName: String
+        if !title.isEmpty {
+            let safe = title.replacingOccurrences(of: "[/\\\\:*?\"<>|]", with: "_", options: .regularExpression)
+            copyName = String(safe.prefix(60)) + ".pdf"
+        } else {
+            copyName = pdfURL.lastPathComponent
+        }
         let copyURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("p2q_deliver")
-            .appendingPathComponent(pdfURL.lastPathComponent)
+            .appendingPathComponent(copyName)
         try? FileManager.default.createDirectory(
             at: copyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         do {

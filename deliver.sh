@@ -23,7 +23,7 @@ SCRIPT_DIR="${0:A:h}"
 source "$SCRIPT_DIR/config.sh"   # 页面几何、字体、方言等共享配置
 DELIVER_TIMEOUT=15                 # 监听送达结果的最长秒数
 TEMPLATE="$SCRIPT_DIR/deliver.typ"
-OUT="$WORKDIR/quaderno_delivery_$$.pdf"     # PID 命名，隔离并发
+OUT="$WORKDIR/quaderno_delivery_$$.pdf"     # PID 命名，隔离并发；若检测到标题会重命名
 ERRLOG="$WORKDIR/quaderno_render_$$.log"
 
 # macOS 系统通知（$1=标题 $2=正文 $3=声音，缺省无声）
@@ -146,6 +146,15 @@ if ! printf '%s' "$PAYLOAD_FINAL" \
   fail "渲染失败: $(tail -1 "$ERRLOG" | cut -c1-120)" 2
 fi
 rm -f "$ERRLOG"
+
+# ---- 2b. 用标题重命名 PDF（QUADERNO 客户端以文件名作显示名）--------------
+if [[ -n "${TITLE:-}" ]]; then
+  SAFE=$(printf '%s' "$TITLE" | sed 's/[/\\:*?"<>|]/_/g' | cut -c1-60)
+  if [[ -n "$SAFE" ]]; then
+    TITLE_OUT="$WORKDIR/${SAFE}.pdf"
+    mv -f "$OUT" "$TITLE_OUT" 2>/dev/null && OUT="$TITLE_OUT"
+  fi
+fi
 
 # ---- 3. 定位 QUADERNO 日志（用于真实送达判定）-----------------------------
 # 提速：find 全盘走一次要 ~33ms，结果缓存复用；缓存失效才重新定位。

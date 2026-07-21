@@ -266,11 +266,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         elif path == "/api/deliver":
             pdf = Path(payload["pdf"])
+            title = payload.get("title", "").strip()
             app = "/Applications/QUADERNO PC App.app"
             if not Path(app).exists():
                 self._json({"ok": False, "error": "未找到 QUADERNO 客户端"}); return
             # 客户端上传后会 unlink 源文件 —— 必须投递副本以保护产物（不变量 I2）
-            copy = WORK / ("deliver_" + pdf.name)
+            # 以标题命名副本，QUADERNO 客户端以文件名作显示名
+            if title:
+                safe = re.sub(r'[/\\:*?"<>|]', '_', title)[:60]
+                copy = WORK / f"{safe}.pdf"
+            else:
+                copy = WORK / ("deliver_" + pdf.name)
             try:
                 shutil.copy(pdf, copy)
             except Exception as e:

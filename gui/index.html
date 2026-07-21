@@ -355,8 +355,9 @@ $('#send').onclick = async ()=>{
     PDF=r.pdf; PAGES=r.metrics.pages; DIRTY=false;
   }
   st('正在发送到 Quaderno…','run');
+  const title = MODE==='text' ? ($('#doctitle').value||'').trim() : '';
   const r = await (await fetch('/api/deliver',{method:'POST',
-    body:JSON.stringify({pdf:PDF})})).json();
+    body:JSON.stringify({pdf:PDF, title:title})})).json();
   st(r.ok ? '已发送（客户端需保持连接，稍后同步到设备）'
           : '发送失败：'+r.error, r.ok?'ok':'err');
 };

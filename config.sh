@@ -17,9 +17,9 @@ PAGE_H="209.5mm"
 # PAGE_H="270.3mm"
 
 # ---- 排版 -------------------------------------------------------------------
-FONTS=("Helvetica Neue" "PingFang SC")   # 拉丁在前，CJK fallback 在后
-PAGE_MARGIN="10mm"                        # 屏幕阅读无装订需求
-BODY_SIZE="10pt"                          # 1:1 下即真实物理字号
+FONTS=("Helvetica Neue" "Songti SC")   # 拉丁在前，CJK fallback 在后
+PAGE_MARGIN="14mm"                        # 屏幕阅读无装订需求
+BODY_SIZE="10.5pt"                        # 1:1 下即真实物理字号
 LEADING="0.85em"
 
 # ---- Markdown 方言 ----------------------------------------------------------

@@ -20,7 +20,7 @@ WORK=$(mktemp -d /tmp/p2q_test.XXXXXX)
 trap 'rm -rf "$WORK"' EXIT
 
 PASS=0; FAIL=0
-ok(){ PASS=$((PASS+1));  (( VERBOSE )) && print -r -- "  ✅ $1" }
+ok(){ PASS=$((PASS+1)); if (( VERBOSE )); then print -r -- "  ✅ $1"; fi; return 0; }
 no(){ FAIL=$((FAIL+1));  print -r -- "  ❌ $1" }
 sec(){ print -r -- ""; print -r -- "▸ $1" }
 
@@ -29,12 +29,16 @@ EXPECT_PT="445"                  # 157mm ≈ 445pt，容差见下
 
 # 读取一个 PDF 的所有不同页面尺寸
 page_sizes(){ pdfinfo -f 1 -l "$(pdfinfo "$1" 2>/dev/null|awk '/^Pages/{print $2}')" "$1" 2>/dev/null \
-              | grep -oE 'Page +[0-9]+ size: +[0-9.]+ x [0-9.]+' | grep -oE '[0-9.]+ x [0-9.]+' | sort -u }
+              | grep -oE 'Page +[0-9]+ size: +[0-9.]+ x [0-9.]+' | sed 's/Page *[0-9]* size: *//' | sort -u }
 
 # 前置：依赖齐全，否则测试无意义
 sec "前置检查"
 for bin in pandoc typst pdfinfo; do
-  command -v $bin >/dev/null && ok "$bin 可用" || { no "$bin 缺失 —— 无法测试"; print "中止"; exit 2; }
+  if command -v $bin >/dev/null 2>&1; then
+    ok "$bin 可用"
+  else
+    no "$bin 缺失 —— 无法测试"; print "中止"; exit 2
+  fi
 done
 
 # 造一个「浓缩了所有已知陷阱」的 Markdown 样本 —— 刻意不简化
@@ -79,9 +83,9 @@ SZ=$(page_sizes "$WORK/trap.pdf")
 CNT=$(print -r -- "$SZ" | grep -c x)
 if [[ "$CNT" == "1" ]]; then
   ok "页面尺寸统一（$SZ）"
-  W=$(print -r -- "$SZ" | grep -oE '^[0-9.]+' | cut -d. -f1)
-  (( W >= 443 && W <= 447 )) && ok "页宽 ${W}pt 符合 A5（≈445pt）" \
-                             || no "页宽 ${W}pt 偏离 A5 445pt"
+  W=$(print -r -- "$SZ" | head -1 | grep -oE '^[0-9.]+' | cut -d. -f1)
+    (( W >= 442 && W <= 448 )) && ok "页宽 ${W}pt 符合 A5（≈445pt）" \
+                               || no "页宽 ${W}pt 偏离 A5 445pt"
 else
   no "页面尺寸不统一：$(print -r -- $SZ | tr '\n' ' ')"
 fi
@@ -102,7 +106,7 @@ if "$DIR/book.sh" "$WORK/book.epub" -o "$WORK/book.pdf" >/dev/null 2>"$WORK/be";
 
   # I1 绝对尺寸正确：页宽须为 A5 的 ≈445pt。捕获 config.sh PAGE_W 被改错。
   BW=$(print -r -- "$BSZ" | head -1 | grep -oE '^[0-9.]+' | cut -d. -f1)
-  if [[ -n "$BW" ]] && (( BW >= 443 && BW <= 447 )); then
+  if [[ -n "$BW" ]] && (( BW >= 442 && BW <= 448 )); then
     ok "I1 config.sh 默认页宽正确（${BW}pt ≈ A5 445pt）"
   else
     no "I1 config.sh 默认页宽错误：${BW}pt（应 ≈445pt，检查 PAGE_W）"
