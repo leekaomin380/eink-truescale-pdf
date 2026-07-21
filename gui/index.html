@@ -86,6 +86,7 @@
   <select id="lang"><option value="zh">中文</option><option value="en">English</option></select>
 
   <button id="go" disabled>转换</button>
+  <button id="send" class="sec" disabled hidden>发送到 Quaderno</button>
   <button id="save" class="sec" disabled>另存 PDF…</button>
 
   <div class="st" id="st"></div>
@@ -144,6 +145,7 @@ async function init(){
   fill($('#margin'), MARGINS, r.config.margin);
   fill($('#leading'), LEADS, r.config.leading);
   $('#lang').value = r.config.lang;
+  if(r.has_quaderno) $('#send').hidden = false;   // 检测到客户端才显示
   if(!r.has_poppler) st('预览需要 poppler：brew install poppler。不装仍可转换与保存。','info');
   pickDevice();
 }
@@ -151,12 +153,12 @@ async function init(){
 function pickDevice(){
   DEV = DEVS[+$('#dev').value];
   const [w,h] = DEV.display_mm;
-  const badge = DEV.verified
+  const badge = DEV.size_verified
     ? `<span class="badge v">已实测</span>`
     : `<span class="badge u">未实测</span>`;
   $('#devhint').innerHTML =
     `${badge} 显示区 <span class="v">${w} × ${h} mm</span> · ${DEV.ppi} ppi` +
-    (DEV.verified ? '' : `<br>该尺寸为推算值，使用前建议先用校准页实测。`);
+    (DEV.size_verified ? '' : `<br>该尺寸为推算值，使用前建议先用校准页实测。`);
   update();
 }
 
@@ -224,7 +226,7 @@ $('#go').onclick = async ()=>{
   $('#go').disabled=false;
   if(!r.ok){ st('转换失败：'+r.error,'err'); return; }
   PDF=r.pdf; PAGES=r.metrics.pages; window.__sizes=r.metrics.page_sizes; DIRTY=false;
-  $('#save').disabled=false;
+  $('#save').disabled=false; $('#send').disabled=false;
   ['#pg','#prev','#next'].forEach(s=>$(s).disabled=false);
   $('#pg').max=PAGES; $('#pgtot').textContent=`/ ${PAGES} 页`;
   update(); st(`转换完成，共 ${PAGES} 页`,'ok');
@@ -245,6 +247,15 @@ async function show(n){
 $('#pg').onchange=()=>show(+$('#pg').value);
 $('#prev').onclick=()=>show((+$('#pg').value)-1);
 $('#next').onclick=()=>show((+$('#pg').value)+1);
+
+$('#send').onclick = async ()=>{
+  if(!PDF) return;
+  st('正在发送到 Quaderno…','run');
+  const r = await (await fetch('/api/deliver',{method:'POST',
+    body:JSON.stringify({pdf:PDF})})).json();
+  st(r.ok ? '已发送到 Quaderno（客户端需保持连接，稍后同步到设备）'
+          : '发送失败：'+r.error, r.ok?'ok':'err');
+};
 
 $('#save').onclick = async ()=>{
   const dest = prompt('另存为（完整路径）', (SRC||'').replace(/\.[^.]+$/,'')+'.pdf');

@@ -196,7 +196,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif path == "/api/init":
             self._json({"config": read_config(), "fonts": list_fonts(),
                         "devices": load_devices(),
-                        "has_poppler": bool(shutil.which("pdftoppm"))})
+                        "has_poppler": bool(shutil.which("pdftoppm")),
+                        # 检测到 QUADERNO 客户端才显示「发送到设备」——
+                        # 使产品对非 Quaderno 用户不显示无用按钮，同时保留本机便利
+                        "has_quaderno": Path("/Applications/QUADERNO PC App.app").exists()})
         elif path.startswith("/preview.png"):
             f = WORK / "current_preview.png"
             if not f.exists():
@@ -243,6 +246,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"ok": False, "error": err}); return
             shutil.copy(img, WORK / "current_preview.png")
             self._json({"ok": True, "url": "/preview.png?p=" + str(page)})
+
+        elif path == "/api/deliver":
+            pdf = Path(payload["pdf"])
+            app = "/Applications/QUADERNO PC App.app"
+            if not Path(app).exists():
+                self._json({"ok": False, "error": "未找到 QUADERNO 客户端"}); return
+            # 客户端上传后会 unlink 源文件 —— 必须投递副本以保护产物（不变量 I2）
+            copy = WORK / ("deliver_" + pdf.name)
+            try:
+                shutil.copy(pdf, copy)
+            except Exception as e:
+                self._json({"ok": False, "error": f"创建投递副本失败: {e}"}); return
+            sh(["open", "-gj", "-na", app, "--args", "--print", str(copy)])
+            self._json({"ok": True})
 
         elif path == "/api/save":
             pdf = Path(payload["pdf"])
