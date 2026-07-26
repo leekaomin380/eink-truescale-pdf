@@ -71,6 +71,9 @@ class ConversionViewModel: ObservableObject {
     @Published var pasteText = ""
     @Published var pasteTitle = ""
 
+    // Wechat mode
+    @Published var wechatURL = ""
+
     // EPUB mode
     @Published var sourceFileURL: URL?
     @Published var sourceFileName = ""
@@ -283,22 +286,124 @@ class ConversionViewModel: ObservableObject {
         setStatus("渲染中…", .run)
         isConverting = true
 
+        var finalText = text
+        let title = pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty && !text.hasPrefix("---") {
+            let safeTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
+            finalText = "---\ntitle: \"\(safeTitle)\"\n---\n\n\(text)"
+        }
+        renderMarkdown(finalText, title: title)
+    }
+
+    func convertWechat() {
+        let raw = wechatURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else {
+            setStatus("请先粘贴链接", .err)
+            return
+        }
+        guard let url = URL(string: raw),
+              let host = url.host?.lowercased(),
+              host.contains("mp.weixin.qq.com") else {
+            setStatus("目前只支持微信公众号链接（mp.weixin.qq.com）", .err)
+            return
+        }
+        setStatus("抓取网页…", .run)
+        isConverting = true
+
+        fetchWechatHTML(url: url) { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .failure(let e):
+                DispatchQueue.main.async {
+                    self.isConverting = false
+                    self.setStatus("抓取失败：\(e.localizedDescription)", .err)
+                }
+            case .success(let html):
+                DispatchQueue.main.async {
+                    self.setStatus("抽取正文…", .run)
+                    LocalExtraction.run(html: html, url: raw) { [weak self] outcome in
+                        guard let self = self else { return }
+                        guard let article = outcome.article else {
+                            DispatchQueue.main.async {
+                                self.isConverting = false
+                                let msg: String
+                                if outcome.reason.contains("RISK_GRAY") {
+                                    msg = "微信要求验证，请稍后再试或在微信中打开一次该文章"
+                                } else if outcome.reason.contains("CONTENT_GONE") {
+                                    msg = "该文章已被删除或无法查看"
+                                } else if outcome.reason.contains("STRUCT_MISSING") || outcome.reason.contains("EXTRACT_EMPTY") {
+                                    msg = "未能识别正文结构（可能不是文章页）"
+                                } else if outcome.reason == "js_not_bundled" {
+                                    msg = "JS 抽取器未打包，请重新构建 app"
+                                } else {
+                                    msg = "抽取失败：\(outcome.reason)"
+                                }
+                                self.setStatus(msg, .err)
+                            }
+                            return
+                        }
+                        DispatchQueue.main.async {
+                            self.setStatus("下载图片…", .run)
+                        }
+                        let title = article.title
+                        let author = article.author
+                        DispatchQueue.main.async {
+                            if !title.isEmpty { self.pasteTitle = title }
+                        }
+                        var md = article.markdown
+                        if !title.isEmpty && !md.hasPrefix("---") {
+                            let safeTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
+                            var frontmatter = "---\ntitle: \"\(safeTitle)\"\n"
+                            if let author = author, !author.isEmpty {
+                                frontmatter += "author: \"\(author.replacingOccurrences(of: "\"", with: "\\\""))\"\n"
+                            }
+                            frontmatter += "---\n\n"
+                            md = frontmatter + md
+                        }
+                        ImageInliner.inline(markdown: md) { [weak self] finalMd in
+                            DispatchQueue.main.async {
+                                self?.setStatus("渲染中…", .run)
+                            }
+                            self?.renderMarkdown(finalMd, title: title)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func fetchWechatHTML(url: URL, completion: @escaping (Result<String, Error>) -> Void) {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                         forHTTPHeaderField: "User-Agent")
+
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let data = data else {
+                completion(.failure(NSError(domain: "Quaderno", code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "未从微信获取到数据"])))
+                return
+            }
+            let htmlString = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) ?? ""
+            completion(.success(htmlString))
+        }.resume()
+    }
+
+    private func renderMarkdown(_ markdown: String, title: String) {
         DispatchQueue.global(qos: .userInitiated).async { [self] in
             let workDir = FileManager.default.temporaryDirectory.appendingPathComponent("p2q_app")
             try? FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
 
-            var finalText = text
-            let title = pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !title.isEmpty && !text.hasPrefix("---") {
-                let safeTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
-                finalText = "---\ntitle: \"\(safeTitle)\"\n---\n\n\(text)"
-            }
+            let slug = String(markdown.hashValue, radix: 16, uppercase: false).prefix(8)
+            let mdFile = workDir.appendingPathComponent("wechat_\(slug).md")
+            let outPdf = workDir.appendingPathComponent("wechat_\(slug).pdf")
 
-            let slug = String(finalText.hashValue, radix: 16, uppercase: false).prefix(8)
-            let mdFile = workDir.appendingPathComponent("paste_\(slug).md")
-            let outPdf = workDir.appendingPathComponent("paste_\(slug).pdf")
-
-            try? finalText.write(to: mdFile, atomically: true, encoding: .utf8)
+            try? markdown.write(to: mdFile, atomically: true, encoding: .utf8)
 
             let result = runShell([
                 repoURL.appendingPathComponent("book.sh").path,

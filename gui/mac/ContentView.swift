@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 enum InputMode: String, CaseIterable {
     case epub = "电子书转换"
     case text = "粘贴文本"
+    case wechat = "公众号链接"
 }
 
 struct ContentView: View {
@@ -44,12 +45,15 @@ struct ContentView: View {
                     vm.sourceFileName = ""
                     vm.pasteText = ""
                     vm.pasteTitle = ""
+                    vm.wechatURL = ""
                     vm.currentPdfURL = nil
                     vm.totalPages = 0
                     vm.renderMetrics = nil
                 }
 
-                if inputMode == .epub { epubSection } else { textSection }
+                if inputMode == .epub { epubSection }
+                else if inputMode == .text { textSection }
+                else { wechatSection }
 
                 Divider()
 
@@ -147,6 +151,33 @@ struct ContentView: View {
                 .scrollContentBackground(.visible)
                 .border(Color.secondary.opacity(0.2), width: 1)
                 .frame(minHeight: 140)
+        }
+    }
+
+    private var wechatSection: some View {
+        Group {
+            Label("公众号文章链接", systemImage: "link")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            TextField("粘贴 mp.weixin.qq.com/s/...", text: $vm.wechatURL)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    if !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        vm.convertWechat()
+                    }
+                }
+
+            Button(action: { vm.convertWechat() }) {
+                HStack {
+                    if vm.isConverting {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text("解析并预览")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(vm.isConverting || vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
@@ -263,20 +294,24 @@ struct ContentView: View {
     private var actionButtons: some View {
         Group {
             Button(action: {
-                if inputMode == .epub { vm.convertEpub() }
-                else { vm.convertText() }
+                switch inputMode {
+                case .epub: vm.convertEpub()
+                case .text: vm.convertText()
+                case .wechat: vm.convertWechat()
+                }
             }) {
                 HStack {
                     if vm.isConverting {
                         ProgressView().controlSize(.small)
                     }
-                    Text("预览")
+                    Text(inputMode == .wechat ? "解析并预览" : "预览")
                 }
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .disabled(vm.isConverting || (inputMode == .epub && vm.sourceFileURL == nil)
-                      || (inputMode == .text && vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                      || (inputMode == .text && vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                      || (inputMode == .wechat && vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
             .keyboardShortcut(.return, modifiers: .command)
 
             if vm.hasQuaderno {

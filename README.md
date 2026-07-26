@@ -307,6 +307,9 @@ Pure native SwiftUI (PDFKit for preview) — no Python server, no browser engine
 It shells out to the same `book.sh` / `deliver.sh` used by the CLI, so behavior
 stays identical across all three entry points.
 
+支持三种输入模式：电子书转换、粘贴 Markdown 文本、**微信公众号链接**
+（粘贴 `mp.weixin.qq.com` 链接即可自动抓取正文并渲染 PDF）。
+
 ### Lightweight alternative (no Xcode required)
 
 If you don't have Xcode installed and don't want to build the native app,
