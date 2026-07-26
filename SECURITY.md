@@ -4,10 +4,17 @@
 
 `deliver.sh`, `book.sh`, and the GUI apps read your system clipboard and/or a file
 you point them at, shell out to `pandoc`/`typst` (and `open` on macOS to hand a PDF
-to the QUADERNO client), and write temporary files under `/tmp`. That's the entire
-footprint. There is no network activity, no telemetry, no credential handling, and
-no third-party dependency beyond what Homebrew installs (`pandoc`, `typst`,
-optionally `poppler`/`calibre`).
+to the QUADERNO client), and write temporary files under `/tmp`. There is no
+telemetry, no credential handling, and no third-party dependency beyond what
+Homebrew installs (`pandoc`, `typst`, optionally `poppler`/`calibre`).
+
+**The one network path** is the WeChat article feature: when *you* paste an
+`mp.weixin.qq.com` link, the app fetches that page and the images it references.
+Nothing is uploaded, no account is involved, and nothing is contacted unless you
+paste a link. While parsing, the `WKWebView` doing the extraction has *every*
+network request blocked via `WKContentRuleList` — so the page's own scripts and
+trackers cannot fire, and Tencent's CDN is only contacted by our own deliberate
+image fetches.
 
 This is by design: the project's own stated principle is that **readability is the
 trust mechanism**. There's deliberately no one-line `curl | sh` installer — you're

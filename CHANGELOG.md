@@ -17,10 +17,23 @@ requiring them to read every commit.
   metadata carried over from the source ebook. MOBI/AZW via Calibre.
   `--plain` mode for pasted text (no TOC/chapter forcing).
 - Native macOS GUI (`gui/Quaderno Converter.app`) — SwiftUI + PDFKit, no
-  network calls, no bundled interpreter. Drag-and-drop or paste-text input,
+  bundled interpreter. Drag-and-drop, paste-text, or WeChat-link input,
   live per-parameter readouts (measure width, CJK/Latin characters-per-line),
   whole-document preview with render-once-and-reuse (parameters unchanged →
-  no re-render on save/deliver).
+  no re-render on save/deliver). The only network activity is fetching a
+  WeChat article and its images when you paste a link — nothing else phones
+  home, and there is no telemetry.
+- **WeChat Official Account (微信公众号) article support** — paste an
+  `mp.weixin.qq.com` link and get a correctly-sized PDF. Fills a real gap:
+  QUADERNO is a Japanese device with no path for Chinese social-platform
+  content, while 微信公众号 hosts a large share of Chinese long-form writing.
+  Extraction runs entirely on-device: `URLSession` fetches the HTML, a
+  `WKWebView` with *all* network requests blocked runs a DOM-based extractor
+  against the page's own structure (`#js_content`), and images are downloaded
+  separately, grayscaled, JPEG-compressed and inlined as `data:` URIs. Blocking
+  the WebView's network is both a privacy measure (Tencent's CDN never learns
+  which article you're reading) and a 6× speedup (measured 1343 ms → 225 ms).
+  Ported from the author's ReadIsland project.
 - `gui.sh` — lightweight web-based alternative to the native app (Python
   standard library HTTP server, no Xcode required).
 - `calibrate.typ` — a printable calibration page that turns "what's my

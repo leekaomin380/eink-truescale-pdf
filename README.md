@@ -20,6 +20,20 @@ Copy Markdown  ──►  ⌃⌥⌘P  ──►  it's on your e-ink screen
 Built for people who read long-form text on e-ink and are tired of this dance:
 *copy → open a note app → paste → Cmd+P → hunt for "Print to QUADERNO" in a dropdown.*
 
+**Four ways to get content onto the device**, all rendering at the screen's true
+physical size:
+
+| Source | How |
+|---|---|
+| Clipboard Markdown | Global hotkey — [jump](#bind-the-hotkey) |
+| EPUB / MOBI ebooks | `book.sh` or the app — [jump](#converting-ebooks) |
+| **WeChat articles (微信公众号)** | Paste a link into the app — [jump](#reading-wechat-articles-微信公众号-on-a-quaderno) |
+| Pasted text | Type or paste into the app |
+
+The WeChat support exists because QUADERNO is a Japanese device with no path for Chinese
+social-platform content, and 微信公众号 is where much of Chinese long-form writing lives.
+Extraction runs locally on your Mac — no server, no account.
+
 ---
 
 ## Does this apply to you?
@@ -27,16 +41,21 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 **Please read this before installing.** This tool is narrow on purpose, and it is better
 that you find out in 30 seconds than after twenty minutes of setup.
 
-You need **all** of the following:
+To use **everything**, including one-key delivery to the device:
 
 - [ ] **macOS** (tested on Sequoia / Darwin 24)
 - [ ] **A Fujitsu QUADERNO device** — A5 (FMVDP51) or A4 (FMVDP41)
 - [ ] **QUADERNO PC App** installed, and your device paired and showing *Connected*
 - [ ] **Homebrew**, to install two small dependencies
 
-If you don't own a QUADERNO, this tool cannot help you — but
-[the calibration method](docs/quaderno-display-metrics.md) probably can, and it works on
-any e-ink device.
+**Without a QUADERNO**, only the delivery step is unavailable — the delivery protocol was
+reverse-engineered from that specific client. Everything upstream of it still works, and
+you can save the PDF and transfer it however you normally would:
+
+- Converting EPUBs and **WeChat articles** into clean, correctly-sized PDFs
+- [The calibration method](docs/quaderno-display-metrics.md) — works on any e-ink device
+  (reMarkable, BOOX, Kindle Scribe…) and is what makes the sizing correct in the first place
+- [The e-ink typography research](docs/typography-for-eink.md)
 
 > **Currently tuned for the A5 model.** A4 owners: everything works, but you must change two
 > values first — see [Adapting to the A4 model](#adapting-to-the-a4-model).
@@ -161,6 +180,67 @@ should be kept. Different lifecycles, different tools.
 
 **Does your device show PDF bookmarks?** We generate them, but whether QUADERNO's reader
 exposes an outline navigator is not yet confirmed. If you find out, please tell us.
+
+---
+
+## Reading WeChat articles (微信公众号) on a QUADERNO
+
+QUADERNO is a Japanese device with no path for WeChat content — and WeChat's Official
+Accounts platform (微信公众号) is where a large share of Chinese long-form writing
+actually lives. This tool closes that gap **entirely on your Mac**: no server, no
+account, no upload.
+
+Paste an article URL into the app, and it extracts the text, inlines the images, and
+renders it at your screen's true physical size — same pipeline as everything else here.
+
+**In the app:** switch to **公众号链接 / WeChat link** → paste an
+`https://mp.weixin.qq.com/s/...` URL → **解析并预览** → save the PDF or send it to
+the device.
+
+### How it works, and why it's built this way
+
+```
+URLSession fetches the HTML   ← the only network call you initiate
+        ↓
+WKWebView runs the extractor  ← all network BLOCKED inside this view
+        ↓
+Images downloaded separately  ← grayscaled + JPEG-compressed, inlined as data: URIs
+        ↓
+Markdown → book.sh → 1:1 PDF
+```
+
+The WebView blocks every request while parsing the page. That's deliberate: it keeps
+Tencent's CDN from learning which article you're reading, and it makes extraction
+roughly 6× faster (measured: 1343 ms → 225 ms — most of that time was spent waiting on
+images the extractor never needed).
+
+A few details that matter, all verified against real articles rather than assumed:
+
+- **WeChat lazy-loads images.** The real URL lives in `data-src`; `src` is usually
+  empty. In one measured article, 14 `<img>` tags broke down as 3 with a usable `src`,
+  4 with `data-src`, and 7 bare placeholders. Reading only `src` loses most of the
+  content images.
+- **Images are grayscaled and re-encoded at JPEG q50** — but only kept if the result is
+  actually smaller than the original, which for already-compressed WeChat JPEGs it often
+  isn't. E-ink panels render 16 grey levels; the discarded bits don't physically exist
+  on the target device.
+- **Extraction runs on the page's own structure** (`#js_content`), not a generic
+  readability heuristic. WeChat marks subheadings as bold paragraphs rather than `<h2>`,
+  which generic extractors silently drop.
+
+### When it doesn't work
+
+| Message | Meaning |
+|---|---|
+| 微信要求验证 | WeChat is rate-limiting or challenging the request. Open the article once in WeChat, then retry. |
+| 该文章已被删除或无法查看 | The article was removed by its publisher, or is otherwise unavailable. |
+| 未能识别正文结构 | The page isn't an article (an account profile page, a video page, etc.). |
+
+Only `mp.weixin.qq.com` links are accepted. General-purpose web article extraction is a
+much harder problem and deliberately out of scope.
+
+> The extraction core is ported from [ReadIsland](https://github.com/leekaomin380), the
+> author's other project, where it has been in real-world use.
 
 ---
 
@@ -293,22 +373,24 @@ A few notes on why it's built this way:
 
 ---
 
-## 打包成 App
+## The desktop app
 
-本项目提供了一个原生 macOS .app，双击即可启动，无需终端。
+A native macOS app, if you'd rather not use the terminal:
 
 ```bash
-./gui/build-app.sh    # 编译并组装 .app
+./gui/build-app.sh    # builds gui/Quaderno Converter.app
 ```
 
-产出 `gui/Quaderno Converter.app`，双击访达中的图标即可使用。
+Then double-click it in Finder. (To keep it around, drag it to `/Applications`.)
+
+Three input modes: **ebook conversion**, **pasted Markdown**, and
+**WeChat article links** ([details above](#reading-wechat-articles-微信公众号-on-a-quaderno)).
+Adjust fonts, size, margins and leading, preview any page, then save the PDF or send it
+straight to the device.
 
 Pure native SwiftUI (PDFKit for preview) — no Python server, no browser engine.
 It shells out to the same `book.sh` / `deliver.sh` used by the CLI, so behavior
-stays identical across all three entry points.
-
-支持三种输入模式：电子书转换、粘贴 Markdown 文本、**微信公众号链接**
-（粘贴 `mp.weixin.qq.com` 链接即可自动抓取正文并渲染 PDF）。
+stays identical across all entry points.
 
 ### Lightweight alternative (no Xcode required)
 
