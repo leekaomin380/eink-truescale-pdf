@@ -14,6 +14,18 @@ struct ContentView: View {
     @State private var previewImage: NSImage?
     @State private var showFilePicker = false
 
+    /// 页框尺寸：按目标设备显示区的真实宽高比，等比放进可用空间。
+    /// 有无预览都用同一个框 —— 未转换时用户也能看到内容将落在多大的版面里。
+    private func pageBox(in available: CGSize) -> CGSize {
+        let wmm = Double(vm.config.pageW.replacingOccurrences(of: "mm", with: "")) ?? 157.1
+        let hmm = Double(vm.config.pageH.replacingOccurrences(of: "mm", with: "")) ?? 209.5
+        guard wmm > 0, hmm > 0 else { return available }
+        let maxW = max(available.width - 48, 40)
+        let maxH = max(available.height - 32, 40)
+        let scale = min(maxW / wmm, maxH / hmm)
+        return CGSize(width: wmm * scale, height: hmm * scale)
+    }
+
     var body: some View {
         HSplitView {
             sidebar
@@ -167,17 +179,8 @@ struct ContentView: View {
                     }
                 }
 
-            Button(action: { vm.convertWechat() }) {
-                HStack {
-                    if vm.isConverting {
-                        ProgressView().controlSize(.small)
-                    }
-                    Text("解析并预览")
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(vm.isConverting || vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            // 主操作按钮统一放在下方按钮组，与其它输入模式一致 ——
+            // 此处不再重复一个「解析并预览」。回车仍可直接触发（见上方 onSubmit）。
         }
     }
 
@@ -406,27 +409,34 @@ struct ContentView: View {
 
             Divider()
 
-            // Preview
+            // Preview —— 页框始终按目标设备的真实宽高比呈现，
+            // 未转换时同样显示该幅面，让用户先看到「内容会落在多大的版面里」。
             GeometryReader { geo in
-                if let img = previewImage {
-                    Image(nsImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: geo.size.width - 40, maxHeight: geo.size.height - 20)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                } else {
-                    VStack(spacing: 12) {
-                        Image(systemName: "doc.richtext")
-                            .font(.system(size: 40))
-                            .foregroundColor(.gray.opacity(0.5))
-                        Text("转换后在此显示预览")
-                            .foregroundColor(.secondary)
-                        Text("按页面真实宽高比呈现")
-                            .font(.caption)
-                            .foregroundColor(.gray.opacity(0.5))
+                let box = pageBox(in: geo.size)
+                ZStack {
+                    if let img = previewImage {
+                        Image(nsImage: img)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: box.width, height: box.height)
+                    } else {
+                        Rectangle()
+                            .fill(Color(nsColor: .textBackgroundColor))
+                            .frame(width: box.width, height: box.height)
+                            .overlay(
+                                Text("准备就绪")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            )
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .frame(width: box.width, height: box.height)
+                .overlay(
+                    Rectangle()
+                        .stroke(Color.secondary.opacity(0.45), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+                .frame(width: geo.size.width, height: geo.size.height)
             }
             .background(Color(nsColor: .controlBackgroundColor))
 

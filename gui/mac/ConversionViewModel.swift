@@ -135,9 +135,11 @@ class ConversionViewModel: ObservableObject {
         let fontPattern = #"FONTS=\(([^)]*)\)"#
         if let range = text.range(of: fontPattern, options: .regularExpression) {
             let fontStr = String(text[range])
-            config.fonts = fontStr.components(separatedBy: "\"").filter {
-                !$0.isEmpty && $0 != "FONTS=(" && $0 != ")"
-            }
+            // 按引号分割会产生字体之间的分隔片段（如 " "）——必须 trim 后再判空，
+            // 否则那个空格会被当成一个字体名，导致 Picker 选中一个不存在的项而显示空白。
+            config.fonts = fontStr.components(separatedBy: "\"")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && $0 != "FONTS=(" && $0 != ")" }
         }
 
         bodySize = config.bodySize
@@ -214,7 +216,7 @@ class ConversionViewModel: ObservableObject {
     // MARK: - Metrics
 
     func computeMetrics(pages: Int? = nil, pageSizes: [String]? = nil) -> RenderMetrics {
-        let pageWmm = Double(margin.replacingOccurrences(of: "mm", with: "")) ?? 10
+        let pageWmm = Double(config.pageW.replacingOccurrences(of: "mm", with: "")) ?? 157.1
         let marginMm = Double(margin.replacingOccurrences(of: "mm", with: "")) ?? 10
         let sizePt = Double(bodySize.replacingOccurrences(of: "pt", with: "")) ?? 10
         let measure = pageWmm - 2 * marginMm
@@ -554,9 +556,23 @@ class ConversionViewModel: ObservableObject {
     }
 
     @discardableResult
+    /// 把裸命令名解析为绝对路径；已是绝对路径则原样返回。
+    private static func resolveExecutable(_ cmd: String) -> String {
+        guard !cmd.hasPrefix("/") else { return cmd }
+        let searchPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+        for dir in searchPaths {
+            let candidate = dir + "/" + cmd
+            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
+        }
+        return cmd   // 交给 Process 报错，调用方已有失败分支
+    }
+
     private func runShell(_ args: [String]) -> (stdout: String, stderr: String, exitCode: Int32) {
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: args[0])
+        // executableURL 不做 PATH 查找 —— 设 environment["PATH"] 只影响孙进程。
+        // 故裸命令名（"typst"/"pdftoppm"）必须自行解析成绝对路径，
+        // 否则从 Finder 启动时必然启动失败（Homebrew 不在 launchd 的默认 PATH 里）。
+        proc.executableURL = URL(fileURLWithPath: Self.resolveExecutable(args[0]))
         proc.arguments = Array(args.dropFirst())
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:" + (env["PATH"] ?? "")
