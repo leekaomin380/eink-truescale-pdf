@@ -186,7 +186,7 @@ struct ContentView: View {
 
     private var deviceSection: some View {
         Group {
-            Label("目标设备", systemImage: "device.phone")
+            Text("目标设备")
                 .font(.caption)
                 .foregroundColor(.secondary)
             Picker("", selection: $vm.selectedDeviceIndex) {
@@ -211,7 +211,7 @@ struct ContentView: View {
 
     private var fontSection: some View {
         Group {
-            Label("中文字体", systemImage: "textformat.abc")
+            Text("中文字体")
                 .font(.caption)
                 .foregroundColor(.secondary)
             Picker("", selection: $vm.selectedCjkFont) {
@@ -221,7 +221,7 @@ struct ContentView: View {
             }
             .pickerStyle(.menu)
 
-            Label("西文字体", systemImage: "textformat")
+            Text("西文字体")
                 .font(.caption)
                 .foregroundColor(.secondary)
             Picker("", selection: $vm.selectedLatinFont) {
@@ -235,7 +235,7 @@ struct ContentView: View {
 
     private var layoutSection: some View {
         Group {
-            Label("正文字号", systemImage: "textformat.size")
+            Text("正文字号")
                 .font(.caption)
                 .foregroundColor(.secondary)
             Picker("", selection: $vm.bodySize) {
@@ -260,7 +260,7 @@ struct ContentView: View {
 
             HStack {
                 VStack(alignment: .leading) {
-                    Label("页边距", systemImage: "rectangle.dashed")
+                    Text("页边距")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Picker("", selection: $vm.margin) {
@@ -271,7 +271,7 @@ struct ContentView: View {
                     .pickerStyle(.menu)
                 }
                 VStack(alignment: .leading) {
-                    Label("行距", systemImage: "arrow.up.and.down")
+                    Text("行距")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Picker("", selection: $vm.leading) {
@@ -283,7 +283,7 @@ struct ContentView: View {
                 }
             }
 
-            Label("语言", systemImage: "globe")
+            Text("语言")
                 .font(.caption)
                 .foregroundColor(.secondary)
             Picker("", selection: $vm.docLang) {
