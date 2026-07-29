@@ -20,6 +20,11 @@ Copy Markdown  ──►  ⌃⌥⌘P  ──►  it's on your e-ink screen
 Built for people who read long-form text on e-ink and are tired of this dance:
 *copy → open a note app → paste → Cmd+P → hunt for "Print to QUADERNO" in a dropdown.*
 
+> **📄 [Download the calibration page](https://github.com/leekaomin380/eink-truescale/releases/latest)** —
+> works on *any* e-ink device, not just QUADERNO. Send it to your reader, hold a ruler
+> against the screen, and find out whether it displays PDFs at true 1:1. No installation
+> needed to use it.
+
 **Four ways to get content onto the device**, all rendering at the screen's true
 physical size:
 
@@ -293,6 +298,9 @@ PAGE_H="270.3mm"
 
 Rendering at the display's physical size only works if the device shows PDFs at exactly
 100% with no letterboxing. Don't take our word for it — measure:
+
+**[Download the calibration page](https://github.com/leekaomin380/eink-truescale/releases/latest)**
+and transfer it to your device however you normally would. Or build it yourself:
 
 ```bash
 typst compile calibrate.typ calibration.pdf
