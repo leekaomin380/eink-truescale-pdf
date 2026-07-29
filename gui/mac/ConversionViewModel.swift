@@ -87,9 +87,17 @@ class ConversionViewModel: ObservableObject {
     }
 
     init() {
-        let scriptDir = URL(fileURLWithPath: #file)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        repoURL = scriptDir
+        if let resourceURL = Bundle.main.resourceURL,
+           FileManager.default.fileExists(atPath: resourceURL.appendingPathComponent("book.sh").path) {
+            repoURL = resourceURL
+        } else {
+            let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            if FileManager.default.fileExists(atPath: cwd.appendingPathComponent("book.sh").path) {
+                repoURL = cwd
+            } else {
+                repoURL = cwd.deletingLastPathComponent()
+            }
+        }
 
         // File I/O only — fast, safe on main thread
         loadConfig()

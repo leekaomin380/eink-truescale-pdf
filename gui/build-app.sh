@@ -46,5 +46,13 @@ fi
 echo ">>> 复制 JS 抽取器"
 cp "$MAC_DIR/wechat/wechat_extractor.js" "$APP_DIR/Contents/Resources/wechat_extractor.js"
 
+echo ">>> 复制运行时依赖"
+cp "$REPO/config.sh" "$APP_DIR/Contents/Resources/config.sh"
+cp "$REPO/devices.json" "$APP_DIR/Contents/Resources/devices.json"
+cp "$REPO/book.sh" "$APP_DIR/Contents/Resources/book.sh"
+chmod +x "$APP_DIR/Contents/Resources/book.sh"
+cp "$REPO/deliver.typ" "$APP_DIR/Contents/Resources/deliver.typ"
+cp "$REPO/book-filter.lua" "$APP_DIR/Contents/Resources/book-filter.lua"
+
 echo ">>> 完成: $APP_DIR"
 echo "    双击访达中的 \"$APP_NAME.app\" 即可启动"
