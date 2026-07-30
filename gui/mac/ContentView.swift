@@ -13,6 +13,21 @@ struct ContentView: View {
     @State private var isDragOver = false
     @State private var previewImage: NSImage?
     @State private var showFilePicker = false
+    @AppStorage("isAdvancedExpanded") private var isAdvancedExpanded = false
+
+    private let cjkNames: [String: String] = [
+        "PingFang SC": "苹方", "Songti SC": "宋体", "Heiti SC": "黑体",
+        "STSong": "华文宋体", "Hiragino Sans GB": "冬青黑体",
+        "Noto Serif CJK SC": "思源宋体", "Source Han Sans SC": "思源黑体",
+        "Source Han Serif SC": "思源宋体"
+    ]
+
+    private func cjkDisplayName(for name: String) -> String {
+        if let cn = cjkNames[name] {
+            return "\(cn) (\(name))"
+        }
+        return name
+    }
 
     /// 当前模式下是否已有可渲染的输入。
     /// 发送/另存不再要求「必须先预览」—— 它们会在内容脱节时自行重渲（见 vm.ensureFresh），
@@ -85,9 +100,16 @@ struct ContentView: View {
 
                 Divider()
 
-                deviceSection
-                fontSection
-                layoutSection
+                layoutBasicSection
+
+                DisclosureGroup("进阶设置", isExpanded: $isAdvancedExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        deviceSection
+                        fontSection
+                        layoutAdvancedSection
+                    }
+                    .padding(.top, 4)
+                }
 
                 Divider()
 
@@ -232,7 +254,7 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
             Picker("", selection: $vm.selectedCjkFont) {
                 ForEach(vm.cjkFonts, id: \.self) { f in
-                    Text(f).tag(f)
+                    Text(cjkDisplayName(for: f)).tag(f)
                 }
             }
             .pickerStyle(.menu)
@@ -249,7 +271,7 @@ struct ContentView: View {
         }
     }
 
-    private var layoutSection: some View {
+    private var layoutBasicSection: some View {
         Group {
             Text("正文字号")
                 .font(.caption)
@@ -274,6 +296,20 @@ struct ContentView: View {
                 }
             }
 
+            Text("行距")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Picker("", selection: $vm.leading) {
+                ForEach(ConversionViewModel.leadingChoices, id: \.0) { pair in
+                    Text(pair.1).tag(pair.0)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+    }
+
+    private var layoutAdvancedSection: some View {
+        Group {
             HStack {
                 VStack(alignment: .leading) {
                     Text("页边距")
@@ -286,21 +322,14 @@ struct ContentView: View {
                     }
                     .pickerStyle(.menu)
                 }
+                
                 VStack(alignment: .leading) {
-                    Text("行距")
+                    Text("页脚时间")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    // 显示传统「倍行距」，em 仅作内部值。
-                    // typst 的 leading 指「行间额外空隙」，而人们说的「1.5 倍行距」
-                    // 指「基线距 ÷ 字号」，两者差一个字身高。实测换算为线性：
-                    //   倍数 = em + 0.7   （0.85em → 实测基线距为字号的 1.55 倍）
-                    // 直接显示 em 会让人以为是 0.85 倍，与实际相差近一倍，故必须换算。
-                    Picker("", selection: $vm.leading) {
-                        ForEach(ConversionViewModel.leadingChoices, id: \.0) { pair in
-                            Text(pair.1).tag(pair.0)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                    Toggle("开启", isOn: $vm.printTime)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
                 }
             }
         }

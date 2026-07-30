@@ -56,6 +56,7 @@ class ConversionViewModel: ObservableObject {
     @Published var margin = "10mm"
     @Published var leading = "0.85em"
     @Published var docLang = "zh"
+    @Published var printTime = true
     @Published var statusMessage = ""
     @Published var statusKind: StatusKind = .info
     @Published var isConverting = false
@@ -119,6 +120,7 @@ class ConversionViewModel: ObservableObject {
             bodySize, margin, leading, docLang,
             selectedLatinFont, selectedCjkFont,
             config.pageW, config.pageH,
+            String(printTime)
         ].joined(separator: "\u{1F}")
     }
 
@@ -355,7 +357,8 @@ class ConversionViewModel: ObservableObject {
                 "--size", bodySize, "--margin", margin,
                 "--leading", leading, "--lang", docLang,
                 "--font", "\(selectedLatinFont),\(selectedCjkFont)",
-                "--page", config.pageW, config.pageH
+                "--page", config.pageW, config.pageH,
+                printTime ? "--time" : "--no-time"
             ])
 
             DispatchQueue.main.async { [self] in
@@ -513,6 +516,7 @@ class ConversionViewModel: ObservableObject {
                 "--leading", leading, "--lang", docLang,
                 "--font", "\(selectedLatinFont),\(selectedCjkFont)",
                 "--page", config.pageW, config.pageH,
+                printTime ? "--time" : "--no-time",
                 "--plain"
             ])
 
@@ -647,12 +651,18 @@ class ConversionViewModel: ObservableObject {
     private func getPageSizes(pdf: URL, pages: Int) -> [String] {
         let r = runShell(["pdfinfo", "-f", "1", "-l", "\(pages)", pdf.path])
         guard r.exitCode == 0 else { return [] }
-        let pattern = #"Page\s+\d+ size:\s+([\d.]+ x [\d.]+)"#
+        // 只取尺寸本身，不能连「Page N size:」前缀一起入集合 ——
+        // 那样每页因页号不同都成为不同字符串，尺寸一致的文档也会被判为「尺寸不一致」，
+        // 界面上恒亮告警（实测多页文档三页均为 445.323 x 593.858 却仍报警）。
+        // Range<String.Index> 拿不到捕获组，改用 NSRegularExpression 取 group 1。
+        guard let re = try? NSRegularExpression(
+            pattern: #"Page\s+\d+ size:\s+([\d.]+ x [\d.]+)"#) else { return [] }
         var sizes = Set<String>()
         for line in r.stdout.components(separatedBy: "\n") {
-            if let range = line.range(of: pattern, options: .regularExpression) {
-                sizes.insert(String(line[range]))
-            }
+            let ns = line as NSString
+            guard let m = re.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)),
+                  m.numberOfRanges > 1 else { continue }
+            sizes.insert(ns.substring(with: m.range(at: 1)))
         }
         return sizes.sorted()
     }

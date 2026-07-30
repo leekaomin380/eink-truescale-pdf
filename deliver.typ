@@ -116,6 +116,18 @@ $endif$
 $if(pagewidth)$
 #set page(width: $pagewidth$, height: $pageheight$$if(pagemargin)$, margin: $pagemargin$$endif$)
 $endif$
+$if(printtime)$
+#set page(
+  footer: context {
+    let pn = counter(page).display($if(page-numbering)$"$page-numbering$"$else$"1"$endif$)
+    let t = text(fill: luma(100), size: 0.8em)[$printtime$]
+    grid(
+      columns: (1fr, auto, 1fr),
+      [], align(center)[#pn], align(right)[#t]
+    )
+  }
+)
+$endif$
 $if(bodysize)$
 #set text(size: $bodysize$)
 $endif$

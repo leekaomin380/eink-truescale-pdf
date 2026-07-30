@@ -28,11 +28,13 @@ TEMPLATE="$SCRIPT_DIR/deliver.typ"
 die() { print -r -- "❌ $1" >&2; exit "${2:-1}"; }
 
 # ---- 参数解析 ---------------------------------------------------------------
-SRC=""; OUT=""; DELIVER=0; PLAIN=0
+SRC=""; OUT=""; DELIVER=0; PLAIN=0; PRINT_TIME=1
 while (( $# )); do
   case "$1" in
     --deliver|-d) DELIVER=1 ;;
     --plain)      PLAIN=1 ;;
+    --time)       PRINT_TIME=1 ;;
+    --no-time)    PRINT_TIME=0 ;;
     --lang)       shift; DOC_LANG="${1:-zh}" ;;
     --page)       shift; PAGE_W="${1}"; shift; PAGE_H="${1}" ;;
     --size)       shift; BODY_SIZE="${1:-10pt}" ;;
@@ -50,6 +52,7 @@ while (( $# )); do
       print -r -- "  --font \"A,B\"      字体 fallback，逗号分隔，拉丁在前 CJK 在后"
       print -r -- "  --margin 12mm     页边距（默认 $PAGE_MARGIN）"
       print -r -- "  --leading 0.9em   行距（默认 $LEADING）"
+      print -r -- "  --no-time         关闭页脚生成时间"
       print -r -- ""
       print -r -- "建议范围（页宽 $PAGE_W，1:1 无缩放前提下）:"
       print -r -- "  中文  10-12pt  —— 10.5pt 即传统五号，中文书正文标准字号"
@@ -114,6 +117,10 @@ FONTARGS=(); for f in "${FONTS[@]}"; do FONTARGS+=(-V "mainfont=$f"); done
 EXTRA_ARGS=()
 if (( ! PLAIN )); then
   EXTRA_ARGS+=(--toc --toc-depth=3 -V chapterbreak=true)
+fi
+
+if (( PRINT_TIME )); then
+  EXTRA_ARGS+=(-V "printtime=$(date +'%Y-%m-%d %H:%M')")
 fi
 
 print -r -- "→ 渲染中：${SRC:t}"
