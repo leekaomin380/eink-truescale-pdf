@@ -488,10 +488,15 @@ class ConversionViewModel: ObservableObject {
             setStatus("请先粘贴链接", .err)
             return
         }
+        // 放宽为任意 http(s) 网页 —— 抽取器已支持通用容器（article / main /
+        // .post-content …），公众号仍走其专用选择器优先匹配。
+        // 只校验协议：file:// 与自定义 scheme 会让 WKWebView 读本地文件或触发
+        // 外部 app，不该由一个粘贴框决定。
         guard let url = URL(string: raw),
-              let host = url.host?.lowercased(),
-              host.contains("mp.weixin.qq.com") else {
-            setStatus("目前只支持微信公众号链接（mp.weixin.qq.com）", .err)
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host?.isEmpty == false else {
+            setStatus("请粘贴 http(s) 开头的网页链接", .err)
             return
         }
         setStatus("抓取网页…", .run)
@@ -518,8 +523,13 @@ class ConversionViewModel: ObservableObject {
                                     msg = "微信要求验证，请稍后再试或在微信中打开一次该文章"
                                 } else if outcome.reason.contains("CONTENT_GONE") {
                                     msg = "该文章已被删除或无法查看"
+                                } else if outcome.reason.contains("NEEDS_JS") {
+                                    // 骨架在但正文空 —— 页面靠 JS 渲染，而 WKWebView
+                                    // 为隐私与速度屏蔽了全部网络请求，故拿不到正文。
+                                    // 这类站点本工具无解，直接给出可行的替代路径。
+                                    msg = "该页面正文由脚本动态加载，无法抓取 —— 请在浏览器中复制正文，改用「粘贴文本」"
                                 } else if outcome.reason.contains("STRUCT_MISSING") || outcome.reason.contains("EXTRACT_EMPTY") {
-                                    msg = "未能识别正文结构（可能不是文章页）"
+                                    msg = "未能识别正文结构（可能是首页/列表页，请用文章本身的链接）"
                                 } else if outcome.reason == "js_not_bundled" {
                                     msg = "JS 抽取器未打包，请重新构建 app"
                                 } else {

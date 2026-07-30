@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 enum InputMode: String, CaseIterable {
     case epub = "电子书转换"
     case text = "粘贴文本"
-    case wechat = "公众号链接"
+    case wechat = "网页链接"
 }
 
 struct ContentView: View {
@@ -216,10 +216,10 @@ struct ContentView: View {
 
     private var wechatSection: some View {
         Group {
-            Label("公众号文章链接", systemImage: "link")
+            Label("网页文章链接", systemImage: "link")
                 .font(.caption)
                 .foregroundColor(.secondary)
-            TextField("粘贴 mp.weixin.qq.com/s/...", text: $vm.wechatURL)
+            TextField("粘贴网页链接（公众号 / 博客文章）", text: $vm.wechatURL)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
                     if !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
