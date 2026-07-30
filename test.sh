@@ -349,6 +349,21 @@ grep -q 'onChange(of: vm.currentPdfURL)' "$CV" \
   || ok "预览不再依赖可能巧合相等的 currentPdfURL"
 
 # ---------------------------------------------------------------------------
+sec "book.sh -o 相对路径 · 产物不得被临时目录清理吃掉"
+# 【实际发生过】book.sh 内部 `cd "$WORK"` 后，相对的 -o 会相对 $WORK 解析，
+# 产物落在临时目录，随后被 EXIT trap 的 rm -rf 删掉 —— 而脚本已打印
+# 「✅ 完成：<路径>」，用户以为成功，实际一无所有。属静默数据丢失。
+REL_DIR=$(mktemp -d)
+print -r -- '# 相对路径
+
+正文。' > "$REL_DIR/r.md"
+( cd "$REL_DIR" && "$DIR/book.sh" r.md --plain -o "r_out.pdf" >/dev/null 2>&1 )
+[[ -s "$REL_DIR/r_out.pdf" ]] \
+  && ok "-o 相对路径时产物真实落盘" \
+  || no "-o 相对路径的产物被临时目录清理吃掉（脚本却报成功）"
+rm -rf "$REL_DIR"
+
+# ---------------------------------------------------------------------------
 print -r -- ""; print -r -- "────────────────────────"
 if (( FAIL == 0 )); then
   print -r -- "全部通过 · ${PASS} 项断言 ✅"
