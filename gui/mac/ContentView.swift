@@ -14,6 +14,17 @@ struct ContentView: View {
     @State private var previewImage: NSImage?
     @State private var showFilePicker = false
 
+    /// 当前模式下是否已有可渲染的输入。
+    /// 发送/另存不再要求「必须先预览」—— 它们会在内容脱节时自行重渲（见 vm.ensureFresh），
+    /// 故按钮条件与「预览」一致：有输入即可点。
+    private var hasInput: Bool {
+        switch inputMode {
+        case .epub:   return vm.sourceFileURL != nil
+        case .text:   return !vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .wechat: return !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
     /// 页框尺寸：按目标设备显示区的真实宽高比，等比放进可用空间。
     /// 有无预览都用同一个框 —— 未转换时用户也能看到内容将落在多大的版面里。
     private func pageBox(in available: CGSize) -> CGSize {
@@ -52,7 +63,12 @@ struct ContentView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: inputMode) { _, _ in
+                .onChange(of: inputMode) { _, newMode in
+                    vm.activeKind = switch newMode {
+                        case .epub: .epub
+                        case .text: .text
+                        case .wechat: .wechat
+                    }
                     vm.sourceFileURL = nil
                     vm.sourceFileName = ""
                     vm.pasteText = ""
@@ -274,23 +290,19 @@ struct ContentView: View {
                     Text("行距")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    // 显示传统「倍行距」，em 仅作内部值。
+                    // typst 的 leading 指「行间额外空隙」，而人们说的「1.5 倍行距」
+                    // 指「基线距 ÷ 字号」，两者差一个字身高。实测换算为线性：
+                    //   倍数 = em + 0.7   （0.85em → 实测基线距为字号的 1.55 倍）
+                    // 直接显示 em 会让人以为是 0.85 倍，与实际相差近一倍，故必须换算。
                     Picker("", selection: $vm.leading) {
-                        ForEach(["0.7em", "0.8em", "0.85em", "0.9em", "1.0em"], id: \.self) { l in
-                            Text(l).tag(l)
+                        ForEach(ConversionViewModel.leadingChoices, id: \.0) { pair in
+                            Text(pair.1).tag(pair.0)
                         }
                     }
                     .pickerStyle(.menu)
                 }
             }
-
-            Text("语言")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Picker("", selection: $vm.docLang) {
-                Text("中文").tag("zh")
-                Text("English").tag("en")
-            }
-            .pickerStyle(.segmented)
         }
     }
 
@@ -318,20 +330,20 @@ struct ContentView: View {
             .keyboardShortcut(.return, modifiers: .command)
 
             if vm.hasQuaderno {
-                Button(action: { vm.deliverToDevice() }) {
+                Button(action: { vm.ensureFresh { vm.deliverToDevice() } }) {
                     Text("发送到 Quaderno")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .disabled(vm.currentPdfURL == nil)
+                .disabled(vm.isConverting || !hasInput)
             }
 
-            Button(action: { vm.savePDF() }) {
+            Button(action: { vm.ensureFresh { vm.savePDF() } }) {
                 Text("另存 PDF…")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .disabled(vm.currentPdfURL == nil)
+            .disabled(vm.isConverting || !hasInput)
             .keyboardShortcut("s", modifiers: .command)
         }
     }

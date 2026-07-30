@@ -81,6 +81,94 @@ class ConversionViewModel: ObservableObject {
 
     enum StatusKind { case info, ok, err, run }
 
+    /// 行距选项：(内部 em 值, 界面显示的传统倍行距)。
+    /// typst 的 leading 是「行间额外空隙」，人们说的「1.5 倍行距」是「基线距 ÷ 字号」，
+    /// 二者差一个字身高。实测换算为线性关系：倍数 = em + 0.7。
+    /// 界面只显示右侧，em 不外露 —— 显示 0.85 会让人误以为是 0.85 倍，实际是 1.55 倍。
+    static let leadingChoices: [(String, String)] = [
+        ("0.7em",  "1.4 倍"),
+        ("0.8em",  "1.5 倍"),
+        ("0.85em", "1.55 倍"),
+        ("0.9em",  "1.6 倍"),
+        ("1.0em",  "1.7 倍"),
+    ]
+
+    /// 上次渲染所依据的输入指纹（内容 + 全部排版参数）。
+    ///
+    /// 【为什么需要它】此前发送/另存的唯一条件是「currentPdfURL != nil」，即
+    /// 只要曾渲染过任何东西按钮就一直可用，完全不校验当前输入是否对应那个 PDF。
+    /// 后果：贴入新文字后不点预览直接发送，发出去的是【上一篇】—— 真的发错内容。
+    ///
+    /// 网页版当年用 DIRTY 标记解决过此问题（index.html 至今仍有），
+    /// 原生 SwiftUI 重写时整套机制丢失，属回归。
+    ///
+    /// 现改为「发送/另存自行保证正确」：比对指纹，不一致就先重渲再执行 ——
+    /// 这样按钮名义与实际行为一致，用户不必记住「必须先预览」这条前置规则。
+    private var renderedFingerprint: String?
+
+    /// 当前输入的指纹。任何影响产物的东西都必须计入。
+    private func currentFingerprint(mode: InputKind) -> String {
+        let source: String
+        switch mode {
+        case .epub:   source = sourceFileURL?.path ?? ""
+        case .text:   source = pasteTitle + "\u{1}" + pasteText
+        case .wechat: source = wechatURL
+        }
+        return [
+            String(describing: mode), source,
+            bodySize, margin, leading, docLang,
+            selectedLatinFont, selectedCjkFont,
+            config.pageW, config.pageH,
+        ].joined(separator: "\u{1F}")
+    }
+
+    /// 输入种类。与 ContentView 的 InputMode 对应，但 ViewModel 不依赖 View 层类型。
+    enum InputKind { case epub, text, wechat }
+
+    /// 当前处于哪种输入模式 —— 由 View 在切换时同步过来。
+    var activeKind: InputKind = .epub
+
+    /// 产物是否已与当前输入脱节。
+    var isStale: Bool {
+        currentPdfURL == nil || renderedFingerprint != currentFingerprint(mode: activeKind)
+    }
+
+    /// 记录本次渲染对应的输入 —— 渲染成功后调用。
+    func markRendered() {
+        renderedFingerprint = currentFingerprint(mode: activeKind)
+    }
+
+    /// 等待渲染完成的回调。渲染是异步的，ensureFresh 需要在它结束后才继续。
+    private var pendingRenderCallbacks: [(Bool) -> Void] = []
+
+    /// 渲染流程结束时统一收敛 —— 成功与失败都必须调用，否则等待者永远悬着。
+    private func finishPendingRender(success: Bool) {
+        let cbs = pendingRenderCallbacks
+        pendingRenderCallbacks = []
+        cbs.forEach { $0(success) }
+    }
+
+    /// 按当前输入模式触发对应的渲染流程。
+    private func renderCurrentInput(_ done: @escaping (Bool) -> Void) {
+        pendingRenderCallbacks.append(done)
+        switch activeKind {
+        case .epub:   convertEpub()
+        case .text:   convertText()
+        case .wechat: convertWechat()
+        }
+    }
+
+    /// 确保产物与当前输入一致；若已脱节则重新渲染，完成后执行 next。
+    /// 这是「发送/另存自行保证正确」的入口。
+    func ensureFresh(then next: @escaping () -> Void) {
+        guard isStale else { next(); return }
+        setStatus("内容有变，正在重新渲染…", .run)
+        renderCurrentInput { ok in
+            guard ok else { return }   // 失败时状态已由渲染流程写明
+            next()
+        }
+    }
+
     var selectedDevice: DeviceInfo? {
         guard selectedDeviceIndex < devices.count else { return nil }
         return devices[selectedDeviceIndex]
@@ -274,6 +362,7 @@ class ConversionViewModel: ObservableObject {
                 isConverting = false
                 if result.exitCode != 0 {
                     setStatus("渲染失败：\(result.stderr.suffix(200))", .err)
+                    self.finishPendingRender(success: false)
                     return
                 }
                 self.currentPdfURL = outPdf
@@ -283,6 +372,8 @@ class ConversionViewModel: ObservableObject {
                 let sizes = getPageSizes(pdf: outPdf, pages: self.totalPages)
                 self.renderMetrics = computeMetrics(pages: self.totalPages, pageSizes: sizes)
                 setStatus("渲染完成，共 \(self.totalPages) 页", .ok)
+                self.markRendered()
+                self.finishPendingRender(success: true)
             }
         }
     }
@@ -429,6 +520,7 @@ class ConversionViewModel: ObservableObject {
                 isConverting = false
                 if result.exitCode != 0 {
                     setStatus("渲染失败：\(result.stderr.suffix(200))", .err)
+                    self.finishPendingRender(success: false)
                     return
                 }
                 self.currentPdfURL = outPdf
@@ -438,6 +530,8 @@ class ConversionViewModel: ObservableObject {
                 let sizes = getPageSizes(pdf: outPdf, pages: self.totalPages)
                 self.renderMetrics = computeMetrics(pages: self.totalPages, pageSizes: sizes)
                 setStatus("渲染完成，共 \(self.totalPages) 页", .ok)
+                self.markRendered()
+                self.finishPendingRender(success: true)
             }
         }
     }

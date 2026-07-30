@@ -125,6 +125,17 @@ $endif$
 $if(leading)$
 #set par(leading: $leading$)
 $endif$
+// 标题与正文之间留出呼吸空间。
+// typst 的 heading 默认 below 约 0.55em，标题几乎贴住首行正文；
+// 中文标题字面饱满、缺少升降部，视觉上比西文更"顶"，故需更多下间距。
+//
+// 必须写成 `show heading: set block(...)`（只改样式），
+// 不可写成 `show heading: it => block(..., it)`（构造容器）——
+// 后者会把标题包进容器，而分章规则要在标题处 pagebreak，typst 随即报
+// 「pagebreaks are not allowed inside of containers」，整本 EPUB 渲染中止。
+// 该错误已由 test.sh 的 EPUB 断言当场抓到。
+#show heading: set block(above: 1.5em, below: 0.9em)
+
 // 超宽数学块等比缩进版心 —— typst 的数学块【不会自动换行】，长公式会原样
 // 顶出版心。实测一条来自 AI 对话的真实公式：版心 [34.0, 411.3]pt，
 // 公式却占 [5.6, 439.8]pt（左右各溢约 10mm），距纸张物理边缘仅剩 2mm。
@@ -143,7 +154,7 @@ $endif$
 }
 $if(title)$
 #align(center)[
-  #block(above: 1.2em, below: 0.6em)[#text(1.5em, weight: "bold")[$title$]]
+  #block(above: 1.2em, below: 1.4em)[#text(1.5em, weight: "bold")[$title$]]
 $if(subtitle)$  #block(below: 0.6em)[#text(1.05em)[$subtitle$]]
 $endif$$if(author)$  #block(below: 1.6em)[#text(0.95em)[$for(author)$$author$$sep$, $endfor$]]
 $endif$]
