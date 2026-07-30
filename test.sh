@@ -309,6 +309,32 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "预览刷新 · 只改排版参数时预览也必须重画"
+# 【这个 bug 的形态值得记住】改字体后重新预览，预览图【不变】。
+# 但磁盘上的 PDF 其实已按新字体重渲（实测嵌入字体确为 STSongti-SC-Regular），
+# 发送到设备的文件是对的 —— 只有预览在骗人。这比「功能不生效」更容易误导：
+# 用户据预览判断「字体没生效」，于是反复尝试或放弃。
+#
+# 根因：View 靠 currentPdfURL / currentPage 的变化触发刷新，而输出路径是
+# 【确定性】的（文本模式取 markdown 哈希、EPUB 取源文件名）。只改字体时正文
+# 未变 → 路径不变、页码仍为 1 → SwiftUI 认为「无变化」→ 刷新从不发生。
+# 故必须依赖单调自增的显式信号，不能依赖任何可能巧合相等的状态。
+VM="$DIR/gui/mac/ConversionViewModel.swift"
+CV="$DIR/gui/mac/ContentView.swift"
+
+grep -q 'renderGeneration += 1' "$VM" \
+  && ok "渲染成功时自增 renderGeneration" \
+  || no "渲染完成后无单调信号 —— 只改排版参数时预览不会重画"
+
+grep -q 'onChange(of: vm.renderGeneration)' "$CV" \
+  && ok "预览刷新观察 renderGeneration" \
+  || no "预览未观察渲染世代号 —— 会退回「只改字体预览不变」的骗人状态"
+
+grep -q 'onChange(of: vm.currentPdfURL)' "$CV" \
+  && no "预览仍依赖 currentPdfURL —— 输出路径确定性，改参数时它不会变" \
+  || ok "预览不再依赖可能巧合相等的 currentPdfURL"
+
+# ---------------------------------------------------------------------------
 print -r -- ""; print -r -- "────────────────────────"
 if (( FAIL == 0 )); then
   print -r -- "全部通过 · ${PASS} 项断言 ✅"

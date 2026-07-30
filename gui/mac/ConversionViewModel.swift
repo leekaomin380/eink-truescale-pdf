@@ -140,9 +140,26 @@ class ConversionViewModel: ObservableObject {
         currentPdfURL == nil || renderedFingerprint != currentFingerprint(mode: activeKind)
     }
 
+    /// 渲染世代号 —— 每次渲染成功后自增，供 View 触发预览刷新。
+    ///
+    /// 【为何必须有它】View 原先靠 `currentPdfURL` 与 `currentPage` 的变化来刷新预览。
+    /// 但输出路径是【确定性】的（文本模式取 markdown 哈希、EPUB 模式取源文件名），
+    /// 只改字体/字号/行距时正文未变，路径与页码都不变 —— SwiftUI 的 onChange 认为
+    /// 「没有变化」，于是 updatePreview 从不被调用，预览停留在上一次渲染。
+    ///
+    /// 后果很坏：磁盘上的 PDF 已按新参数重渲（实测确认嵌入字体已换成
+    /// STSongti-SC-Regular），发送到设备的文件是对的，**只有预览在骗人**。
+    /// 用户据此判断「字体没生效」，实际生效了 —— 比不生效更容易误导。
+    ///
+    /// 故不再依赖任何可能巧合相等的状态，改用单调自增的显式信号。
+    @Published private(set) var renderGeneration = 0
+
     /// 记录本次渲染对应的输入 —— 渲染成功后调用。
+    /// 三条渲染路径（EPUB / 文本 / 公众号）都在成功时收敛到这里，
+    /// 故世代号在此自增可保证「渲染成功」与「预览刷新」严格一一对应。
     func markRendered() {
         renderedFingerprint = currentFingerprint(mode: activeKind)
+        renderGeneration += 1
     }
 
     /// 等待渲染完成的回调。渲染是异步的，ensureFresh 需要在它结束后才继续。

@@ -513,7 +513,9 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .controlBackgroundColor))
         }
-        .onChange(of: vm.currentPdfURL) { _, _ in updatePreview() }
+        // 观察世代号而非 currentPdfURL —— 后者在只改排版参数时不会变化
+        // （输出路径是确定性的），会导致预览停留在上一次渲染。
+        .onChange(of: vm.renderGeneration) { _, _ in updatePreview() }
     }
 
     // MARK: - Actions
