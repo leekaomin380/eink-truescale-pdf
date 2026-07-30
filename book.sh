@@ -112,7 +112,14 @@ esac
 case "${${INPUT:t:e}:l}" in
   epub)          FROM="epub" ;;
   fb2)           FROM="fb2" ;;
-  html|htm)      FROM="html" ;;
+  # tex_math_dollars 在 html reader 里【默认关闭】，不加则 $$…$$ 被当普通文字排版。
+  # 实测 lilianweng.github.io 一篇满是公式的文章：投递到设备后公式全变成
+  # 「$$ \text{Inner: }c_s^*=\arg\max_{c_s}J_\text{train}(c_s;s) $$」这样的源码，
+  # 用户看到的就是大段乱码。这类静态博客把 LaTeX 源码直接写在 HTML 里、
+  # 靠 MathJax/KaTeX 在浏览器端渲染，故源码必须由我们自己解析。
+  # 注意：app 的网页抽取路径不受影响 —— 它产出 markdown，走 $MD_FORMAT，
+  # 而那条已含 tex_math_dollars。此处修的是 book.sh 直接吃 .html 的情形。
+  html|htm)      FROM="html+tex_math_dollars" ;;
   *)             FROM="$MD_FORMAT" ;;
 esac
 

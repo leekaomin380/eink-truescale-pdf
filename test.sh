@@ -364,6 +364,25 @@ print -r -- '# 相对路径
 rm -rf "$REL_DIR"
 
 # ---------------------------------------------------------------------------
+sec "HTML 输入的数学公式 · $$…$$ 必须被渲染，不能原样排成源码"
+# 【用户报的 bug】投递的文章「Pattern 1 后面出现大段乱码」——实为未渲染的 LaTeX：
+#   $$ \text{Inner: }c_s^*=\arg\max_{c_s}J_\text{train}(c_s;s) $$
+# 根因：pandoc 的 html reader 默认【关闭】tex_math_dollars。静态博客把 LaTeX
+# 源码直接写在 HTML 里、靠 MathJax 在浏览器端渲染，故必须由我们解析。
+MH=$(mktemp -d)
+print -r -- '<html><body><p>正文</p><p>$$\arg\max_{c}J_\text{train}(c)$$</p></body></html>' > "$MH/m.html"
+"$DIR/book.sh" "$MH/m.html" --plain -o "$MH/m.pdf" >/dev/null 2>&1
+if [[ -s "$MH/m.pdf" ]]; then
+  RAW=$(pdftotext "$MH/m.pdf" - 2>/dev/null | grep -c 'arg\\max\|\\text{' || true)
+  [[ "$RAW" == "0" ]] \
+    && ok "HTML 里的 \$\$…\$\$ 被解析为公式（无 LaTeX 源码残留）" \
+    || no "HTML 数学公式未被解析，源码原样排进 PDF —— 用户看到的是大段乱码"
+else
+  no "含公式的 HTML 渲染失败"
+fi
+rm -rf "$MH"
+
+# ---------------------------------------------------------------------------
 print -r -- ""; print -r -- "────────────────────────"
 if (( FAIL == 0 )); then
   print -r -- "全部通过 · ${PASS} 项断言 ✅"
