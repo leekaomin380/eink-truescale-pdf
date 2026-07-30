@@ -86,6 +86,12 @@ class ConversionViewModel: ObservableObject {
     /// typst 的 leading 是「行间额外空隙」，人们说的「1.5 倍行距」是「基线距 ÷ 字号」，
     /// 二者差一个字身高。实测换算为线性关系：倍数 = em + 0.7。
     /// 界面只显示右侧，em 不外露 —— 显示 0.85 会让人误以为是 0.85 倍，实际是 1.55 倍。
+    /// 字号与页边距的可选值。
+    /// 【为何放在这里】原先硬编码在 ContentView 的 ForEach 里，而偏好校验需要
+    /// 判断"存下来的值是否仍是合法选项"，两处各写一份必然漂移。故收拢为单一来源。
+    static let bodySizeChoices = ["9pt", "10pt", "10.5pt", "11pt", "11.5pt", "12pt", "13pt", "14pt"]
+    static let marginChoices   = ["8mm", "10mm", "12mm", "14mm", "16mm"]
+
     static let leadingChoices: [(String, String)] = [
         ("0.7em",  "1.4 倍"),
         ("0.8em",  "1.5 倍"),
@@ -209,6 +215,7 @@ class ConversionViewModel: ObservableObject {
                 self.cjkFonts = fonts.cjk
                 self.latinFonts = fonts.latin
                 self.hasPoppler = poppler
+                self.reconcileSavedFonts()
             }
         }
     }
@@ -248,6 +255,68 @@ class ConversionViewModel: ObservableObject {
             selectedLatinFont = config.fonts[0]
             selectedCjkFont = config.fonts[1]
         }
+
+        // config.sh 是【出厂默认】；用户调过的值优先。
+        // 之前没有任何持久化，字体字号每次启动都被打回默认 —— 而这些参数
+        // 恰恰是一次性调好、长期不变的东西，每次重设是纯粹的摩擦。
+        applySavedPreferences()
+    }
+
+    // MARK: - 偏好持久化
+
+    /// UserDefaults 键。加前缀避免与系统或将来的键冲突。
+    private enum PrefKey {
+        static let cjkFont   = "pref.cjkFont"
+        static let latinFont = "pref.latinFont"
+        static let bodySize  = "pref.bodySize"
+        static let margin    = "pref.margin"
+        static let leading   = "pref.leading"
+        static let deviceIdx = "pref.deviceIndex"
+    }
+
+    /// 用已保存的偏好覆盖出厂默认值。
+    ///
+    /// 【为何不直接信任存下来的值】字体可能被卸载、devices.json 可能增删条目、
+    /// 选项列表可能变化。存的值若已失效就必须回退到默认，否则 Picker 会选中一个
+    /// 不存在的项而显示空白 —— 这个坑本项目踩过一次（FONTS 解析出空字符串，
+    /// 导致中文字体下拉整个空掉）。故所有值取用前都要校验。
+    private func applySavedPreferences() {
+        let d = UserDefaults.standard
+        // 字号/边距/行距：只接受仍在选项表里的值
+        if let v = d.string(forKey: PrefKey.bodySize),
+           Self.bodySizeChoices.contains(v) { bodySize = v }
+        if let v = d.string(forKey: PrefKey.margin),
+           Self.marginChoices.contains(v) { margin = v }
+        if let v = d.string(forKey: PrefKey.leading),
+           Self.leadingChoices.contains(where: { $0.0 == v }) { leading = v }
+        // 字体：能否使用要等字体列表异步加载完才知道，故此处先存起来，
+        // 由 reconcileSavedFonts() 在列表就绪后再校验。
+        if let v = d.string(forKey: PrefKey.cjkFont)   { selectedCjkFont = v }
+        if let v = d.string(forKey: PrefKey.latinFont) { selectedLatinFont = v }
+        // 设备索引：devices 已在 loadDevices 中同步载入，可立即校验
+        let idx = d.integer(forKey: PrefKey.deviceIdx)
+        if idx > 0 && idx < devices.count { selectedDeviceIndex = idx }
+    }
+
+    /// 字体列表异步就绪后，核对已保存的字体是否真的可用；不可用则回退到出厂默认。
+    private func reconcileSavedFonts() {
+        if !cjkFonts.isEmpty, !cjkFonts.contains(selectedCjkFont) {
+            selectedCjkFont = config.fonts.count >= 2 ? config.fonts[1] : cjkFonts[0]
+        }
+        if !latinFonts.isEmpty, !latinFonts.contains(selectedLatinFont) {
+            selectedLatinFont = config.fonts.first ?? latinFonts[0]
+        }
+    }
+
+    /// 保存当前偏好。由 View 在参数变化时调用。
+    func savePreferences() {
+        let d = UserDefaults.standard
+        d.set(selectedCjkFont,   forKey: PrefKey.cjkFont)
+        d.set(selectedLatinFont, forKey: PrefKey.latinFont)
+        d.set(bodySize,          forKey: PrefKey.bodySize)
+        d.set(margin,            forKey: PrefKey.margin)
+        d.set(leading,           forKey: PrefKey.leading)
+        d.set(selectedDeviceIndex, forKey: PrefKey.deviceIdx)
     }
 
     private func loadDevices() {

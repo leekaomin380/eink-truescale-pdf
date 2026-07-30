@@ -61,6 +61,16 @@ struct ContentView: View {
         .onChange(of: vm.currentPage) { _, _ in
             updatePreview()
         }
+        // 排版参数一改就落盘。
+        // 【为何逐项监听而不在退出时统一保存】app 是常驻型（关窗不退出），
+        // 「退出时保存」在异常退出或强制关闭时会丢；而这些值改动频率极低，
+        // 每次写一个 UserDefaults 字典的开销可以忽略。
+        .onChange(of: vm.selectedCjkFont)     { _, _ in vm.savePreferences() }
+        .onChange(of: vm.selectedLatinFont)   { _, _ in vm.savePreferences() }
+        .onChange(of: vm.bodySize)            { _, _ in vm.savePreferences() }
+        .onChange(of: vm.margin)              { _, _ in vm.savePreferences() }
+        .onChange(of: vm.leading)             { _, _ in vm.savePreferences() }
+        .onChange(of: vm.selectedDeviceIndex) { _, _ in vm.savePreferences() }
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers)
         }
@@ -277,7 +287,7 @@ struct ContentView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
             Picker("", selection: $vm.bodySize) {
-                ForEach(["9pt", "10pt", "10.5pt", "11pt", "11.5pt", "12pt", "13pt", "14pt"], id: \.self) { s in
+                ForEach(ConversionViewModel.bodySizeChoices, id: \.self) { s in
                     Text(s).tag(s)
                 }
             }
@@ -316,7 +326,7 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Picker("", selection: $vm.margin) {
-                        ForEach(["8mm", "10mm", "12mm", "14mm", "16mm"], id: \.self) { m in
+                        ForEach(ConversionViewModel.marginChoices, id: \.self) { m in
                             Text(m).tag(m)
                         }
                     }

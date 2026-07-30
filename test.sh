@@ -251,6 +251,29 @@ V=$(python3 -c "import json;d=json.load(open('$DIR/devices.json'));print([c.get(
                      || no "A5 尺寸类未标记已实测（回归：字段名或数据被改动）"
 
 # ---------------------------------------------------------------------------
+sec "偏好持久化 · 存下来的失效值必须被校验，而非直接采用"
+# 【为何断言这个】字体会被卸载、选项表会变动。若读到什么就用什么，Picker 会选中
+# 一个不存在的项而显示【空白】—— 本项目在 FONTS 解析上正踩过一次这种静默失效。
+VM="$DIR/gui/mac/ConversionViewModel.swift"
+CV="$DIR/gui/mac/ContentView.swift"
+
+MISS=()
+grep -q 'bodySizeChoices.contains' "$VM" || MISS+=("字号")
+grep -q 'marginChoices.contains'   "$VM" || MISS+=("页边距")
+grep -q 'leadingChoices.contains'  "$VM" || MISS+=("行距")
+(( ${#MISS[@]} == 0 )) && ok "字号/页边距/行距偏好均校验合法性后才采用" \
+                       || no "偏好未校验合法性：${(j:、:)MISS} —— 失效值会让 Picker 显示空白"
+
+grep -q 'func reconcileSavedFonts' "$VM" \
+  && ok "字体偏好在字体列表异步就绪后再核对" \
+  || no "字体偏好未核对可用性 —— 卸载该字体后 typst 会静默 fallback，排版被悄悄换掉"
+
+# 选项表必须单一来源：ContentView 不得再各写一份，否则与校验用的表会漂移
+grep -q '"9pt", "10pt"' "$CV" \
+  && no "ContentView 仍硬编码字号选项 —— 与校验所用的表必然漂移" \
+  || ok "字号/页边距选项表单一来源（ConversionViewModel）"
+
+# ---------------------------------------------------------------------------
 print -r -- ""; print -r -- "────────────────────────"
 if (( FAIL == 0 )); then
   print -r -- "全部通过 · ${PASS} 项断言 ✅"
