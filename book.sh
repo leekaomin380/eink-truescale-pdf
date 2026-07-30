@@ -19,7 +19,15 @@
 set -uo pipefail
 export LANG="en_US.UTF-8"
 export LC_ALL="en_US.UTF-8"
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# .app 内自带 pandoc/typst 时优先用它们 —— 这是「装上就能用、无需 Homebrew」的关键。
+# SCRIPT_DIR 在 .app 中即 Contents/Resources，故 bin/ 与本脚本同级；
+# 从 git 检出直接运行时该目录不存在，自然回退到 Homebrew，两种用法都成立。
+_BUNDLED_BIN="${0:A:h}/bin"
+if [[ -x "$_BUNDLED_BIN/pandoc" ]]; then
+  export PATH="$_BUNDLED_BIN:/opt/homebrew/bin:/usr/local/bin:$PATH"
+else
+  export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+fi
 
 SCRIPT_DIR="${0:A:h}"
 source "$SCRIPT_DIR/config.sh"

@@ -89,9 +89,19 @@ It's short, and every non-obvious line is commented.
 
 ## Bind the hotkey
 
-This is the one step that cannot be automated. Apple does not allow programs to create
-Shortcuts or register global hotkeys on your behalf, so you have to click through it once.
-It takes about a minute.
+This is the one step that cannot be automated **for the shell-script workflow**: macOS
+does not let a program create a Shortcut or assign its key binding on your behalf, so you
+have to click through it once. It takes about a minute.
+
+To be precise about what is and isn't possible, since this is easy to get wrong: an app
+*can* register a global hotkey without any accessibility permission — Carbon's
+`RegisterEventHotKey` does exactly that (measured: registration succeeds while
+`AXIsProcessTrusted()` returns false). What macOS does not allow is programmatically
+authoring a *Shortcuts.app* shortcut and binding a key to it. The two are different
+mechanisms, and only the latter is closed off.
+
+So this manual step exists because the CLI workflow routes through Shortcuts.app.
+Building the hotkey into the app itself is a tracked task, not a platform limitation.
 
 1. Open **Shortcuts.app** → click **+** to create a new shortcut
 2. Search the action list for **Run Shell Script** and add it
@@ -383,10 +393,22 @@ A few notes on why it's built this way:
 
 ## The desktop app
 
-A native macOS app, if you'd rather not use the terminal:
+A native macOS app, if you'd rather not use the terminal.
+
+**It is self-contained: pandoc and typst ship inside the bundle, so it works on a Mac
+with no Homebrew and no command-line tools at all.** Install the QUADERNO client, drag
+this app to `/Applications`, and you can convert and send — nothing else to set up.
+That costs about 306 MB (pandoc alone is 263 MB and cannot be stripped further); making
+"just works" actually true was judged worth the size.
+
+**Apple Silicon only.** The bundled engines are arm64. On an Intel Mac, build it yourself
+(below) and the build packs your machine's own architecture.
+
+To build from source:
 
 ```bash
-./gui/build-app.sh    # builds gui/Quaderno Converter.app
+brew install pandoc typst      # only needed on the build machine
+./gui/build-app.sh             # builds gui/Quaderno Converter.app
 ```
 
 Then double-click it in Finder. (To keep it around, drag it to `/Applications`.)
@@ -402,7 +424,7 @@ stays identical across all entry points.
 
 ### Lightweight alternative (no Xcode required)
 
-If you don't have Xcode installed and don't want to build the native app,
+If you don't have Xcode and don't want to build the native app,
 `./gui.sh` starts the same GUI as a local web page (Python standard library
 HTTP server, no third-party dependencies). Same features, same underlying
 `book.sh`/`deliver.sh` — just rendered in a browser tab instead of a native
@@ -445,7 +467,12 @@ Code contributions are welcome too, especially A4 support and English error mess
 ## Credits and licence
 
 Built with [pandoc](https://pandoc.org) (syntax tree) and [typst](https://typst.app)
-(typesetting). Neither is bundled; both are installed via Homebrew.
+(typesetting). **Both are bundled inside the macOS app** so it runs without Homebrew;
+the CLI scripts use whichever is on your `PATH`. pandoc is GPL-2.0-or-later and libgmp is
+LGPL-3/GPL-2 — distributing those binaries carries obligations, which are documented and
+discharged in **[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md)** (component versions,
+the exact binary modifications made, and where to get corresponding source). typst is
+Apache-2.0. License texts ship inside the app under `Contents/Resources/licenses/`.
 
 Not affiliated with or endorsed by Fujitsu. QUADERNO is their trademark.
 

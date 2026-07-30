@@ -66,7 +66,6 @@ class ConversionViewModel: ObservableObject {
     @Published var currentPage = 1
     @Published var renderMetrics: RenderMetrics?
     @Published var hasQuaderno = false
-    @Published var hasPoppler = false
 
     // Text paste mode
     @Published var pasteText = ""
@@ -209,12 +208,10 @@ class ConversionViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let fonts = self.listFontsAsync()
-            let poppler = self.shellCommandExists("pdftoppm")
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.cjkFonts = fonts.cjk
                 self.latinFonts = fonts.latin
-                self.hasPoppler = poppler
                 self.reconcileSavedFonts()
             }
         }
@@ -717,21 +714,24 @@ class ConversionViewModel: ObservableObject {
         statusKind = kind
     }
 
+    /// 各页物理尺寸（去重后）。用于告警「页面尺寸不一致」。
+    ///
+    /// 【为何改用 PDFKit】原先调 poppler 的 `pdfinfo` 解析文本输出。而 poppler
+    /// 是本项目唯一需要成串动态库（libpoppler / liblcms2 / freetype / fontconfig…）
+    /// 的依赖，为把 app 做成自包含可分发，它那棵依赖树的重定位成本远高于收益 ——
+    /// 而它在此处只做一件事：读页面尺寸，PDFKit 原生就能做，且免去解析文本、
+    /// 免去正则（此前正则漏取捕获组，导致每页都被判为不同尺寸而恒亮告警）。
+    ///
+    /// mediaBox 与 pdfinfo 的 "Page N size" 同源，故数值与旧实现一致。
     private func getPageSizes(pdf: URL, pages: Int) -> [String] {
-        let r = runShell(["pdfinfo", "-f", "1", "-l", "\(pages)", pdf.path])
-        guard r.exitCode == 0 else { return [] }
-        // 只取尺寸本身，不能连「Page N size:」前缀一起入集合 ——
-        // 那样每页因页号不同都成为不同字符串，尺寸一致的文档也会被判为「尺寸不一致」，
-        // 界面上恒亮告警（实测多页文档三页均为 445.323 x 593.858 却仍报警）。
-        // Range<String.Index> 拿不到捕获组，改用 NSRegularExpression 取 group 1。
-        guard let re = try? NSRegularExpression(
-            pattern: #"Page\s+\d+ size:\s+([\d.]+ x [\d.]+)"#) else { return [] }
+        guard let doc = PDFDocument(url: pdf) else { return [] }
         var sizes = Set<String>()
-        for line in r.stdout.components(separatedBy: "\n") {
-            let ns = line as NSString
-            guard let m = re.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)),
-                  m.numberOfRanges > 1 else { continue }
-            sizes.insert(ns.substring(with: m.range(at: 1)))
+        for i in 0..<min(pages, doc.pageCount) {
+            guard let page = doc.page(at: i) else { continue }
+            let b = page.bounds(for: .mediaBox)
+            // 保留三位小数并与旧格式一致（"445.323 x 593.858"），
+            // 使既有的一致性比较与界面展示无需改动。
+            sizes.insert(String(format: "%.3f x %.3f", b.width, b.height))
         }
         return sizes.sorted()
     }
@@ -740,7 +740,12 @@ class ConversionViewModel: ObservableObject {
     /// 把裸命令名解析为绝对路径；已是绝对路径则原样返回。
     private static func resolveExecutable(_ cmd: String) -> String {
         guard !cmd.hasPrefix("/") else { return cmd }
-        let searchPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+        // bundle 内自带的引擎优先 —— 目标机可能根本没有 Homebrew。
+        var searchPaths: [String] = []
+        if let res = Bundle.main.resourceURL {
+            searchPaths.append(res.appendingPathComponent("bin").path)
+        }
+        searchPaths += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
         for dir in searchPaths {
             let candidate = dir + "/" + cmd
             if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }

@@ -274,6 +274,41 @@ grep -q '"9pt", "10pt"' "$CV" \
   || ok "字号/页边距选项表单一来源（ConversionViewModel）"
 
 # ---------------------------------------------------------------------------
+sec "自包含 · .app 在没有 Homebrew 的机器上必须能渲染"
+# 只有构建过 .app 时才检查（CI 或纯脚本用户不必先构建）
+APP_RES="$DIR/gui/Quaderno Converter.app/Contents/Resources"
+if [[ -d "$APP_RES/bin" ]]; then
+  # ① 引擎确实在 bundle 内
+  [[ -x "$APP_RES/bin/pandoc" && -x "$APP_RES/bin/typst" ]] \
+    && ok "pandoc / typst 已打包进 .app" \
+    || no "渲染引擎未打包 —— 用户装上后一点转换就报「未找到 pandoc」"
+
+  # ② 【关键】不得残留 Homebrew 绝对路径引用。
+  #    dylib 自身的 install ID 也算，只改 -change 会漏 —— 此坑实际踩到过。
+  LEAKED=""
+  for f in "$APP_RES"/bin/*(N) "$APP_RES"/lib/*(N); do
+    [[ -f "$f" ]] || continue
+    LEAKED+=$(otool -L "$f" 2>/dev/null | tail -n +2 | awk '{print $1}' \
+              | grep -E '^/opt/homebrew/|^/usr/local/' || true)
+  done
+  [[ -z "$LEAKED" ]] \
+    && ok "bundle 内二进制无 Homebrew 绝对路径引用" \
+    || no "残留 Homebrew 路径引用 —— 目标机会 dyld 崩溃（Library not loaded）"
+
+  # ③ 端到端：清空环境变量与 PATH，模拟没有 Homebrew 的机器
+  printf '# 自包含\n\n中文测试。\n' > "$WORKDIR/sc.md"
+  if env -i HOME="$HOME" PATH="/usr/bin:/bin" /bin/zsh \
+       "$APP_RES/book.sh" "$WORKDIR/sc.md" --plain -o "$WORKDIR/sc.pdf" >/dev/null 2>&1 \
+     && [[ -s "$WORKDIR/sc.pdf" ]]; then
+    ok "无 Homebrew 的干净环境下端到端渲染成功"
+  else
+    no "干净环境渲染失败 —— 「装上就能用」不成立"
+  fi
+else
+  print -r -- "  （跳过自包含检查：尚未构建 .app）"
+fi
+
+# ---------------------------------------------------------------------------
 print -r -- ""; print -r -- "────────────────────────"
 if (( FAIL == 0 )); then
   print -r -- "全部通过 · ${PASS} 项断言 ✅"
