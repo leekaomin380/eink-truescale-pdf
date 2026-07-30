@@ -23,10 +23,28 @@ BODY_SIZE="10.5pt"                        # 1:1 下即真实物理字号
 LEADING="0.85em"
 
 # ---- Markdown 方言 ----------------------------------------------------------
-# 关掉两个对「任意文本」有害的默认扩展：
-#   -citations        : "@227dpi"/@提及/邮箱 会被当文献引用 → 渲染硬失败
-#   -tex_math_dollars : $PATH / $1 / $100 会被当数学公式吃掉
-MD_FORMAT="markdown-citations-tex_math_dollars"
+# 只关 citations，保留数学公式支持。
+#
+#   -citations : "@227dpi" / @提及 / 邮箱 会被当成文献引用，而文档没有参考文献
+#                → typst 报 "does not contain a bibliography" → 渲染硬失败。
+#                这是真凶，必须关。
+#
+# 【2026-07-29 修正】此处原本连 tex_math_dollars 一起关掉了，理由写的是
+# "$PATH / $1 / $100 会被当数学公式吃掉" —— 该判断经实测不成立：
+#   打开公式支持时，$PATH、$HOME、$1、$100 到 $250、$(date)、${VAR}
+#   以及代码块/行内代码里的一切，全部完好无损（pandoc 要求 $ 紧贴非空格
+#   才视为公式，且代码环境受保护）。
+# 当初是把两个扩展一并关闭，tex_math_dollars 属于被连坐。
+#
+# 而关闭它的实际代价是【丢内容】：真实公式里的希腊字母与中文会被整段丢弃，
+#   \Delta_{net}                      → _{net}        （\Delta 消失）
+#   \text{回收阻断带来的递质增量}      → ()            （中文整段消失）
+#   \alpha_2                          → _2            （\alpha 消失）
+# 从 AI 对话复制来的技术内容常含公式，这是真实的数据损坏，不可接受。
+#
+# 打开后唯一的损失是「两个 $ 紧贴内容」的裸文本（如 $mainfont$ → mainfont），
+# 这种写法在自然文本中几乎只出现于模板占位符，且写在代码块里即可保全。
+MD_FORMAT="markdown-citations"
 
 # ---- 环境 -------------------------------------------------------------------
 QUADERNO_APP="/Applications/QUADERNO PC App.app"

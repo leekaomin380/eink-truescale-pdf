@@ -66,8 +66,12 @@ EOF
 
 # ---------------------------------------------------------------------------
 sec "I3 · 含 @词 / \$变量 的文本不致渲染失败（deliver.sh 路径）"
+# 方言取自 config.sh，不在此写死 —— 否则测的是测试自己的假设，而非真实配置。
+# （本行原先硬编码 markdown-citations-tex_math_dollars，导致 config.sh 改动
+#   完全不被覆盖。2026-07-29 修正。）
+source "$DIR/config.sh"
 if printf '%s' "$(cat "$WORK/trap.md")" \
-   | pandoc -f markdown-citations-tex_math_dollars --template="$DIR/deliver.typ" \
+   | pandoc -f "$MD_FORMAT" --template="$DIR/deliver.typ" \
      -V mainfont=Charter -V "mainfont=PingFang SC" \
      -V pagewidth=156.97mm -V pageheight=209.3mm -V pagemargin=10mm \
      -V bodysize=10pt -V leading=0.85em \
@@ -75,6 +79,32 @@ if printf '%s' "$(cat "$WORK/trap.md")" \
   ok "@227dpi / \$PATH / @media 等未导致崩溃"
 else
   no "含特殊字符的文本渲染失败：$(tail -1 "$WORK/e")"
+fi
+
+# ---------------------------------------------------------------------------
+sec "I9 · 数学公式内的希腊字母与中文不得丢失"
+# 由真实 bug 得出：曾为防 \$PATH 被误判而关闭 tex_math_dollars，
+# 代价是 \Delta → 消失、\text{中文} → 整段消失。从 AI 对话复制的技术内容常含公式。
+cat > "$WORK/math.md" <<'MATHEOF'
+公式：$\Delta_{net} = V_{a}(\text{中文说明}) - \alpha_2$ 结束。
+MATHEOF
+if pandoc "$WORK/math.md" -f "$MD_FORMAT" --template="$DIR/deliver.typ" \
+     -V mainfont=Charter -V "mainfont=Songti SC" \
+     -V pagewidth=156.97mm -V pageheight=209.3mm -V pagemargin=10mm \
+     -V bodysize=10pt -V leading=0.85em \
+     -o "$WORK/math.pdf" --pdf-engine=typst 2>"$WORK/me"; then
+  MT=$(pdftotext "$WORK/math.pdf" - 2>/dev/null)
+  print -r -- "$MT" | grep -q "中文说明" \
+    && ok "公式内的中文保留（\\text{} 未被丢弃）" \
+    || no "公式内的中文丢失 —— 检查 config.sh 的 MD_FORMAT 是否关掉了 tex_math_dollars"
+  # 希腊字母断言：Δ 为 U+0394（原样保留），α 经 typst 数学排版后变为
+  # U+1D6FC「数学斜体小写 alpha」。拉丁字母同理会变成 U+1D44x 段的数学斜体，
+  # 故不能用 ASCII 的 "net" 去 grep —— 那是本断言初版写错的地方。
+  print -r -- "$MT" | grep -q "Δ" \
+    && ok "公式内希腊字母保留（\\Delta）" \
+    || no "公式内希腊字母丢失（\\Delta 未出现）"
+else
+  no "含公式的文本渲染失败：$(tail -1 "$WORK/me")"
 fi
 
 # ---------------------------------------------------------------------------
