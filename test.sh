@@ -295,7 +295,21 @@ if [[ -d "$APP_RES/bin" ]]; then
     && ok "bundle 内二进制无 Homebrew 绝对路径引用" \
     || no "残留 Homebrew 路径引用 —— 目标机会 dyld 崩溃（Library not loaded）"
 
-  # ③ 端到端：清空环境变量与 PATH，模拟没有 Homebrew 的机器
+  # ③ bundle 封印必须有效 —— 否则下载后 macOS 报「已损坏，请移到废纸篓」，
+  #    那个提示【没有「仍要打开」的出路】，比「无法验证开发者」恶劣得多。
+  #    此前 build-app.sh 只签 Resources/bin 与 lib 里的单个二进制，从未签 .app
+  #    本体，_CodeSignature/CodeResources 根本不存在。必须最后一步整包签名。
+  [[ -f "$APP_RES/../_CodeSignature/CodeResources" ]] \
+    && ok ".app 已盖封印（存在 _CodeSignature/CodeResources）" \
+    || no "bundle 无封印 —— 下载后 macOS 报「已损坏」，无法打开"
+
+  if codesign --verify --deep --strict "$DIR/gui/Quaderno Converter.app" 2>/dev/null; then
+    ok "codesign 校验通过（签名与内容一致）"
+  else
+    no "codesign 校验失败 —— 签名与 bundle 内容不一致，下载后不可用"
+  fi
+
+  # ④ 端到端：清空环境变量与 PATH，模拟没有 Homebrew 的机器
   printf '# 自包含\n\n中文测试。\n' > "$WORKDIR/sc.md"
   if env -i HOME="$HOME" PATH="/usr/bin:/bin" /bin/zsh \
        "$APP_RES/book.sh" "$WORKDIR/sc.md" --plain -o "$WORKDIR/sc.pdf" >/dev/null 2>&1 \
