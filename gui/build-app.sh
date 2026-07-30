@@ -150,7 +150,7 @@ for pkg in pandoc typst gmp; do
   done
 done
 [[ -f "$REPO/THIRD-PARTY-LICENSES.md" ]] && cp "$REPO/THIRD-PARTY-LICENSES.md" "$LIC_DIR/"
-[[ -f "$REPO/LICENSE" ]] && cp "$REPO/LICENSE" "$LIC_DIR/eink-truescale-LICENSE"
+[[ -f "$REPO/LICENSE" ]] && cp "$REPO/LICENSE" "$LIC_DIR/eink-truescale-pdf-LICENSE"
 echo "    $(ls "$LIC_DIR" | wc -l | tr -d ' ') 个许可文件"
 
 echo ">>> 完成: $APP_DIR"

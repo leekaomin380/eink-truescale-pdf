@@ -1,4 +1,4 @@
-# eink-truescale
+# eink-truescale-pdf
 
 **Copy text → press a hotkey → it appears on your e-ink device.** No GUI, no windows, nothing steals your focus.
 
@@ -20,7 +20,7 @@ Copy Markdown  ──►  ⌃⌥⌘P  ──►  it's on your e-ink screen
 Built for people who read long-form text on e-ink and are tired of this dance:
 *copy → open a note app → paste → Cmd+P → hunt for "Print to QUADERNO" in a dropdown.*
 
-> **📄 [Download the calibration page](https://github.com/leekaomin380/eink-truescale/releases/latest)** —
+> **📄 [Download the calibration page](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest)** —
 > works on *any* e-ink device, not just QUADERNO. Send it to your reader, hold a ruler
 > against the screen, and find out whether it displays PDFs at true 1:1. No installation
 > needed to use it.
@@ -71,8 +71,8 @@ you can save the PDF and transfer it however you normally would:
 
 ```bash
 brew install pandoc typst
-git clone https://github.com/leekaomin380/eink-truescale.git
-cd eink-truescale
+git clone https://github.com/leekaomin380/eink-truescale-pdf.git
+cd eink-truescale-pdf
 chmod +x deliver.sh
 ./deliver.sh --check     # verify every link in the chain
 ```
@@ -109,7 +109,7 @@ rather not, the desktop app covers the same ground without one.
 2. Search the action list for **Run Shell Script** and add it
 3. Replace the contents of the script box with **the absolute path to `deliver.sh`**, and nothing else:
    ```
-   /full/path/to/eink-truescale/deliver.sh
+   /full/path/to/eink-truescale-pdf/deliver.sh
    ```
    Run `pwd` in the repo folder if you're not sure of the path.
 
@@ -311,7 +311,7 @@ PAGE_H="270.3mm"
 Rendering at the display's physical size only works if the device shows PDFs at exactly
 100% with no letterboxing. Don't take our word for it — measure:
 
-**[Download the calibration page](https://github.com/leekaomin380/eink-truescale/releases/latest)**
+**[Download the calibration page](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest)**
 and transfer it to your device however you normally would. Or build it yourself:
 
 ```bash
@@ -397,16 +397,22 @@ A few notes on why it's built this way:
 
 A native macOS app, if you'd rather not use the terminal.
 
-**It is self-contained: pandoc and typst ship inside the bundle, so it works on a Mac
-with no Homebrew and no command-line tools at all.** Install the QUADERNO client, drag
-this app to `/Applications`, and you can convert and send — nothing else to set up.
-That costs about 306 MB (pandoc alone is 263 MB and cannot be stripped further); making
-"just works" actually true was judged worth the size.
+**The bundle is self-contained: pandoc and typst ship inside it**, so once built it runs
+on a Mac with no Homebrew and no command-line tools at all — install the QUADERNO client
+and it converts and sends, nothing else to set up. That costs about 306 MB (pandoc alone
+is 263 MB and cannot be stripped further); making "just works" actually true was judged
+worth the size.
+
+> **There is no prebuilt download yet — you build it yourself (one command, below).**
+> Shipping a double-clickable `.app` requires a Developer ID signature plus Apple
+> notarization; without those, macOS refuses a downloaded copy outright. That work is
+> deferred, so the honest status is: the app is self-contained, but not yet *distributable*.
+> Building it takes one command and needs Xcode.
 
 **Apple Silicon only.** The bundled engines are arm64. On an Intel Mac, build it yourself
-(below) and the build packs your machine's own architecture.
+and the build packs your machine's own architecture.
 
-To build from source:
+To build:
 
 ```bash
 brew install pandoc typst      # only needed on the build machine
