@@ -233,7 +233,7 @@ open -gj -na "/Applications/QUADERNO PC App.app" --args --print <pdf路径>
 | `curl \| sh` 一键安装 | 工具读取剪贴板并调用系统 API，用户应能先读源码。可读性即信任机制 |
 | 模拟点击 / UI 自动化 | 基于像素与 UI 树的方案极脆弱，与设计哲学冲突 |
 | 自动创建**快捷指令**并绑定其按键 | **【实测】** macOS 不允许程序代为创建 Shortcuts.app 快捷指令或指派其按键，此步骤必须手动。**注意勿推广为「app 不能注册全局热键」——那是错的**，见下行 |
-| ~~app 自行注册全局热键~~ | **【实测】不属于本项禁区，此前表述有误。** Carbon 的 `RegisterEventHotKey` 无需辅助功能权限即可注册全局热键（实测：`AXIsProcessTrusted()` 为 false 时注册依然成功）。把热键内建进 app 是**待办任务**，非平台限制 |
+| ~~app 自行注册全局热键~~ | **【实测】不属于本项禁区，此前表述有误。** Carbon 的 `RegisterEventHotKey` 无需辅助功能权限即可注册全局热键（实测：`AXIsProcessTrusted()` 为 false 时注册依然成功）。把热键内建进 app 技术上可行，但经权衡**已决定不做**（理由见 TODO.md），故本行仅为更正事实，不构成待办 |
 | 破解 DRM | 不在支持范围 |
 | 支持非 QUADERNO 设备的**投递** | 投递协议为该客户端特有。但 **L3 的测定方法通用** |
 

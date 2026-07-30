@@ -101,7 +101,9 @@ authoring a *Shortcuts.app* shortcut and binding a key to it. The two are differ
 mechanisms, and only the latter is closed off.
 
 So this manual step exists because the CLI workflow routes through Shortcuts.app.
-Building the hotkey into the app itself is a tracked task, not a platform limitation.
+Building the hotkey into the app was considered and **deliberately dropped** — see
+[TODO.md](TODO.md) for the reasoning. If you want a hotkey, bind one here; if you'd
+rather not, the desktop app covers the same ground without one.
 
 1. Open **Shortcuts.app** → click **+** to create a new shortcut
 2. Search the action list for **Run Shell Script** and add it
