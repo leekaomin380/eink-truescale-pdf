@@ -125,6 +125,22 @@ $endif$
 $if(leading)$
 #set par(leading: $leading$)
 $endif$
+// 超宽数学块等比缩进版心 —— typst 的数学块【不会自动换行】，长公式会原样
+// 顶出版心。实测一条来自 AI 对话的真实公式：版心 [34.0, 411.3]pt，
+// 公式却占 [5.6, 439.8]pt（左右各溢约 10mm），距纸张物理边缘仅剩 2mm。
+// 这在墨水屏上尤其危险：屏幕边缘常有数毫米被外壳遮挡或显示不良，
+// 溢出的两端可能真的看不见。
+// 只在超宽时缩，绝不放大 —— 与 ImageInliner 处理图片同一原则。
+#show math.equation.where(block: true): it => {
+  layout(size => {
+    let w = measure(it).width
+    if w > size.width {
+      let s = size.width / w
+      block(width: 100%, align(center,
+        scale(x: s * 100%, y: s * 100%, reflow: true, it)))
+    } else { it }
+  })
+}
 $if(title)$
 #align(center)[
   #block(above: 1.2em, below: 0.6em)[#text(1.5em, weight: "bold")[$title$]]

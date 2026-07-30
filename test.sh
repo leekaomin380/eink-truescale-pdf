@@ -103,6 +103,31 @@ if pandoc "$WORK/math.md" -f "$MD_FORMAT" --template="$DIR/deliver.typ" \
   print -r -- "$MT" | grep -q "Δ" \
     && ok "公式内希腊字母保留（\\Delta）" \
     || no "公式内希腊字母丢失（\\Delta 未出现）"
+
+  # 超长公式不得顶出版心 —— typst 数学块不自动换行，实测曾左右各溢约 10mm、
+  # 距纸张边缘仅 2mm。墨水屏边缘常被外壳遮挡，溢出部分会真的看不见。
+  cat > "$WORK/wide.md" <<'WIDEEOF'
+$$\Delta_{net} = V_{reuptake\_block}(\text{回收阻断带来的递质增量}) - V_{autoreceptor\_brake}(\text{前膜制动导致的释放减量})$$
+WIDEEOF
+  if pandoc "$WORK/wide.md" -f "$MD_FORMAT" --template="$DIR/deliver.typ" \
+       -V mainfont=Charter -V "mainfont=Songti SC" \
+       -V pagewidth=157.1mm -V pageheight=209.5mm -V pagemargin=12mm \
+       -V bodysize=10.5pt -V leading=0.85em \
+       -o "$WORK/wide.pdf" --pdf-engine=typst 2>/dev/null; then
+    OVER=$(pdftotext -bbox "$WORK/wide.pdf" - 2>/dev/null | \
+      python3 -c "
+import sys, re
+xml = sys.stdin.read()
+ws = re.findall(r'xMin=\"([0-9.]+)\"[^>]*xMax=\"([0-9.]+)\"', xml)
+L = 12/25.4*72
+bad = [1 for a, b in ws if float(a) < L - 2]
+print(len(bad))
+")
+    [[ "$OVER" == "0" ]] && ok "超长公式已缩入版心（未顶出左边距）" \
+                         || no "超长公式顶出版心 —— deliver.typ 的 math.equation 缩放规则可能失效"
+  else
+    no "超长公式渲染失败"
+  fi
 else
   no "含公式的文本渲染失败：$(tail -1 "$WORK/me")"
 fi
