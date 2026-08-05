@@ -8,11 +8,15 @@ enum InputMode: String, CaseIterable {
 }
 
 struct ContentView: View {
+    @Environment(\.undoManager) private var undoManager
     @StateObject private var vm = ConversionViewModel()
     @State private var inputMode: InputMode = .epub
     @State private var isDragOver = false
     @State private var previewImage: NSImage?
     @State private var showFilePicker = false
+    @State private var clearedPasteText: String?
+    @State private var showClearNotice = false
+    @State private var clearNoticeID = UUID()
     @AppStorage("isAdvancedExpanded") private var isAdvancedExpanded = false
 
     private let cjkNames: [String: String] = [
@@ -55,7 +59,7 @@ struct ContentView: View {
     var body: some View {
         HSplitView {
             sidebar
-                .frame(minWidth: 280, idealWidth: 310, maxWidth: 340)
+                .frame(minWidth: 300, idealWidth: 360, maxWidth: 520)
             previewArea
         }
         .onChange(of: vm.currentPage) { _, _ in
@@ -79,54 +83,93 @@ struct ContentView: View {
     // MARK: - Sidebar
 
     private var sidebar: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                // Tab bar
-                Picker("", selection: $inputMode) {
-                    ForEach(InputMode.allCases, id: \.self) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: inputMode) { _, newMode in
-                    vm.activeKind = switch newMode {
-                        case .epub: .epub
-                        case .text: .text
-                        case .wechat: .wechat
-                    }
-                    vm.sourceFileURL = nil
-                    vm.sourceFileName = ""
-                    vm.pasteText = ""
-                    vm.pasteTitle = ""
-                    vm.wechatURL = ""
-                    vm.currentPdfURL = nil
-                    vm.totalPages = 0
-                    vm.renderMetrics = nil
-                }
+        VStack(spacing: 0) {
+            inputModePicker
 
-                if inputMode == .epub { epubSection }
-                else if inputMode == .text { textSection }
-                else { wechatSection }
+            Divider()
 
-                Divider()
-
-                layoutBasicSection
-
-                DisclosureGroup("进阶设置", isExpanded: $isAdvancedExpanded) {
+            if inputMode == .text {
+                textWorkspace
+            } else {
+                ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        deviceSection
-                        fontSection
-                        layoutAdvancedSection
+                        if inputMode == .epub { epubSection }
+                        else { wechatSection }
+
+                        Divider()
+                        settingsSection
                     }
-                    .padding(.top, 4)
+                    .padding(16)
                 }
-
-                Divider()
-
-                actionButtons
-                statusBar
             }
-            .padding(16)
+
+            Divider()
+
+            sidebarFooter
+        }
+    }
+
+    private var inputModePicker: some View {
+        Picker("输入来源", selection: $inputMode) {
+            ForEach(InputMode.allCases, id: \.self) { mode in
+                Text(mode.rawValue).tag(mode)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .onChange(of: inputMode) { _, newMode in
+            showClearNotice = false
+            clearedPasteText = nil
+
+            vm.activeKind = switch newMode {
+                case .epub: .epub
+                case .text: .text
+                case .wechat: .wechat
+            }
+
+            // 每个来源的草稿各自保留；切换时只移除与当前来源不再对应的预览。
+            vm.currentPdfURL = nil
+            vm.currentPage = 1
+            vm.totalPages = 0
+            vm.renderMetrics = nil
+            previewImage = nil
+        }
+    }
+
+    private var textWorkspace: some View {
+        VStack(spacing: 0) {
+            textSection
+                .padding(16)
+                .frame(maxHeight: .infinity)
+                .layoutPriority(1)
+
+            Divider()
+
+            ScrollView {
+                settingsSection
+                    .padding(16)
+            }
+            .frame(minHeight: 130, idealHeight: 190, maxHeight: 240)
+        }
+    }
+
+    private var settingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("排版设置")
+                .font(.headline)
+
+            layoutBasicSection
+
+            DisclosureGroup("进阶设置", isExpanded: $isAdvancedExpanded) {
+                VStack(alignment: .leading, spacing: 12) {
+                    deviceSection
+                    fontSection
+                    layoutAdvancedSection
+                }
+                .padding(.top, 4)
+            }
         }
     }
 
@@ -199,18 +242,43 @@ struct ContentView: View {
     }
 
     private var textSection: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 8) {
             Label("标题", systemImage: "text.quote")
                 .font(.caption)
                 .foregroundColor(.secondary)
             TextField("可选，留空自动提取 # 标题", text: $vm.pasteTitle)
                 .textFieldStyle(.roundedBorder)
 
+            HStack(spacing: 8) {
+                Text("正文")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("支持 Markdown")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.7))
+
+                Spacer()
+
+                Button("清空正文", action: clearPasteText)
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .foregroundColor(.secondary)
+                    .disabled(vm.pasteText.isEmpty)
+                    .help("清除正文并保留标题，可撤销")
+            }
+
             TextEditor(text: $vm.pasteText)
                 .font(.system(.body, design: .monospaced))
                 .scrollContentBackground(.visible)
                 .border(Color.secondary.opacity(0.2), width: 1)
-                .frame(minHeight: 140)
+                .frame(minHeight: 180, maxHeight: .infinity)
+                .onChange(of: vm.pasteText) { _, newValue in
+                    // 清空后开始新的输入，旧内容不再适合作为快捷“撤销”目标。
+                    if showClearNotice && !newValue.isEmpty {
+                        showClearNotice = false
+                        clearedPasteText = nil
+                    }
+                }
         }
     }
 
@@ -346,7 +414,7 @@ struct ContentView: View {
     }
 
     private var actionButtons: some View {
-        Group {
+        VStack(spacing: 8) {
             Button(action: {
                 switch inputMode {
                 case .epub: vm.convertEpub()
@@ -368,23 +436,50 @@ struct ContentView: View {
                       || (inputMode == .wechat && vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
             .keyboardShortcut(.return, modifiers: .command)
 
-            if vm.hasQuaderno {
-                Button(action: { vm.ensureFresh { vm.deliverToDevice() } }) {
-                    Text("发送到 Quaderno")
+            HStack(spacing: 8) {
+                if vm.hasQuaderno {
+                    Button(action: { vm.ensureFresh { vm.deliverToDevice() } }) {
+                        Text("发送到 Quaderno")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(vm.isConverting || !hasInput)
+                }
+
+                Button(action: { vm.ensureFresh { vm.savePDF() } }) {
+                    Text("另存 PDF…")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .disabled(vm.isConverting || !hasInput)
+                .keyboardShortcut("s", modifiers: .command)
+            }
+        }
+    }
+
+    private var sidebarFooter: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if showClearNotice {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                        .foregroundColor(.accentColor)
+                    Text("正文已清空")
+                        .font(.caption)
+                    Spacer()
+                    Button("撤销", action: restoreClearedPasteText)
+                        .buttonStyle(.borderless)
+                        .controlSize(.small)
+                }
+                .padding(8)
+                .background(Color.accentColor.opacity(0.08))
+                .cornerRadius(6)
+            } else {
+                statusBar
             }
 
-            Button(action: { vm.ensureFresh { vm.savePDF() } }) {
-                Text("另存 PDF…")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .disabled(vm.isConverting || !hasInput)
-            .keyboardShortcut("s", modifiers: .command)
+            actionButtons
         }
+        .padding(12)
     }
 
     private var statusBar: some View {
@@ -414,6 +509,41 @@ struct ContentView: View {
         case .run: return .orange
         case .info: return .secondary
         }
+    }
+
+    private func clearPasteText() {
+        guard !vm.pasteText.isEmpty else { return }
+
+        let previousText = vm.pasteText
+        clearedPasteText = previousText
+        undoManager?.registerUndo(withTarget: vm) { target in
+            target.pasteText = previousText
+        }
+        undoManager?.setActionName("清空正文")
+
+        vm.pasteText = ""
+        vm.currentPdfURL = nil
+        vm.currentPage = 1
+        vm.totalPages = 0
+        vm.renderMetrics = nil
+        previewImage = nil
+
+        let noticeID = UUID()
+        clearNoticeID = noticeID
+        showClearNotice = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(6))
+            guard clearNoticeID == noticeID else { return }
+            showClearNotice = false
+            clearedPasteText = nil
+        }
+    }
+
+    private func restoreClearedPasteText() {
+        guard let text = clearedPasteText else { return }
+        vm.pasteText = text
+        clearedPasteText = nil
+        showClearNotice = false
     }
 
     // MARK: - Preview Area
