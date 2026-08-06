@@ -151,7 +151,7 @@ struct ContentView: View {
                 settingsSection
                     .padding(16)
             }
-            .frame(minHeight: 130, idealHeight: 190, maxHeight: 240)
+            .frame(minHeight: 190, idealHeight: 220, maxHeight: 280)
         }
     }
 
@@ -623,7 +623,7 @@ struct ContentView: View {
 
             // Bottom info bar
             HStack(spacing: 16) {
-                if let dev = vm.selectedDevice {
+                if vm.selectedDevice != nil {
                     Text("页面 \(vm.config.pageW) × \(vm.config.pageH)")
                         .font(.caption2).foregroundColor(.secondary)
                 }
