@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var previewImage: NSImage?
     @State private var showFilePicker = false
     @State private var clearedPasteText: String?
+    @State private var clearedWechatURL: String?
     @State private var showClearNotice = false
     @State private var clearNoticeID = UUID()
     @AppStorage("isAdvancedExpanded") private var isAdvancedExpanded = false
@@ -122,6 +123,7 @@ struct ContentView: View {
         .onChange(of: inputMode) { _, newMode in
             showClearNotice = false
             clearedPasteText = nil
+            clearedWechatURL = nil
 
             vm.activeKind = switch newMode {
                 case .epub: .epub
@@ -284,14 +286,31 @@ struct ContentView: View {
 
     private var wechatSection: some View {
         Group {
-            Label("网页文章链接", systemImage: "link")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack(spacing: 8) {
+                Label("网页文章链接", systemImage: "link")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button("清空链接", action: clearWechatURL)
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .foregroundColor(.secondary)
+                    .disabled(vm.wechatURL.isEmpty)
+                    .help("清除网页链接，可撤销")
+            }
             TextField("粘贴网页链接（公众号 / 博客文章）", text: $vm.wechatURL)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
                     if !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         vm.convertWechat()
+                    }
+                }
+                .onChange(of: vm.wechatURL) { _, newValue in
+                    if showClearNotice && !newValue.isEmpty {
+                        showClearNotice = false
+                        clearedWechatURL = nil
                     }
                 }
 
@@ -463,12 +482,18 @@ struct ContentView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.uturn.backward.circle.fill")
                         .foregroundColor(.accentColor)
-                    Text("正文已清空")
+                    Text(inputMode == .wechat ? "链接已清空" : "正文已清空")
                         .font(.caption)
                     Spacer()
-                    Button("撤销", action: restoreClearedPasteText)
-                        .buttonStyle(.borderless)
-                        .controlSize(.small)
+                    Button("撤销") {
+                        if inputMode == .wechat {
+                            restoreClearedWechatURL()
+                        } else {
+                            restoreClearedPasteText()
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
                 }
                 .padding(8)
                 .background(Color.accentColor.opacity(0.08))
@@ -543,6 +568,41 @@ struct ContentView: View {
         guard let text = clearedPasteText else { return }
         vm.pasteText = text
         clearedPasteText = nil
+        showClearNotice = false
+    }
+
+    private func clearWechatURL() {
+        guard !vm.wechatURL.isEmpty else { return }
+
+        let previousURL = vm.wechatURL
+        clearedWechatURL = previousURL
+        undoManager?.registerUndo(withTarget: vm) { target in
+            target.wechatURL = previousURL
+        }
+        undoManager?.setActionName("清空链接")
+
+        vm.wechatURL = ""
+        vm.currentPdfURL = nil
+        vm.currentPage = 1
+        vm.totalPages = 0
+        vm.renderMetrics = nil
+        previewImage = nil
+
+        let noticeID = UUID()
+        clearNoticeID = noticeID
+        showClearNotice = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(6))
+            guard clearNoticeID == noticeID else { return }
+            showClearNotice = false
+            clearedWechatURL = nil
+        }
+    }
+
+    private func restoreClearedWechatURL() {
+        guard let url = clearedWechatURL else { return }
+        vm.wechatURL = url
+        clearedWechatURL = nil
         showClearNotice = false
     }
 
