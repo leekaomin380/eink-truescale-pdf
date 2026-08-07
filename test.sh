@@ -353,6 +353,16 @@ grep -q 'onChange(of: vm.currentPdfURL)' "$CV" \
   || ok "预览不再依赖可能巧合相等的 currentPdfURL"
 
 # ---------------------------------------------------------------------------
+sec "底部操作区 · Quaderno 与另存按钮不得被垂直压缩出窗口"
+
+if grep -A8 'sidebarFooter' "$CV" | grep -q 'fixedSize(horizontal: false, vertical: true)' \
+   && grep -q 'Text("发送到 Quaderno")' "$CV"; then
+  ok "底部操作区固定其固有高度，发送按钮保持可见"
+else
+  no "底部操作区仍可被压缩，发送到 Quaderno 按钮可能落到窗口外"
+fi
+
+# ---------------------------------------------------------------------------
 sec "book.sh -o 相对路径 · 产物不得被临时目录清理吃掉"
 # 【实际发生过】book.sh 内部 `cd "$WORK"` 后，相对的 -o 会相对 $WORK 解析，
 # 产物落在临时目录，随后被 EXIT trap 的 rm -rf 删掉 —— 而脚本已打印

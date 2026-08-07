@@ -107,6 +107,11 @@ struct ContentView: View {
             Divider()
 
             sidebarFooter
+                // 底部操作区不能参与垂直压缩。文本编辑器和设置区内容较长时，
+                // SwiftUI 默认会压缩整个 VStack，导致第二行的「发送到 Quaderno」
+                // 与「另存 PDF」被推到窗口下方，实际存在却完全不可见。
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(2)
         }
     }
 
