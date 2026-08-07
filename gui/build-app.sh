@@ -119,11 +119,20 @@ done
 # 注意 ad-hoc 只够本机运行 —— Apple 的 syspolicy_check 明确判定
 # 「adhoc signed apps are not suitable for distribution」，公证另需 notarytool。
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  # ad-hoc 是本地开发模式；不给它强开 Hardened Runtime，否则无 Team ID 的
+  # pandoc 与 libgmp 会触发库验证，反而破坏「本机构建可运行」。
+  SIGN_FLAGS=()
+else
+  # Developer ID 站外分发必须启用 Hardened Runtime；安全时间戳由 Apple
+  # 时间戳服务签发，是后续公证与 Gatekeeper 验证的必要组成。
+  SIGN_FLAGS=(--options runtime --timestamp)
+fi
 
 echo ">>> 重签渲染引擎"
 for f in "$BIN_DIR"/* "$LIB_DIR"/*; do
   [[ -f "$f" ]] || continue
-  codesign -f -s "$SIGN_IDENTITY" "$f" >/dev/null 2>&1
+  codesign -f "${SIGN_FLAGS[@]}" -s "$SIGN_IDENTITY" "$f" >/dev/null 2>&1
 done
 
 # 自检：bundle 内的二进制不得再引用 Homebrew 路径
@@ -180,7 +189,7 @@ echo "    $(ls "$LIC_DIR" | wc -l | tr -d ' ') 个许可文件"
 # 内层先各自签好（上面已做），再签外层 bundle。
 # ---------------------------------------------------------------------------
 echo ">>> 给 .app 盖封印（签名身份：$SIGN_IDENTITY）"
-codesign --force --sign "$SIGN_IDENTITY" "$APP_DIR" 2>&1 | sed 's/^/    /'
+codesign --force "${SIGN_FLAGS[@]}" --sign "$SIGN_IDENTITY" "$APP_DIR" 2>&1 | sed 's/^/    /'
 
 if codesign --verify --deep --strict "$APP_DIR" 2>/dev/null; then
   echo "    ✅ 签名校验通过"

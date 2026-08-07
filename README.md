@@ -48,10 +48,14 @@ that you find out in 30 seconds than after twenty minutes of setup.
 
 To use **everything**, including one-key delivery to the device:
 
-- [ ] **macOS** (tested on Sequoia / Darwin 24)
+- [ ] **Apple Silicon Mac** (M1 or newer), running macOS 14 or later
 - [ ] **A Fujitsu QUADERNO device** — A5 (FMVDP51) or A4 (FMVDP41)
-- [ ] **QUADERNO PC App** installed, and your device paired and showing *Connected*
-- [ ] **Homebrew**, to install two small dependencies
+- [ ] **QUADERNO PC App** installed in `/Applications`, with your device paired and
+      showing *Connected*
+
+The downloadable desktop app is self-contained: **Homebrew, pandoc, typst, Xcode and a
+manually configured command path are not required.** Homebrew is needed only when using
+the source/command-line workflow described below.
 
 **Without a QUADERNO**, only the delivery step is unavailable — the delivery protocol was
 reverse-engineered from that specific client. Everything upstream of it still works, and
@@ -69,6 +73,21 @@ you can save the PDF and transfer it however you normally would:
 
 ## Install
 
+### Desktop app (recommended)
+
+1. Download `Quaderno-Converter-1.0.0-macOS-arm64.zip` from the
+   [latest GitHub Release](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest).
+2. Open the ZIP and drag **Quaderno Converter.app** into `/Applications`.
+3. Install the official **QUADERNO PC App** into `/Applications`, pair the device, and
+   confirm that it shows *Connected*.
+4. Open Quaderno Converter. No command path or Shortcut configuration is needed.
+
+The release is signed with Developer ID and notarized by Apple. It supports Apple Silicon
+only. EPUB, FB2, HTML, Markdown, pasted text and web links work without additional tools;
+MOBI/AZW conversion remains optional and requires Calibre.
+
+### Source / command-line workflow
+
 ```bash
 brew install pandoc typst
 git clone https://github.com/leekaomin380/eink-truescale-pdf.git
@@ -81,7 +100,7 @@ chmod +x deliver.sh
 **most of them fail silently** when broken. Run it first; run it again any time something
 seems off.
 
-There is deliberately **no `curl | sh` installer**. This script reads your clipboard and
+There is deliberately **no `curl | sh` installer**. The script reads your clipboard and
 calls system APIs — you should be able to read it before you run it.
 It's short, and every non-obvious line is commented.
 
@@ -403,11 +422,9 @@ and it converts and sends, nothing else to set up. That costs about 306 MB (pand
 is 263 MB and cannot be stripped further); making "just works" actually true was judged
 worth the size.
 
-> **There is no prebuilt download yet — you build it yourself (one command, below).**
-> Shipping a double-clickable `.app` requires a Developer ID signature plus Apple
-> notarization; without those, macOS refuses a downloaded copy outright. That work is
-> deferred, so the honest status is: the app is self-contained, but not yet *distributable*.
-> Building it takes one command and needs Xcode.
+The prebuilt app is available from the
+[latest GitHub Release](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest).
+It is Developer ID signed and Apple-notarized for normal double-click installation.
 
 **Apple Silicon only.** The bundled engines are arm64. On an Intel Mac, build it yourself
 and the build packs your machine's own architecture.
@@ -420,6 +437,9 @@ brew install pandoc typst      # only needed on the build machine
 ```
 
 Then double-click it in Finder. (To keep it around, drag it to `/Applications`.)
+
+The GUI does **not** need a Shortcut or an absolute script path. The manual hotkey setup
+above applies only to the separate command-line clipboard workflow.
 
 Three input modes: **ebook conversion**, **pasted Markdown**, and
 **WeChat article links** ([details above](#reading-wechat-articles-微信公众号-on-a-quaderno)).

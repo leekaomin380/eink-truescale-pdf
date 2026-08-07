@@ -8,3 +8,4 @@ quaderno_render_*.log
 
 # GUI 打包产物（由 gui/build-app.sh 重建）
 gui/*.app/
+dist/
