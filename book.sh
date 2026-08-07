@@ -80,6 +80,9 @@ done
 
 [[ -n "$SRC" ]]  || die "未指定输入文件。用法: book.sh <书文件> [--deliver]"
 [[ -f "$SRC" ]]  || die "文件不存在: $SRC"
+if [[ ! -s "$SRC" ]] || ! grep -q '[^[:space:]]' "$SRC" 2>/dev/null; then
+  die "文件内容为空: ${SRC:t}"
+fi
 command -v pandoc >/dev/null || die "未找到 pandoc → brew install pandoc" 10
 command -v typst  >/dev/null || die "未找到 typst → brew install typst"  10
 [[ -f "$TEMPLATE" ]] || die "缺少模板 deliver.typ" 10
@@ -155,6 +158,7 @@ cd "$WORK" || die "无法进入工作目录"     # 铁律：pandoc 需可写沙�
 
 if ! pandoc "$INPUT" -f "$FROM" \
       --template="$TEMPLATE" \
+      --resource-path="${SRC:h}:." \
       "${EXTRA_ARGS[@]}" \
       -V "lang=$DOC_LANG" \
       --lua-filter="$SCRIPT_DIR/book-filter.lua" \
@@ -168,6 +172,12 @@ if ! pandoc "$INPUT" -f "$FROM" \
   tail -20 "$WORK/err.log" >&2
   die "渲染未完成" 2
 fi
+
+if grep -q "Could not fetch resource" "$WORK/err.log" 2>/dev/null; then
+  print -r -- "⚠️  提醒：无法获取部分本地资源（图片已用替代说明保留）"
+fi
+
+[[ -s "$OUT" ]] || die "PDF 文件未生成或为空" 2
 
 ELAPSED=$(( $(date +%s) - START ))
 SIZE=$(stat -f%z "$OUT" 2>/dev/null)

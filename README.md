@@ -205,10 +205,20 @@ You get:
 
 | Format | How |
 |---|---|
-| `.epub` `.fb2` `.html` `.md` | Directly, via pandoc |
+| `.epub` `.fb2` `.html` `.htm` `.md` | Directly, via pandoc |
 | `.mobi` `.azw` `.azw3` | Via Calibre (`brew install --cask calibre`), converted to EPUB first |
 
 > DRM-protected files cannot be converted. That is not a limitation we can work around.
+
+#### Local HTML conversion details
+
+Local `.html` and `.htm` files are converted directly on your Mac (completely offline):
+
+- **Typeset by document structure**: HTML is parsed into document nodes and typeset at the device's physical 1:1 size, rather than taking a screenshot of a browser window.
+- **Local relative resources**: Images with relative paths (e.g., `<img src="images/cover.png">` or `article_files/image.png`) relative to the HTML file are resolved and embedded in the PDF.
+- **No JavaScript execution**: Local HTML files are parsed statically. `<script>` tags are not executed.
+- **Complex CSS & dynamic pages**: Pages relying on JavaScript or complex web CSS are re-typeset based on structural elements (headings, paragraphs, lists, tables, formulas); exact pixel-level browser layout is not guaranteed.
+- **Conversion is strictly local**: No files, HTML, or resources are uploaded.
 
 It's a separate script from `deliver.sh` on purpose: a clipboard snippet renders in half a
 second and is thrown away, while a book takes far longer, needs chapters and a TOC, and

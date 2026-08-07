@@ -2,6 +2,33 @@ import Foundation
 import AppKit
 import PDFKit
 
+struct SupportedFileFormat {
+    let extensions: [String]
+    let typeName: String
+
+    static let all: [SupportedFileFormat] = [
+        SupportedFileFormat(extensions: ["epub"], typeName: "EPUB 电子书"),
+        SupportedFileFormat(extensions: ["html", "htm"], typeName: "HTML 文档"),
+        SupportedFileFormat(extensions: ["fb2"], typeName: "FB2 电子书"),
+        SupportedFileFormat(extensions: ["md", "markdown"], typeName: "Markdown 文档")
+    ]
+
+    static var allowedExtensions: [String] {
+        all.flatMap { $0.extensions }
+    }
+
+    static func isSupported(url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return allowedExtensions.contains(ext)
+    }
+
+    static func typeName(for url: URL) -> String? {
+        let ext = url.pathExtension.lowercased()
+        return all.first(where: { $0.extensions.contains(ext) })?.typeName
+    }
+}
+
+
 struct DeviceInfo: Identifiable, Hashable {
     let id = UUID()
     let name: String
@@ -74,12 +101,38 @@ class ConversionViewModel: ObservableObject {
     // Wechat mode
     @Published var wechatURL = ""
 
-    // EPUB mode
+    // EPUB / File mode
     @Published var sourceFileURL: URL?
     @Published var sourceFileName = ""
     @Published var pdfTitle = ""  // derived title for delivery filename
 
+    var sourceFileTypeDisplayName: String? {
+        guard let url = sourceFileURL else { return nil }
+        return SupportedFileFormat.typeName(for: url)
+    }
+
+    @discardableResult
+    func selectSourceFile(url: URL) -> Bool {
+        guard SupportedFileFormat.isSupported(url: url) else {
+            let ext = url.pathExtension.isEmpty ? "" : ".\(url.pathExtension.lowercased())"
+            setStatus("暂不支持 \(ext) 文件\n支持 EPUB、HTML、FB2 和 Markdown", .err)
+            return false
+        }
+        sourceFileURL = url
+        sourceFileName = url.lastPathComponent
+        return true
+    }
+
+    func clearSourceFile() {
+        sourceFileURL = nil
+        sourceFileName = ""
+        currentPdfURL = nil
+        totalPages = 0
+        renderMetrics = nil
+    }
+
     enum StatusKind { case info, ok, err, run }
+
 
     /// 行距选项：(内部 em 值, 界面显示的传统倍行距)。
     /// typst 的 leading 是「行间额外空隙」，人们说的「1.5 倍行距」是「基线距 ÷ 字号」，
@@ -447,10 +500,12 @@ class ConversionViewModel: ObservableObject {
             DispatchQueue.main.async { [self] in
                 isConverting = false
                 if result.exitCode != 0 {
-                    setStatus("渲染失败：\(result.stderr.suffix(200))", .err)
+                    let cleanErr = Self.parseErrorMessage(result.stderr)
+                    setStatus("渲染失败：\(cleanErr)", .err)
                     self.finishPendingRender(success: false)
                     return
                 }
+
                 self.currentPdfURL = outPdf
                 let info = PDFDocument(url: outPdf)
                 self.totalPages = info?.pageCount ?? 0
@@ -816,4 +871,19 @@ class ConversionViewModel: ObservableObject {
         let r = runShell(["/bin/sh", "-c", "command -v \(cmd)"])
         return r.exitCode == 0
     }
+
+    static func parseErrorMessage(_ rawStderr: String) -> String {
+        let lines = rawStderr.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        if let dieLine = lines.first(where: { $0.contains("❌") }) {
+            return dieLine.replacingOccurrences(of: "❌ ", with: "")
+        }
+        if let lastLine = lines.last {
+            return String(lastLine.suffix(150))
+        }
+        return "未知错误"
+    }
 }
+

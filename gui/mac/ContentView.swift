@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum InputMode: String, CaseIterable {
-    case epub = "电子书转换"
+    case epub = "文件转换"
     case text = "粘贴文本"
     case wechat = "网页链接"
 }
@@ -182,10 +182,10 @@ struct ContentView: View {
                     Image(systemName: "doc.badge.plus")
                         .font(.system(size: 24))
                         .foregroundColor(isDragOver ? .accentColor : .secondary)
-                    Text(isDragOver ? "松开载入" : "拖入电子书或点击选择")
+                    Text(isDragOver ? "松开载入" : "拖入文件或点击选择")
                         .font(.callout)
                         .foregroundColor(.secondary)
-                    Text("EPUB / FB2 / HTML / MD")
+                    Text("EPUB / HTML / FB2 / Markdown")
                         .font(.caption)
                         .foregroundColor(.gray.opacity(0.5))
                 }
@@ -200,18 +200,11 @@ struct ContentView: View {
             .buttonStyle(.plain)
             .fileImporter(
                 isPresented: $showFilePicker,
-                allowedContentTypes: [
-                    UTType(filenameExtension: "epub")!,
-                    UTType(filenameExtension: "fb2")!,
-                    UTType(filenameExtension: "html")!,
-                    UTType(filenameExtension: "md")!,
-                    UTType(filenameExtension: "markdown")!
-                ],
+                allowedContentTypes: SupportedFileFormat.allowedExtensions.compactMap { UTType(filenameExtension: $0) },
                 allowsMultipleSelection: false
             ) { result in
                 if case .success(let urls) = result, let url = urls.first {
-                    vm.sourceFileURL = url
-                    vm.sourceFileName = url.lastPathComponent
+                    _ = vm.selectSourceFile(url: url)
                 }
             }
 
@@ -223,13 +216,18 @@ struct ContentView: View {
                         .font(.callout)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    if let typeName = vm.sourceFileTypeDisplayName {
+                        Text(typeName)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.12))
+                            .cornerRadius(4)
+                            .foregroundColor(.secondary)
+                    }
                     Spacer()
                     Button(action: {
-                        vm.sourceFileURL = nil
-                        vm.sourceFileName = ""
-                        vm.currentPdfURL = nil
-                        vm.totalPages = 0
-                        vm.renderMetrics = nil
+                        vm.clearSourceFile()
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.secondary)
@@ -724,8 +722,7 @@ struct ContentView: View {
             guard let data = item as? Data,
                   let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
             DispatchQueue.main.async {
-                vm.sourceFileURL = url
-                vm.sourceFileName = url.lastPathComponent
+                _ = vm.selectSourceFile(url: url)
             }
         }
         return true

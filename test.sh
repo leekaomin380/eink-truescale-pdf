@@ -311,10 +311,14 @@ if [[ -d "$APP_RES/bin" ]]; then
 
   # ④ 端到端：清空环境变量与 PATH，模拟没有 Homebrew 的机器
   printf '# 自包含\n\n中文测试。\n' > "$WORKDIR/sc.md"
+  printf '<html><body><h1>自包含 HTML</h1><p>中文测试。</p></body></html>' > "$WORKDIR/sc.html"
   if env -i HOME="$HOME" PATH="/usr/bin:/bin" /bin/zsh \
        "$APP_RES/book.sh" "$WORKDIR/sc.md" --plain -o "$WORKDIR/sc.pdf" >/dev/null 2>&1 \
-     && [[ -s "$WORKDIR/sc.pdf" ]]; then
-    ok "无 Homebrew 的干净环境下端到端渲染成功"
+     && [[ -s "$WORKDIR/sc.pdf" ]] \
+     && env -i HOME="$HOME" PATH="/usr/bin:/bin" /bin/zsh \
+       "$APP_RES/book.sh" "$WORKDIR/sc.html" --plain -o "$WORKDIR/sc_html.pdf" >/dev/null 2>&1 \
+     && [[ -s "$WORKDIR/sc_html.pdf" ]]; then
+    ok "无 Homebrew 的干净环境下端到端渲染（MD 与 HTML）成功"
   else
     no "干净环境渲染失败 —— 「装上就能用」不成立"
   fi
@@ -383,6 +387,120 @@ fi
 rm -rf "$MH"
 
 # ---------------------------------------------------------------------------
+sec "HTML 转换全链路 · 支持 .html / .htm / 大写 .HTML，含中文路径与空格"
+HTML_DIR="$WORK/中文 路径 测试/HTML 目录"
+mkdir -p "$HTML_DIR/images" "$HTML_DIR/article_files"
+
+# 有效的 1x1 红色 PNG (base64 解码)
+printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' | base64 -d > "$HTML_DIR/images/测试 图片.png"
+printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' | base64 -d > "$HTML_DIR/article_files/sub_img.png"
+
+cat > "$HTML_DIR/测试 文章.HTML" <<'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>HTML 测试文章</title>
+  <script>document.write("SCRIPT_SHOULD_NOT_EXECUTE");</script>
+</head>
+<body>
+  <h1>HTML 主标题</h1>
+  <h2>小节标题</h2>
+  <p>这是正文段落，包含 <b>粗体</b> 与 <i>斜体</i> 以及 <a href="https://example.com">超链接文字</a>。</p>
+  <ul>
+    <li>列表项目 1</li>
+    <li>列表项目 2</li>
+  </ul>
+  <ol>
+    <li>顺序项目 A</li>
+  </ol>
+  <blockquote>引用段落文字</blockquote>
+  <table>
+    <tr><th>表头 1</th><th>表头 2</th></tr>
+    <tr><td>单元格 1</td><td>单元格 2</td></tr>
+  </table>
+  <p><img src="images/测试 图片.png" alt="图片1"></p>
+  <p><img src="article_files/sub_img.png" alt="图片2"></p>
+  <p>公式测试：$\Delta_{net} = V_{a}(\text{中文公式}) - \alpha_2$ 结束。</p>
+</body>
+</html>
+EOF
+
+if "$DIR/book.sh" "$HTML_DIR/测试 文章.HTML" -o "$WORK/html_test.pdf" >/dev/null 2>"$WORK/html_err"; then
+  ok "HTML 文件（大写 .HTML、中文目录与空格路径）转换成功"
+
+  # 检查尺寸统一与页宽符合 A5 (≈445pt)
+  HSZ=$(page_sizes "$WORK/html_test.pdf"); HBCNT=$(print -r -- "$HSZ" | grep -c x)
+  [[ "$HBCNT" == "1" ]] && ok "HTML 转换输出页面尺寸统一" \
+                        || no "HTML 转换输出页面尺寸不统一：$(print -r -- $HSZ | tr '\n' ' ')"
+
+  HW=$(print -r -- "$HSZ" | head -1 | grep -oE '^[0-9.]+' | cut -d. -f1)
+  if [[ -n "$HW" ]] && (( HW >= 442 && HW <= 448 )); then
+    ok "HTML 输出页宽正确（${HW}pt ≈ A5 445pt）"
+  else
+    no "HTML 输出页宽错误：${HW}pt（应 ≈445pt）"
+  fi
+
+  HTXT=$(pdftotext "$WORK/html_test.pdf" - 2>/dev/null)
+
+  # 结构元素验证
+  print -r -- "$HTXT" | grep -q "HTML 主标题" && ok "HTML 标题解析正常" || no "HTML 标题未显示"
+  print -r -- "$HTXT" | grep -q "列表项目 1" && ok "HTML 列表解析正常" || no "HTML 列表未显示"
+  print -r -- "$HTXT" | grep -q "引用段落文字" && ok "HTML 引用块解析正常" || no "HTML 引用未显示"
+  print -r -- "$HTXT" | grep -q "表头 1" && ok "HTML 表格解析正常" || no "HTML 表格未显示"
+
+  # 脚本防注入验证
+  print -r -- "$HTXT" | grep -q "SCRIPT_SHOULD_NOT_EXECUTE" \
+    && no "HTML 内的 <script> 脚本被执行 —— 存在安全缺陷" \
+    || ok "HTML 内的 <script> 脚本未执行（符合安全边界）"
+
+  # 公式验证
+  print -r -- "$HTXT" | grep -q "中文公式" \
+    && ok "HTML 数学公式解析正常（公式内中文保留）" \
+    || no "HTML 数学公式内的中文丢失"
+
+  print -r -- "$HTXT" | grep -F -q -e '\Delta' -e '\text{' \
+    && no "HTML 数学公式残留 LaTeX 源码" \
+    || ok "HTML 数学公式未残留 LaTeX 源码"
+else
+  no "HTML 文件转换失败：$(tail -2 "$WORK/html_err" | tr '\n' ' ')"
+fi
+
+# 测试 .htm 与 .html 扩展名
+cp "$HTML_DIR/测试 文章.HTML" "$HTML_DIR/test1.html"
+cp "$HTML_DIR/测试 文章.HTML" "$HTML_DIR/test2.htm"
+"$DIR/book.sh" "$HTML_DIR/test1.html" -o "$WORK/t1.pdf" >/dev/null 2>&1 \
+  && ok ".html 扩展名转换成功" \
+  || no ".html 扩展名转换失败"
+"$DIR/book.sh" "$HTML_DIR/test2.htm" -o "$WORK/t2.pdf" >/dev/null 2>&1 \
+  && ok ".htm 扩展名转换成功" \
+  || no ".htm 扩展名转换失败"
+
+# ---------------------------------------------------------------------------
+sec "HTML 缺失本地图片与空文件 · 错误处理显式且符合预期"
+cat > "$WORK/missing_img.html" <<'EOF'
+<html><body><h1>标题</h1><p><img src="images/not_found_xxx.png" alt="缺失图片"></p></body></html>
+EOF
+LOG_OUT=$("$DIR/book.sh" "$WORK/missing_img.html" -o "$WORK/missing_img.pdf" 2>&1)
+if [[ -s "$WORK/missing_img.pdf" ]]; then
+  print -r -- "$LOG_OUT" | grep -q "无法获取部分本地资源" \
+    && ok "缺失本地图片时显式给出提醒（未静默假装完全成功）" \
+    || no "缺失本地图片时未给出明确提醒"
+else
+  no "缺失本地图片时转换崩溃"
+fi
+
+# 空文件检测
+touch "$WORK/empty.html"
+if "$DIR/book.sh" "$WORK/empty.html" -o "$WORK/empty.pdf" >/dev/null 2>"$WORK/emp_err"; then
+  no "空 HTML 文件转换未报错（应被拒绝）"
+else
+  grep -q "内容为空" "$WORK/emp_err" \
+    && ok "空 HTML 文件转换被明确拒绝并给出提示" \
+    || no "空 HTML 文件错误提示不明确：$(tail -1 "$WORK/emp_err")"
+fi
+
+# ---------------------------------------------------------------------------
 print -r -- ""; print -r -- "────────────────────────"
 if (( FAIL == 0 )); then
   print -r -- "全部通过 · ${PASS} 项断言 ✅"
@@ -391,3 +509,4 @@ else
   print -r -- "${FAIL} 项失败 / ${PASS} 项通过 ❌"
   exit 1
 fi
+
