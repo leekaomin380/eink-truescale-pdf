@@ -75,7 +75,7 @@ you can save the PDF and transfer it however you normally would:
 
 ### Desktop app (recommended)
 
-1. Download `Quaderno-Converter-1.0.0-macOS-arm64.zip` from the
+1. Download `Quaderno-Converter-1.1.0-macOS-arm64.zip` from the
    [latest GitHub Release](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest).
 2. Open the ZIP and drag **Quaderno Converter.app** into `/Applications`.
 3. Install the official **QUADERNO PC App** into `/Applications`, pair the device, and

@@ -7,7 +7,7 @@
 #   ASC_KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8" \
 #   ASC_KEY_ID="XXXXXXXXXX" \
 #   ASC_ISSUER_ID="00000000-0000-0000-0000-000000000000" \
-#   ./gui/release-github.sh 1.0.0
+#   ./gui/release-github.sh 1.1.0
 
 set -euo pipefail
 
@@ -51,6 +51,8 @@ security find-identity -v -p codesigning | grep -Fq "\"$PREPARE_SIGN_IDENTITY\""
 
 bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
   "$SCRIPT_DIR/mac/Info.plist")
+bundle_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' \
+  "$SCRIPT_DIR/mac/Info.plist")
 [[ "$bundle_version" == "$VERSION" ]] \
   || { print -u2 "Info.plist 版本为 $bundle_version，与发布版本 $VERSION 不一致"; exit 2; }
 
@@ -82,7 +84,7 @@ plutil -insert ApplicationProperties -dictionary "$ARCHIVE_INFO"
 plutil -insert ApplicationProperties.ApplicationPath -string "Applications/$APP_NAME.app" "$ARCHIVE_INFO"
 plutil -insert ApplicationProperties.CFBundleIdentifier -string "com.eink-truescale.gui" "$ARCHIVE_INFO"
 plutil -insert ApplicationProperties.CFBundleShortVersionString -string "$VERSION" "$ARCHIVE_INFO"
-plutil -insert ApplicationProperties.CFBundleVersion -string "1.0" "$ARCHIVE_INFO"
+plutil -insert ApplicationProperties.CFBundleVersion -string "$bundle_build" "$ARCHIVE_INFO"
 plutil -insert ApplicationProperties.SigningIdentity -string "$PREPARE_SIGN_IDENTITY" "$ARCHIVE_INFO"
 
 plutil -create xml1 "$EXPORT_OPTIONS"
