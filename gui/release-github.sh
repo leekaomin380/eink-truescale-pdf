@@ -132,7 +132,7 @@ xcrun stapler validate "$APP_DIR"
 # 公证票据会改变 app bundle，必须在装订后重新制作最终下载包。
 rm "$ARCHIVE"
 ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ARCHIVE"
-shasum -a 256 "$ARCHIVE" > "$CHECKSUM"
+(cd "$DIST_DIR" && shasum -a 256 "${ARCHIVE:t}" > "${CHECKSUM:t}")
 
 print ">>> 最终分发验证"
 codesign --verify --deep --strict --verbose=2 "$APP_DIR"
