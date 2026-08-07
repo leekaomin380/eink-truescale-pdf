@@ -1,5 +1,10 @@
 # eink-truescale-pdf
 
+Current project handoff documents:
+
+- [Product overview](docs/PRODUCT.md) — current product scope, two-edition strategy, users, architecture and quality bar.
+- [Project progress](docs/PROGRESS.md) — verified release status, completed work, blockers and next actions as of 2026-08-07.
+
 **Copy text → press a hotkey → it appears on your e-ink device.** No GUI, no windows, nothing steals your focus.
 
 The core finding here: most "PDF looks blurry on e-ink" complaints trace back to the
