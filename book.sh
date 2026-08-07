@@ -142,7 +142,7 @@ FONTARGS=(); for f in "${FONTS[@]}"; do FONTARGS+=(-V "mainfont=$f"); done
 # --plain 模式不加目录与分章（粘贴文本用）
 EXTRA_ARGS=()
 if (( ! PLAIN )); then
-  EXTRA_ARGS+=(--toc --toc-depth=3 -V chapterbreak=true)
+  EXTRA_ARGS+=(--toc --toc-depth=3 -V chapterbreak=true -M chapterbreak=true)
 fi
 
 if (( PRINT_TIME )); then

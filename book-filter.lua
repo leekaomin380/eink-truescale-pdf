@@ -1,22 +1,10 @@
 --[[
-  book-filter.lua · epub → PDF 的兼容性修补
+  book-filter.lua · epub / html → PDF 的 AST 修补与安全分章
   ---------------------------------------------------------------------------
-  用于 book.sh。解决真实 epub 转 typst 时的已知崩溃源。
-
-  【问题】epub 内部锚点链接
-    很多电子书（中文书尤甚）用手工锚点做尾注/交叉引用，形如
-      <a href="#part0022.html_jz_0_10">(1)</a>
-    pandoc 会译成 typst 的 #link(<part0022.html_jz_0_10>)[...]，
-    但这些锚点在 typst 侧并不会生成对应 label，于是 typst 报
-      error: label `<...>` does not exist in the document
-    整本书渲染直接中止。
-
-  【处理】把指向文档内部（# 开头）的链接摊平成纯文本：
-    保留读者能看到的文字（如尾注序号「(1)」），只去掉失效的跳转。
-    外部链接（http/https/mailto 等）原样保留。
-
-  【取舍】尾注序号将不可点击。但它们本来就已失效——
-    真正的导航（章节跳转）由 PDF 大纲与目录页承担，不受影响。
+  1. 内部锚点摊平：解决 EPUB 内部无效锚点链接导致 Typst label 找不到而崩溃的问题。
+  2. 顶层分章分页：若开启 chapterbreak，仅在 Pandoc AST 顶层 block 之前插入
+     Typst 原生 #pagebreak(weak: true)，绝不侵入 Div / 表格 / 列表 / 引用块内部，
+     规避 Typst 的 "pagebreaks are not allowed inside of containers" 崩溃。
 ]]
 
 function Link(el)
@@ -26,4 +14,47 @@ function Link(el)
     return el.content
   end
   return nil          -- 其余链接不动
+end
+
+local function contains_h1(block)
+  if block.t == "Header" and block.level == 1 then
+    return true
+  end
+  local found = false
+  pandoc.walk_block(block, {
+    Header = function(h)
+      if h.level == 1 then
+        found = true
+      end
+    end
+  })
+  return found
+end
+
+function Pandoc(doc)
+  local do_chapterbreak = false
+  if doc.meta.chapterbreak then
+    local val = pandoc.utils.stringify(doc.meta.chapterbreak)
+    if val == "true" or val == "1" then
+      do_chapterbreak = true
+    end
+  end
+
+  if do_chapterbreak then
+    local new_blocks = pandoc.List()
+    local has_h1 = false
+
+    for _, block in ipairs(doc.blocks) do
+      if contains_h1(block) then
+        if has_h1 then
+          new_blocks:insert(pandoc.RawBlock('typst', '#pagebreak(weak: true)'))
+        end
+        has_h1 = true
+      end
+      new_blocks:insert(block)
+    end
+    doc.blocks = new_blocks
+  end
+
+  return doc
 end

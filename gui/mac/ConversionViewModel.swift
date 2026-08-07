@@ -877,13 +877,32 @@ class ConversionViewModel: ObservableObject {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
 
-        if let dieLine = lines.first(where: { $0.contains("❌") }) {
-            return dieLine.replacingOccurrences(of: "❌ ", with: "")
+        // 优先提取 Typst/Pandoc 明确抛出的 error: 报错行
+        for line in lines {
+            let lower = line.lowercased()
+            if lower.hasPrefix("error:") || lower.hasPrefix("error :") {
+                return line
+            }
         }
-        if let lastLine = lines.last {
-            return String(lastLine.suffix(150))
+
+        // 寻找具体的 ❌ 错误点（排除“渲染未完成”）
+        for line in lines {
+            if line.contains("❌") && !line.contains("渲染未完成") {
+                return line.replacingOccurrences(of: "❌ ", with: "")
+            }
         }
-        return "未知错误"
+
+        // 提取倒数关键有效信息，跳过纯提示和 ASCII 诊断代码块
+        for line in lines.reversed() {
+            if line.contains("渲染未完成") || line.contains("Error producing PDF.") {
+                continue
+            }
+            if !line.hasPrefix("┌─") && !line.hasPrefix("│") && !line.hasPrefix("└─") {
+                return String(line.suffix(150))
+            }
+        }
+
+        return lines.first(where: { $0.contains("❌") })?.replacingOccurrences(of: "❌ ", with: "") ?? "渲染未完成"
     }
 }
 

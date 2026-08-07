@@ -462,6 +462,17 @@ if "$DIR/book.sh" "$HTML_DIR/测试 文章.HTML" -o "$WORK/html_test.pdf" >/dev/
   print -r -- "$HTXT" | grep -F -q -e '\Delta' -e '\text{' \
     && no "HTML 数学公式残留 LaTeX 源码" \
     || ok "HTML 数学公式未残留 LaTeX 源码"
+  # 补强图片测试：使用 pdfimages -list 确认 PDF 中存在真实图像对象（而非仅 alt 文本）
+  if command -v pdfimages >/dev/null; then
+    IMG_CNT=$(pdfimages -list "$WORK/html_test.pdf" 2>/dev/null | grep -v '^page' | grep -v '^---' | grep -c 'image' || true)
+    if (( IMG_CNT >= 2 )); then
+      ok "HTML 本地相对图片已打入 PDF（pdfimages 确认存在 ${IMG_CNT} 个图像对象）"
+    else
+      no "HTML 本地相对图片未打入 PDF（pdfimages 仅检测到 ${IMG_CNT} 个图像对象）"
+    fi
+  else
+    ok "跳过 pdfimages 极简校验（未安装 poppler 工具集）"
+  fi
 else
   no "HTML 文件转换失败：$(tail -2 "$WORK/html_err" | tr '\n' ' ')"
 fi
@@ -475,6 +486,40 @@ cp "$HTML_DIR/测试 文章.HTML" "$HTML_DIR/test2.htm"
 "$DIR/book.sh" "$HTML_DIR/test2.htm" -o "$WORK/t2.pdf" >/dev/null 2>&1 \
   && ok ".htm 扩展名转换成功" \
   || no ".htm 扩展名转换失败"
+
+# ---------------------------------------------------------------------------
+sec "HTML 容器内一级标题分章 · 避免 Typst container pagebreak 报错"
+cat > "$WORK/nested_container_h1.html" <<'EOF'
+<!DOCTYPE html>
+<html>
+<body>
+<div>
+  <section>
+    <h1>第一章</h1>
+    <p>正文内容一</p>
+  </section>
+</div>
+<div>
+  <section>
+    <h1>第二章</h1>
+    <p>正文内容二</p>
+  </section>
+</div>
+</body>
+</html>
+EOF
+
+if "$DIR/book.sh" "$WORK/nested_container_h1.html" -o "$WORK/nested_h1.pdf" >/dev/null 2>"$WORK/nested_err"; then
+  [[ -s "$WORK/nested_h1.pdf" ]] \
+    && ok "容器嵌套 H1 标题 HTML 成功转换且 PDF 非空" \
+    || no "容器嵌套 H1 标题转换后 PDF 为空"
+
+  NSZ=$(page_sizes "$WORK/nested_h1.pdf"); NBCNT=$(print -r -- "$NSZ" | grep -c x)
+  [[ "$NBCNT" == "1" ]] && ok "容器嵌套 H1 HTML 转换输出页面尺寸统一" \
+                        || no "容器嵌套 H1 HTML 转换输出页面尺寸不统一：$(print -r -- $NSZ | tr '\n' ' ')"
+else
+  no "容器嵌套 H1 标题 HTML 转换失败：$(tail -3 "$WORK/nested_err" | tr '\n' ' ')"
+fi
 
 # ---------------------------------------------------------------------------
 sec "HTML 缺失本地图片与空文件 · 错误处理显式且符合预期"
