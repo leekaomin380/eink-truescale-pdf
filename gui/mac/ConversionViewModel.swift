@@ -905,4 +905,3 @@ class ConversionViewModel: ObservableObject {
         return lines.first(where: { $0.contains("❌") })?.replacingOccurrences(of: "❌ ", with: "") ?? "渲染未完成"
     }
 }
-
