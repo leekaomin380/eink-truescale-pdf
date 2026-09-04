@@ -163,7 +163,10 @@ class ConversionViewModel: ObservableObject {
     ///
     /// 现改为「发送/另存自行保证正确」：比对指纹，不一致就先重渲再执行 ——
     /// 这样按钮名义与实际行为一致，用户不必记住「必须先预览」这条前置规则。
-    private var renderedFingerprint: String?
+    /// 上次渲染对应的输入指纹。
+    /// 必须 @Published：`isStale` 由它推导，而 View 用 isStale 决定读数是否变暗。
+    /// 若不发布，视图只能靠 renderGeneration 恰好同时变化而被动刷新 —— 那是巧合，不是契约。
+    @Published private(set) var renderedFingerprint: String?
 
     /// 当前输入的指纹。任何影响产物的东西都必须计入。
     private func currentFingerprint(mode: InputKind) -> String {

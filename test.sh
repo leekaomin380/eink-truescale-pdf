@@ -404,6 +404,82 @@ grep -q 'onChange(of: vm.currentPdfURL)' "$CV" \
   || ok "预览不再依赖可能巧合相等的 currentPdfURL"
 
 # ---------------------------------------------------------------------------
+sec "读数时效 · 排版参数改动必须自动重渲，陈旧读数必须显式变暗"
+# 【这个问题的形态】renderMetrics 只在渲染成功时赋值，而控件是即时的。
+# 改了字号却不重渲，左栏「中文 N 字/行」描述的仍是上一次渲染的版面 ——
+# 用户看到的是【描述旧设置的数字，紧挨着新设置的控件】，且无任何标记提示它是旧的。
+# 底栏当时更糟：「页面」「字号」取自当前设置，「版心」「共 N 页」取自 renderMetrics，
+# 会同时显示「字号 13pt」与「共 49 页」（49 页是 10.5pt 的结果），同一行自相矛盾。
+VM="$DIR/gui/mac/ConversionViewModel.swift"
+CV="$DIR/gui/mac/ContentView.swift"
+
+grep -q 'private func scheduleAutoRender' "$CV" \
+  && ok "存在防抖重渲染调度" \
+  || no "参数改动后不会自动重渲 —— 读数会长期停留在上一次渲染"
+
+for k in bodySize leading margin selectedCjkFont; do
+  grep -qE "onChange\(of: vm\.$k\).*scheduleAutoRender" "$CV" \
+    && ok "$k 变更接入自动重渲" \
+    || no "$k 变更未接自动重渲 —— 该项改动后读数不会跟上"
+done
+
+grep -q 'guard inputMode != .wechat' "$CV" \
+  && ok "网页模式排除在自动重渲之外（避免输入网址时自动发起抓取）" \
+  || no "网页模式会因键入网址而自动发起网络抓取"
+
+grep -q 'opacity(vm.isStale ? 0.4 : 1)' "$CV" \
+  && ok "陈旧读数变暗" \
+  || no "陈旧读数无视觉区分 —— 防抖窗口内用户会把旧数字当成新设置的结果"
+
+grep -q '@Published private(set) var renderedFingerprint' "$VM" \
+  && ok "renderedFingerprint 可观察（isStale 由它推导）" \
+  || no "isStale 依赖未发布的属性 —— 变暗只能靠 renderGeneration 恰好同时变化，是巧合不是契约"
+
+# 用 -qF：BRE 里 \( 是分组，含它的模式会让 grep 直接报错退出，
+# 反向断言便永远走 ok 分支而空过 —— 已实测踩到。
+grep -qF 'Text("字号 \(vm.bodySize)")' "$CV" \
+  && no "底栏仍混用两个时效的数据源（当前字号 + 上次渲染的页数）" \
+  || ok "底栏不再混用两个时效的数据源"
+
+# ---------------------------------------------------------------------------
+sec "主按钮层级 · 投递是目的，预览是手段"
+# 「预览」此前是唯一的 borderedProminent 按钮，而右侧面板本就一直显示预览，
+# 等于把视觉重心压在手段上，真正的目的（投递到设备）反而是次要样式。
+# 参数变更已由 scheduleAutoRender 自动跟进后，该按钮不再有存在理由。
+grep -q 'Text(inputMode == .wechat ? "解析并预览" : "预览")' "$CV" \
+  && no "「预览」按钮仍在 —— 与右侧常驻预览面板语义重复" \
+  || ok "已移除冗余的「预览」按钮"
+
+grep -q 'PrimaryStyled(isPrimary: inputMode != .wechat)' "$CV" \
+  && ok "发送到 Quaderno 在非网页模式下为主按钮" \
+  || no "投递按钮未升为主按钮"
+
+grep -q '@ViewBuilder func body(content: Content)' "$CV" \
+  && ok "PrimaryStyled 的 if/else 有 @ViewBuilder（两种 buttonStyle 是不同类型）" \
+  || no "ViewModifier.body 缺 @ViewBuilder —— if/else 返回不同类型会编译失败"
+
+# ---------------------------------------------------------------------------
+sec "侧栏空间 · 已选文件后投放区必须收起"
+# 左栏是本 app 最紧张的空间，让一个已完成的操作继续占着约 130pt 的空态是纯浪费。
+grep -q 'if vm.sourceFileName.isEmpty' "$CV" \
+  && grep -q '"更换文件"' "$CV" \
+  && ok "已选文件后投放区收起为细条" \
+  || no "投放区在已选文件后仍占满高度"
+
+# ---------------------------------------------------------------------------
+sec "差异化信息 · 尺寸与校验结果不得埋在窗口底角"
+# 页面物理尺寸、版心、全书尺寸一致性校验是本产品区别于任意 epub 转换器的地方
+# （docs/PRODUCT.md 核心价值第 1、3 条），此前是窗口最底的 caption2 灰字，
+# 且校验标记会被窗口边缘截断。
+grep -q 'private var layoutSummary' "$CV" \
+  && ok "版面摘要已提到侧栏设置区" \
+  || no "尺寸与校验结果仍只在窗口底角"
+
+grep -A12 'Label("页面尺寸统一"' "$CV" | grep -q 'fixedSize(horizontal: true' \
+  && ok "尺寸校验标记固定固有宽度，不再被窗口边缘截断" \
+  || no "尺寸校验标记仍可能被截断"
+
+# ---------------------------------------------------------------------------
 sec "底部操作区 · Quaderno 与另存按钮不得被垂直压缩出窗口"
 
 if grep -A8 'sidebarFooter' "$CV" | grep -q 'fixedSize(horizontal: false, vertical: true)' \

@@ -2,9 +2,23 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum InputMode: String, CaseIterable {
-    case epub = "文件转换"
-    case text = "粘贴文本"
-    case wechat = "网页链接"
+    case epub = "文件"
+    case text = "文本"
+    case wechat = "网页"
+}
+
+/// 按条件切换主/次按钮样式。
+/// SwiftUI 的 `.bordered` 与 `.borderedProminent` 是不同类型，无法用三目运算符切换，
+/// 只能把分支放进 ViewModifier。
+private struct PrimaryStyled: ViewModifier {
+    let isPrimary: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if isPrimary {
+            content.buttonStyle(.borderedProminent)
+        } else {
+            content.buttonStyle(.bordered)
+        }
+    }
 }
 
 struct ContentView: View {
@@ -19,6 +33,14 @@ struct ContentView: View {
     @State private var showClearNotice = false
     @State private var clearNoticeID = UUID()
     @AppStorage("isAdvancedExpanded") private var isAdvancedExpanded = false
+    /// 排版参数变更后的防抖重渲染任务。
+    ///
+    /// 【为何需要】renderMetrics 只在渲染成功时赋值，而控件是即时的。
+    /// 改了字号却不重渲，左栏「中文 N 字/行」与底栏「版心 / 共 N 页」描述的仍是
+    /// 上一次渲染的版面 —— 用户看到的是一个【描述旧设置的数字，紧挨着新设置的控件】，
+    /// 且底栏会同时显示当前字号与旧页数，自相矛盾且无从分辨。
+    /// 本地渲染是秒级操作，没有理由让用户手动同步这件事。
+    @State private var autoRenderTask: Task<Void, Never>?
 
     private let cjkNames: [String: String] = [
         "PingFang SC": "苹方", "Songti SC": "宋体", "Heiti SC": "黑体",
@@ -42,6 +64,34 @@ struct ContentView: View {
         case .epub:   return vm.sourceFileURL != nil
         case .text:   return !vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .wechat: return !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    /// 标题栏显示当前文档，而非固定的应用名 —— macOS 惯例，
+    /// 也让同时开多个窗口时能一眼分辨。
+    private var windowTitle: String {
+        switch inputMode {
+        case .epub:
+            return vm.sourceFileName.isEmpty ? "电子书转换" : vm.sourceFileName
+        case .text:
+            let t = vm.pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? "粘贴文本" : t
+        case .wechat:
+            return vm.wechatURL.isEmpty ? "网页链接" : vm.wechatURL
+        }
+    }
+
+    /// 排版参数变化后延迟重渲染。
+    ///
+    /// 网页模式排除在外 —— 它要发起网络抓取，不能因为用户正在输入网址就自动触发。
+    /// 防抖窗口按来源区分：调字号是离散点击，文本输入是连续键入，后者需要更长的静默期。
+    private func scheduleAutoRender(delay: Duration) {
+        guard inputMode != .wechat, hasInput else { return }
+        autoRenderTask?.cancel()
+        autoRenderTask = Task { @MainActor in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, !vm.isConverting, vm.isStale else { return }
+            vm.ensureFresh {}
         }
     }
 
@@ -70,12 +120,17 @@ struct ContentView: View {
         // 【为何逐项监听而不在退出时统一保存】app 是常驻型（关窗不退出），
         // 「退出时保存」在异常退出或强制关闭时会丢；而这些值改动频率极低，
         // 每次写一个 UserDefaults 字典的开销可以忽略。
-        .onChange(of: vm.selectedCjkFont)     { _, _ in vm.savePreferences() }
-        .onChange(of: vm.selectedLatinFont)   { _, _ in vm.savePreferences() }
-        .onChange(of: vm.bodySize)            { _, _ in vm.savePreferences() }
-        .onChange(of: vm.margin)              { _, _ in vm.savePreferences() }
-        .onChange(of: vm.leading)             { _, _ in vm.savePreferences() }
-        .onChange(of: vm.selectedDeviceIndex) { _, _ in vm.savePreferences() }
+        .onChange(of: vm.selectedCjkFont)     { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
+        .onChange(of: vm.selectedLatinFont)   { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
+        .onChange(of: vm.bodySize)            { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
+        .onChange(of: vm.margin)              { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
+        .onChange(of: vm.leading)             { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
+        .onChange(of: vm.selectedDeviceIndex) { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
+        // 选中文件即视为「要看结果」，无需再点一次按钮。
+        .onChange(of: vm.sourceFileURL)       { _, _ in scheduleAutoRender(delay: .milliseconds(150)) }
+        // 键入是连续动作，静默期取长一些，避免每敲一个字就起一次渲染。
+        .onChange(of: vm.pasteText)           { _, _ in scheduleAutoRender(delay: .milliseconds(900)) }
+        .navigationTitle(windowTitle)
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers)
         }
@@ -167,6 +222,8 @@ struct ContentView: View {
             Text("排版设置")
                 .font(.headline)
 
+            layoutSummary
+
             layoutBasicSection
 
             DisclosureGroup("进阶设置", isExpanded: $isAdvancedExpanded) {
@@ -182,20 +239,38 @@ struct ContentView: View {
 
     private var epubSection: some View {
         Group {
+            // 已选文件后收起投放区：左栏是本 app 最紧张的空间，
+            // 让一个已经完成的操作继续占着约 130pt 的空态是纯浪费。
+            // 收起后仍是完整的投放目标与选择入口，只是不再喧宾夺主。
             Button(action: { showFilePicker = true }) {
-                VStack(spacing: 6) {
-                    Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 24))
-                        .foregroundColor(isDragOver ? .accentColor : .secondary)
-                    Text(isDragOver ? "松开载入" : "拖入文件或点击选择")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                    Text("EPUB / HTML / FB2 / Markdown")
-                        .font(.caption)
-                        .foregroundColor(.gray.opacity(0.5))
+                Group {
+                    if vm.sourceFileName.isEmpty {
+                        VStack(spacing: 6) {
+                            Image(systemName: "doc.badge.plus")
+                                .font(.system(size: 24))
+                                .foregroundColor(isDragOver ? .accentColor : .secondary)
+                            Text(isDragOver ? "松开载入" : "拖入文件或点击选择")
+                                .font(.callout)
+                                .foregroundColor(.secondary)
+                            Text("EPUB / HTML / FB2 / Markdown")
+                                .font(.caption)
+                                .foregroundColor(.gray.opacity(0.5))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.badge.plus")
+                                .font(.caption)
+                                .foregroundColor(isDragOver ? .accentColor : .secondary)
+                            Text(isDragOver ? "松开载入" : "更换文件")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(isDragOver ? Color.accentColor : Color.secondary.opacity(0.3),
@@ -371,6 +446,56 @@ struct ContentView: View {
         }
     }
 
+    /// 版面摘要：页面物理尺寸、版心宽度、全书尺寸一致性校验。
+    ///
+    /// 【为何提到这里】这三项正是本产品区别于任意一个 epub 转换器的地方
+    /// （见 docs/PRODUCT.md 核心价值第 1、3 条：尺寸可理解、结果可验证），
+    /// 此前却是窗口最底的 caption2 灰字，其中校验标记还被截断在右上角。
+    /// 用户注意不到，也就无从理解自己为什么该用这个工具。
+    private var layoutSummary: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "ruler")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("\(vm.config.pageW) × \(vm.config.pageH)")
+                    .font(.callout.monospacedDigit())
+                if let name = vm.selectedDevice?.name {
+                    Text(name)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let m = vm.renderMetrics {
+                HStack(spacing: 8) {
+                    Text("版心 \(String(format: "%.1f", m.measureMm))mm")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    if m.pages > 0 {
+                        Text("共 \(m.pages) 页")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    if m.sizeUniform {
+                        Label("尺寸统一", systemImage: "checkmark.seal.fill")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    } else {
+                        Label("尺寸不一致", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                }
+                .opacity(vm.isStale ? 0.4 : 1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(Color.secondary.opacity(0.06))
+        .cornerRadius(6)
+    }
+
     private var layoutBasicSection: some View {
         Group {
             Text("正文字号")
@@ -394,6 +519,9 @@ struct ContentView: View {
                         .font(.caption2)
                         .foregroundColor(m.latinPerLine >= 45 && m.latinPerLine <= 75 ? .green : .orange)
                 }
+                // 自动重渲染有防抖窗口，其间这两个数描述的仍是上一次渲染的版面。
+                // 变暗表示「正在追上」，避免用户把旧数字当成新设置的结果。
+                .opacity(vm.isStale ? 0.4 : 1)
             }
 
             Text("行距")
@@ -435,28 +563,28 @@ struct ContentView: View {
         }
     }
 
+    /// 主操作区。
+    ///
+    /// 【为何删掉「预览」按钮】右侧面板一直显示着预览，再放一个叫「预览」的
+    /// 醒目按钮在语义上是重复的；而它此前是唯一的 prominent 按钮，等于把
+    /// 视觉重心压在【手段】上，真正的目的（投递到设备）反而是次要样式。
+    /// 参数变更已由 scheduleAutoRender 自动跟进，这个按钮不再有存在理由。
+    ///
+    /// 网页模式例外：它要发起网络抓取，必须由用户显式触发，故保留独立按钮。
     private var actionButtons: some View {
         VStack(spacing: 8) {
-            Button(action: {
-                switch inputMode {
-                case .epub: vm.convertEpub()
-                case .text: vm.convertText()
-                case .wechat: vm.convertWechat()
-                }
-            }) {
-                HStack {
-                    if vm.isConverting {
-                        ProgressView().controlSize(.small)
+            if inputMode == .wechat {
+                Button(action: { vm.convertWechat() }) {
+                    HStack {
+                        if vm.isConverting { ProgressView().controlSize(.small) }
+                        Text("解析并预览")
                     }
-                    Text(inputMode == .wechat ? "解析并预览" : "预览")
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
+                .buttonStyle(.borderedProminent)
+                .disabled(vm.isConverting || !hasInput)
+                .keyboardShortcut("r", modifiers: .command)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(vm.isConverting || (inputMode == .epub && vm.sourceFileURL == nil)
-                      || (inputMode == .text && vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                      || (inputMode == .wechat && vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-            .keyboardShortcut(.return, modifiers: .command)
 
             HStack(spacing: 8) {
                 if vm.hasQuaderno {
@@ -464,15 +592,16 @@ struct ContentView: View {
                         Text("发送到 Quaderno")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .modifier(PrimaryStyled(isPrimary: inputMode != .wechat))
                     .disabled(vm.isConverting || !hasInput)
+                    .keyboardShortcut(.return, modifiers: .command)
                 }
 
                 Button(action: { vm.ensureFresh { vm.savePDF() } }) {
                     Text("另存 PDF…")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .modifier(PrimaryStyled(isPrimary: !vm.hasQuaderno && inputMode != .wechat))
                 .disabled(vm.isConverting || !hasInput)
                 .keyboardShortcut("s", modifiers: .command)
             }
@@ -514,9 +643,14 @@ struct ContentView: View {
         Group {
             if !vm.statusMessage.isEmpty {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 7, height: 7)
+                    // 渲染进度原先寄生在「预览」按钮里，按钮删掉后迁到状态条。
+                    if vm.isConverting {
+                        ProgressView().controlSize(.small).scaleEffect(0.6).frame(width: 7, height: 7)
+                    } else {
+                        Circle()
+                            .fill(statusColor)
+                            .frame(width: 7, height: 7)
+                    }
                     Text(vm.statusMessage)
                         .font(.caption)
                         .foregroundColor(statusColor)
@@ -636,16 +770,23 @@ struct ContentView: View {
 
                 Spacer()
 
+                // 窄窗口下这枚标记会被挤到窗口边缘并截断（实测「页面尺寸统一」只剩前几字）。
+                // fixedSize + layoutPriority 让它保持固有宽度，压缩由左侧翻页控件承担。
                 if let m = vm.renderMetrics {
-                    if m.sizeUniform {
-                        Label("页面尺寸统一", systemImage: "checkmark.seal")
-                            .font(.caption2)
-                            .foregroundColor(.green)
-                    } else {
-                        Label("尺寸不一致", systemImage: "exclamationmark.triangle")
-                            .font(.caption2)
-                            .foregroundColor(.red)
+                    Group {
+                        if m.sizeUniform {
+                            Label("页面尺寸统一", systemImage: "checkmark.seal")
+                                .foregroundColor(.green)
+                        } else {
+                            Label("尺寸不一致", systemImage: "exclamationmark.triangle")
+                                .foregroundColor(.red)
+                        }
                     }
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
+                    .opacity(vm.isStale ? 0.4 : 1)
                 }
             }
             .padding(.horizontal, 16)
@@ -685,6 +826,13 @@ struct ContentView: View {
             .background(Color(nsColor: .controlBackgroundColor))
 
             // Bottom info bar
+            //
+            // 【为何去掉「字号」与「共 N 页」】原先这一行混用两个时效的数据源：
+            // 「页面」「字号」取自当前设置，「版心」「共 N 页」取自上一次渲染的
+            // renderMetrics。改了字号不重渲时会显示「字号 13pt · 共 49 页」，
+            // 而 49 页是 10.5pt 的结果 —— 同一行内自相矛盾。
+            // 且「字号」与左栏控件、「共 N 页」与上方翻页条本就重复。
+            // 现在只保留两项事实性数据，且同属一个时效。
             HStack(spacing: 16) {
                 if vm.selectedDevice != nil {
                     Text("页面 \(vm.config.pageW) × \(vm.config.pageH)")
@@ -693,12 +841,7 @@ struct ContentView: View {
                 if let m = vm.renderMetrics {
                     Text("版心 \(String(format: "%.1f", m.measureMm))mm")
                         .font(.caption2).foregroundColor(.secondary)
-                    Text("字号 \(vm.bodySize)")
-                        .font(.caption2).foregroundColor(.secondary)
-                    if m.pages > 0 {
-                        Text("共 \(m.pages) 页")
-                            .font(.caption2).foregroundColor(.secondary)
-                    }
+                        .opacity(vm.isStale ? 0.4 : 1)
                 }
             }
             .padding(.horizontal, 16)
