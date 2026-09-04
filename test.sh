@@ -182,6 +182,57 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "EPUB 全链路的数学存活 · 上下标与希腊字母不得退化为字面量"
+# 为何单列：I9 覆盖的是 Markdown 直入 typst，第 381 行覆盖的是 HTML 输入，
+# 两者都不经过 EPUB。而 EPUB 路径上数学要经过
+#     $…$  →（pandoc）→ EPUB 里的 MathML/span  →（book.sh 再读）→ Typst
+# 三次转换，任何一环的版本变动都可能把 $G_{\beta\gamma}$ 悄悄降级成字面量
+# "$ G_{} $"（希腊字母被吞、美元符与花括号漏给读者）。
+# 科技类电子书满篇 Ca^2+ / GABA_A / Gβγ，坏了不会报错，只会静默产出错内容。
+cat > "$WORK/mathbook.md" <<'MBEOF'
+# 数学存活
+
+细胞外 $Ca^{2+}$ 浓度约 2 mM，$Na^+$ 梯度驱动转运。
+
+G 蛋白的 $G_{\beta\gamma}$ 亚基与 $GABA_A$ 受体耦联，$\Delta^9$-THC 是活性成分。
+MBEOF
+if pandoc "$WORK/mathbook.md" -o "$WORK/mathbook.epub" --metadata title=数学存活 2>/dev/null \
+   && "$DIR/book.sh" "$WORK/mathbook.epub" -o "$WORK/mathbook.pdf" >/dev/null 2>"$WORK/mbe"; then
+  MBT=$(pdftotext "$WORK/mathbook.pdf" - 2>/dev/null)
+
+  # ① 字面量泄漏：正文里不该再出现美元符或裸花括号
+  if print -r -- "$MBT" | grep -q '[$]'; then
+    no "EPUB 数学退化为字面量：输出中残留 '\$'（应为 0）"
+  else
+    ok "EPUB 数学未泄漏 '\$'"
+  fi
+
+  # ② LaTeX 宏名不得以文字形式漏出
+  if print -r -- "$MBT" | grep -qE 'beta|gamma|mathrm|Delta[^0-9]'; then
+    no "LaTeX 宏名以文字形式漏出（如 beta / mathrm）"
+  else
+    ok "LaTeX 宏名未漏出"
+  fi
+
+  # ③ 希腊字母必须存活。经 typst 数学排版后可能是 U+03B2 也可能是
+  #    U+1D6FD「数学斜体 beta」，两种都算通过 —— 这是 I9 初版踩过的坑。
+  if print -r -- "$MBT" | grep -qE 'β|𝛽' && print -r -- "$MBT" | grep -qE 'Δ|𝛥'; then
+    ok "希腊字母存活（β 与 Δ）"
+  else
+    no "希腊字母丢失 —— 检查 EPUB→Typst 链路的数学处理"
+  fi
+
+  # ④ 上下标的基字符必须还在（pdftotext 会压平上下标，故按基字符断言）
+  if print -r -- "$MBT" | grep -q 'Ca' && print -r -- "$MBT" | grep -q 'GABA'; then
+    ok "上下标基字符存活（Ca / GABA）"
+  else
+    no "上下标内容丢失"
+  fi
+else
+  no "含数学的 EPUB 渲染失败：$(tail -2 "$WORK/mbe" 2>/dev/null | tr '\n' ' ')"
+fi
+
+# ---------------------------------------------------------------------------
 sec "I4 · 含内部锚点的 EPUB 可正常渲染（尾注锚点曾致整本崩溃）"
 # 构造一个带失效内部锚点的 HTML→EPUB
 cat > "$WORK/anchor.html" <<'EOF'
