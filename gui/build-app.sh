@@ -14,11 +14,46 @@ APP_DIR="$SCRIPT_DIR/$APP_NAME.app"
 echo ">>> 清理旧 .app"
 rm -rf "$APP_DIR"
 
+# ---------------------------------------------------------------------------
+# 选 SDK。
+#
+# 【为何不能用默认 SDK】macOS 27 SDK 的 SwiftUI 把 @State / @StateObject 等
+# 声明为【宏】，编译时需要宏实现插件 libSwiftUIMacros.dylib。该插件随完整
+# Xcode 分发，Command Line Tools 的 usr/lib/swift/host/plugins/ 下只有
+# libObservationMacros 与 libSwiftMacros —— 于是在只装了 CLT 的机器上，
+# 用默认 SDK 会得到一屏
+#     error: external macro implementation type 'SwiftUIMacros.StateMacro'
+#            could not be found ... plugin for module 'SwiftUIMacros' not found
+# 且【与源码无关】，HEAD 版本同样报错，很容易被误判成代码写坏了。
+#
+# 26 及更早的 SDK 里 SwiftUI 未走宏，编译无需该插件。本项目 deployment target
+# 是 macos14.0，用 26 SDK 构建不损失任何已用到的 API。
+#
+# 若装了完整 Xcode（xcode-select 指向 Xcode.app），默认 SDK 可直接用，
+# 此处的挑选逻辑会自然选中最新可用者。
+# ---------------------------------------------------------------------------
+SDK_ROOT=""
+if [[ ! -f "$(dirname "$(xcrun -f swiftc 2>/dev/null)")/../lib/swift/host/plugins/libSwiftUIMacros.dylib" ]]; then
+  for cand in MacOSX26.sdk MacOSX26.5.sdk MacOSX15.2.sdk; do
+    if [[ -d "/Library/Developer/CommandLineTools/SDKs/$cand" ]]; then
+      SDK_ROOT="/Library/Developer/CommandLineTools/SDKs/$cand"
+      echo ">>> 未找到 libSwiftUIMacros.dylib（仅装了 Command Line Tools），改用 $cand"
+      break
+    fi
+  done
+fi
+
 echo ">>> 编译原生 SwiftUI 应用"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 
+# zsh 不对 ${VAR:+...} 做分词，写成一个字符串会被 swiftc 当成单个未知参数，
+# 故用数组传递。
+SDK_ARGS=()
+[[ -n "$SDK_ROOT" ]] && SDK_ARGS=(-sdk "$SDK_ROOT")
+
 swiftc \
+    "${SDK_ARGS[@]}" \
     "$MAC_DIR/QuadernoApp.swift" \
     "$MAC_DIR/ContentView.swift" \
     "$MAC_DIR/ConversionViewModel.swift" \
