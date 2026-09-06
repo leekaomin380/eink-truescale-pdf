@@ -9,3 +9,7 @@ quaderno_render_*.log
 # GUI 打包产物（由 gui/build-app.sh 重建）
 gui/*.app/
 dist/
+
+# agy（Antigravity CLI 委托）在 worktree 里落的运行日志，非产出
+agy.stdout
+agy.stderr
