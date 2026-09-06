@@ -1,0 +1,4 @@
+.venv/
+epub_build/
+_check/
+__pycache__/
