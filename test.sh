@@ -82,6 +82,47 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+sec "I9b · \\(…\\) / \\[…\\] 定界符的公式不得被拆成裸括号"
+# 【用户报的 bug】从 AI 对话粘贴的正文里，`(\(\text{Li}^+\))` 在 PDF 里印成
+# `((^+))` —— 元素符号 Li 整个消失。根因：pandoc markdown reader 默认关闭
+# tex_math_single_backslash，于是 \( \) \[ \] 被当转义符剥成裸括号，剩下的
+# \text{Li} 被 raw_tex 收成 RawInline(tex)，typst writer 对非 latex 目标直接丢弃。
+# ChatGPT / Gemini 的行内公式默认就是这套定界符，属高频输入。
+# 【第二处根因】Gemini / 部分网页复制路径把定界符【双写】成 \\(…\\)，
+# 内部的 \text 仍是单反斜杠。single 版认不出，故两个扩展必须同开。
+cat > "$WORK/mathbs.md" <<'BSEOF'
+锂离子 (\(\text{Li}^+\)) 与钠 (\\(\text{Na}^+\\)) 极其相似。
+
+\[ \Delta_{net} = \text{单反斜杠块级} - \alpha_2 \]
+
+\\[ \Delta_{net} = \text{双反斜杠块级} - \alpha_2 \\]
+BSEOF
+if pandoc "$WORK/mathbs.md" -f "$MD_FORMAT" --template="$DIR/deliver.typ" \
+     -V mainfont=Charter -V "mainfont=Songti SC" \
+     -V pagewidth=156.97mm -V pageheight=209.3mm -V pagemargin=10mm \
+     -V bodysize=10pt -V leading=0.85em \
+     -o "$WORK/mathbs.pdf" --pdf-engine=typst 2>"$WORK/mbe"; then
+  BT=$(pdftotext "$WORK/mathbs.pdf" - 2>/dev/null)
+  print -r -- "$BT" | grep -q "Li" \
+    && ok "\\(…\\) 行内公式被解析（Li 未被 raw_tex 丢弃）" \
+    || no "\\(…\\) 公式内容丢失 —— 检查 MD_FORMAT 是否含 tex_math_single_backslash"
+  print -r -- "$BT" | grep -q "Na" \
+    && ok "\\\\(…\\\\) 双写定界符也被解析（Na 未丢）" \
+    || no "双写 \\\\(…\\\\) 未被解析 —— 检查 MD_FORMAT 是否含 tex_math_double_backslash"
+  print -r -- "$BT" | grep -q "单反斜杠块级" \
+    && ok "\\[…\\] 块级公式被解析" \
+    || no "\\[…\\] 块级公式内容丢失"
+  print -r -- "$BT" | grep -q "双反斜杠块级" \
+    && ok "\\\\[…\\\\] 双写块级公式被解析" \
+    || no "双写 \\\\[…\\\\] 块级公式内容丢失"
+  print -r -- "$BT" | grep -q '\\text{' \
+    && no "LaTeX 源码原样排进 PDF（\\text{ 残留）" \
+    || ok "无 LaTeX 源码残留"
+else
+  no "含 \\(…\\) 公式的 markdown 渲染失败"
+fi
+
+# ---------------------------------------------------------------------------
 sec "I9 · 数学公式内的希腊字母与中文不得丢失"
 # 由真实 bug 得出：曾为防 \$PATH 被误判而关闭 tex_math_dollars，
 # 代价是 \Delta → 消失、\text{中文} → 整段消失。从 AI 对话复制的技术内容常含公式。

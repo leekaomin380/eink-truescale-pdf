@@ -122,7 +122,9 @@ case "${${INPUT:t:e}:l}" in
   # 靠 MathJax/KaTeX 在浏览器端渲染，故源码必须由我们自己解析。
   # 注意：app 的网页抽取路径不受影响 —— 它产出 markdown，走 $MD_FORMAT，
   # 而那条已含 tex_math_dollars。此处修的是 book.sh 直接吃 .html 的情形。
-  html|htm)      FROM="html+tex_math_dollars" ;;
+  # tex_math_single_backslash / _double_backslash：同理，\(…\) 与 \\(…\\)
+  # 这两族定界符在 html reader 里也默认关闭；不加则行内公式只剩裸括号。
+  html|htm)      FROM="html+tex_math_dollars+tex_math_single_backslash+tex_math_double_backslash" ;;
   *)             FROM="$MD_FORMAT" ;;
 esac
 

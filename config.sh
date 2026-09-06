@@ -44,7 +44,24 @@ LEADING="0.85em"
 #
 # 打开后唯一的损失是「两个 $ 紧贴内容」的裸文本（如 $mainfont$ → mainfont），
 # 这种写法在自然文本中几乎只出现于模板占位符，且写在代码块里即可保全。
-MD_FORMAT="markdown-citations"
+#
+# 【2026-09-06 补】tex_math_dollars 只认 $…$ / $$…$$。而 ChatGPT / Gemini /
+# Claude 网页版复制出来的正文，行内公式默认是 \(…\)、块级是 \[…\]，
+# pandoc 的 markdown reader 默认【不认】这种单反斜杠定界符，于是：
+#   \(  \)  \[  \]  → 被当成转义符，只剩裸的 ( ) [ ]
+#   \text{Li}          → 被 raw_tex 吃成 RawInline(tex)，typst writer 直接丢弃
+# 实测 `(\(\text{Li}^+\))` 在 PDF 里变成 `((^+))` —— 元素符号整个没了。
+# 这与上面那条 tex_math_dollars 的 bug 是同一类数据损坏，只是定界符不同。
+# 代价：\[ \] 不再能用来转义字面方括号（a\[0\] 会被当块级公式）。
+# 字面方括号在 markdown 里本就无须转义，而 AI 复制来的公式极常见，故取后者。
+#
+# tex_math_double_backslash：Gemini / 部分网页复制路径会把定界符【双写】成
+# \\(…\\) / \\[…\\]（内部的 \text 仍是单反斜杠），single 版认不出这种。
+# 实测 app 落盘的 .md 原文即 `(\\(\text{Li}^+\\))`，只开 single 时输出
+# 退化成 `(\(^+\))` —— 定界符原样印出、Li 照旧被 raw_tex 吞掉。
+# 两个扩展【必须同开】：各自只认一种定界符，互不覆盖，同开后单/双写四种
+# 组合（行内/块级 × 单/双）全部正确解析，实测无冲突。
+MD_FORMAT="markdown-citations+tex_math_single_backslash+tex_math_double_backslash"
 
 # ---- 环境 -------------------------------------------------------------------
 QUADERNO_APP="/Applications/QUADERNO PC App.app"
