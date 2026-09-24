@@ -1,0 +1,32 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "srgb:0.90980,0.93725,0.92549,1.00000",
+      "srgb:0.86275,0.89804,0.88235,1.00000"
+    ]
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "device.svg",
+          "name": "device",
+          "glass": false
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}

@@ -3,20 +3,19 @@
 //
 // 设计要点（改之前先读）：
 //   · 容器是 superellipse n=7、body 824/1024 —— Apple 的图标模板规格，不是随意的圆角矩形。
-//   · 纸是 A 系 1:√2。比例即语义：这个 app 讲的就是真实物理尺寸，纸一旦被拉伸或卷角，
-//     这层意思就没了。所以不做卷角、翻页、撕边。
-//   · 版心地脚 > 天头，文字块落在视觉中心而非几何中心。
-//   · 页外是尚未成行的词（矢量的干脆），页内是排定的字（有印痕）。阈值是纸的左边界。
-//   · 质感取向是「工艺」不是「材质」：双层影、纸的厚度、墨色不匀、亚像素的洇。
-//     不做底噪肌理 —— 渲染器差异 + 小尺寸抖动脏点。
+//   · 主体是一台电子纸设备：白色机身框 + 暖灰屏 + 三行字。不画按键、不画品牌字、不画状态栏。
+//   · 屏是 A 系 1:√2。比例即语义：这个 app 讲的就是按屏幕真实物理尺寸出版，屏一旦被拉伸，
+//     这层意思就没了。机身框不受此约束，只按屏外扩固定边宽。
+//   · 浅底、少色：底 / 机身 / 屏 / 墨，四色封顶。深色只留给字，不给大面积。
+//     上一版（深青渐变底 + 纸 + 标题 + 朱线 + 七行字 + 页外散词）被判定为颜色过重、元素过多。
+//   · 浅底在浅色背景上会发虚，靠容器边的一道低不透明度墨线兜底，不靠加深底色。
 //
-// 分档：大档有工艺，小档有轮廓。16/32 是重排过的，不是缩放。
+// 分档：大档有投影，小档有轮廓。16/32 是重排过的，不是缩放。
 
 const P = {
-  a: '#527874', b: '#284341', lift: '#DCEFE8', liftOp: 0.20,
-  sheet0: '#FBF7ED', sheet1: '#EFE7D6',
-  ink: '#2A3B39', mark: '#F3ECDC', accent: '#C0472C',
-  edge: '#FFFFFF', edgeOp: 0.14, shadow: 0.30,
+  ground0: '#E8EFEC', ground1: '#DCE5E1',   // 底：极浅的灰青，上亮下暗一档
+  bezel: '#FFFFFF', screen: '#F1EEE6',      // 机身 / 电子纸屏
+  ink: '#2B3634', outline: '#1F2A28',
 };
 
 // ---- superellipse n=7，824×824 居中于 1024 ----------------------------------
@@ -39,143 +38,90 @@ function squircle(n = 7, a = 412, cx = 512, cy = 512, SEG = 32) {
 const SQ = squircle();
 
 // ---- 分档 -------------------------------------------------------------------
-// scale 放大纸：小尺寸下纸要占更多面积，否则轮廓吃不住。
+// scale  放大设备：小尺寸下主体要占更多面积，否则轮廓吃不住。
+// lines  每行 [左起比例, 右止比例]；小档减到两行，行高加粗，否则在 16px 下不足一像素。
+// line   行高（1024 坐标）；outline 机身描边宽（0 = 不描，只靠投影分离）。
+const L3 = [[0, 1], [0, 1], [0, 0.63]], L2 = [[0, 1], [0, 0.58]];
 const TIERS = [
-  { at: 512, scale: 1.00, rows: 7, inkH: 15, gap: 17, titleH: 26, ruleH: 5,
-    flow: 1.00, blur: true,  jitter: true,  folio: true,  edge: true,  inkOp: 0.55, contact: 1.00 },
-  { at: 256, scale: 1.00, rows: 7, inkH: 15, gap: 18, titleH: 26, ruleH: 6,
-    flow: 1.00, blur: false, jitter: true,  folio: true,  edge: true,  inkOp: 0.56, contact: 1.05 },
-  { at: 128, scale: 1.02, rows: 6, inkH: 17, gap: 21, titleH: 28, ruleH: 7,
-    flow: 0.85, blur: false, jitter: true,  folio: false, edge: true,  inkOp: 0.58, contact: 1.12 },
-  { at: 64,  scale: 1.06, rows: 5, inkH: 21, gap: 28, titleH: 30, ruleH: 9,
-    flow: 0.42, blur: false, jitter: false, folio: false, edge: true,  inkOp: 0.62, contact: 1.25 },
-  // 32 与 16 是重排，不是缩放：页外的词全部撤掉（小档读成锯齿），
-  // 标题收窄或取消（否则并成一块墨），只保留「一张纸 + 几行字 + 一道朱线」。
-  { at: 32,  scale: 1.10, rows: 3, inkH: 27, gap: 42, titleH: 33, ruleH: 12,
-    flow: 0,    blur: false, jitter: false, folio: false, edge: true,  inkOp: 0.68, contact: 1.45 },
-  { at: 0,   scale: 1.16, rows: 3, inkH: 31, gap: 54, titleH: 0,  ruleH: 30,
-    flow: 0,    blur: false, jitter: false, folio: false, edge: false, inkOp: 0.74, contact: 1.70 },
+  { at: 128, scale: 1.00, bezel: 32, lines: L3, line: 30, lead: 64, outline: 0,  shadow: 0.12, ol: 0 },
+  { at: 64,  scale: 1.04, bezel: 32, lines: L3, line: 38, lead: 76, outline: 5,  shadow: 0.14, ol: 0.14 },
+  { at: 32,  scale: 1.10, bezel: 36, lines: L2, line: 60, lead: 110, outline: 12, shadow: 0,   ol: 0.22 },
+  { at: 0,   scale: 1.16, bezel: 40, lines: L2, line: 84, lead: 140, outline: 24, shadow: 0,   ol: 0.30 },
 ];
 const tierFor = px => TIERS.find(t => px >= t.at);
 
-// ---- 版心几何 ---------------------------------------------------------------
-function geom(scale) {
-  const PW = Math.round(372 * scale), PH = Math.round(PW * Math.SQRT2);
-  const PX = Math.round(512 - PW / 2), PY = Math.round(512 - PH / 2);
-  return { PW, PH, PX, PY,
-    BX: PX + 0.1237 * PW, BR: PX + PW - 0.1559 * PW,   // 切口 左 / 右
-    BT: PY + 0.1141 * PH, BB: PY + PH - 0.1882 * PH }; // 天头 / 地脚（地脚更大）
+const r1 = v => Math.round(v * 10) / 10;
+
+// 机身 + 屏 + 字，1024 坐标、以 (512,512) 为中心。bezelAttrs 由调用方决定投影 / 描边。
+function device(t, bezelAttrs = '') {
+  // 屏 1:√2，机身按固定边宽外扩；整体在容器里居中。
+  const SW = 380 * t.scale, SH = SW * Math.SQRT2;
+  const B = t.bezel * t.scale, BW = SW + 2 * B, BH = SH + 2 * B;
+  const BX = 512 - BW / 2, BY = 512 - BH / 2, SX = BX + B, SY = BY + B;
+  const bezelR = 40 * t.scale, screenR = 10 * t.scale;
+
+  // 文字块：左右内缩屏宽的 12.6%，从屏高的 14.5% 处起排 —— 上重下空，像读到一半的页。
+  const TX = SX + 0.126 * SW, TW = SW * (1 - 2 * 0.126), TY = SY + 0.145 * SH;
+  const lead = t.lead * t.scale, lh = t.line * t.scale;
+  const lines = t.lines.map(([a, b], i) =>
+    `<rect x="${r1(TX + a * TW)}" y="${r1(TY + i * lead)}" width="${r1((b - a) * TW)}" height="${r1(lh)}" rx="${r1(lh / 2)}" fill="${P.ink}" fill-opacity="0.85"/>`
+  ).join('\n  ');
+  return `<rect x="${r1(BX)}" y="${r1(BY)}" width="${r1(BW)}" height="${r1(BH)}" rx="${r1(bezelR)}" fill="${P.bezel}"${bezelAttrs}/>
+<rect x="${r1(SX)}" y="${r1(SY)}" width="${r1(SW)}" height="${r1(SH)}" rx="${r1(screenR)}" fill="${P.screen}"/>
+  ${lines}`;
 }
 
-const lcg = s0 => { let s = s0 >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); };
-const r1 = v => Math.round(v * 10) / 10;
-const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-
 export function svgFor(px) {
-  const t = tierFor(px), g = geom(t.scale);
-  const { PW, PH, PX, PY, BX, BR, BT, BB } = g;
-  const ruleY = BT + 0.108 * PH;
-  const body0 = BT + (t.titleH > 0 ? 0.181 : 0.181) * PH;
-  const breakAt = t.rows >= 5 ? Math.ceil(t.rows * 0.57) : Infinity;
-  const BRK = breakAt < t.rows ? 0.55 : 0;
-  const lead = (BB - t.inkH / 2 - body0) / (t.rows - 1 + BRK);
-  const rowY = i => body0 + i * lead + (i >= breakAt ? BRK * lead : 0);
-  const ROWS = Array.from({ length: t.rows }, (_, i) => rowY(i));
-  const blockW = BR - BX;
-
-  const rnd = lcg(77002);
-  const run = (x0, x1, y, h, op) =>
-    `<rect x="${r1(x0)}" y="${r1(y - h / 2)}" width="${r1(x1 - x0)}" height="${r1(h)}" `
-    + `rx="${r1(h * 0.35)}" fill="${P.ink}" opacity="${r1(op)}"/>`;
-
-  // 标题：长短不一的词。小档只留一个，否则并成一团。
-  let type = '';
-  const tw = t.titleH === 0 ? [] : t.rows >= 5 ? [[0, .26], [.31, .47], [.53, .83]] : [[0, .44]];
-  tw.forEach(([a, b]) => {
-    type += run(BX + a * blockW, BX + b * blockW, BT + t.titleH / 2, t.titleH,
-                t.jitter ? 0.84 + rnd() * 0.12 : 0.90);
-  });
-
-  // 正文：行末齐右；段首缩进两字；末行短。逐行上墨基数 + 逐词墨色抖动。
-  ROWS.forEach((y, i) => {
-    const last = i === ROWS.length - 1;
-    const base = t.jitter ? 0.95 + rnd() * 0.13 : 1;
-    const indent = (t.rows >= 5 && (i === 0 || i === breakAt)) ? t.inkH * 2.4 : 0;
-    const xL = BX + indent, xE = last ? BX + blockW * 0.43 : BR;
-    let x = xE;
-    while (x > xL) {
-      const w = t.inkH * 1.7 + rnd() * t.inkH * 4.1;
-      const x0 = Math.max(xL, x - w);
-      if (x - x0 > t.inkH * 0.6)
-        type += run(x0, x, y, t.inkH,
-          t.jitter ? Math.min(0.70, base * (t.inkOp * 0.87 + rnd() * 0.13)) : t.inkOp);
-      x = x0 - t.gap;
-    }
-  });
-
-  // 页外：尚未成行的词。矢量的干脆 —— 没落纸的还没被印。
-  let flow = '';
-  if (t.flow > 0) {
-    const fr = lcg(20260904), X0 = 132, X1 = PX - 14;
-    const rows = [ROWS[0] - lead * 1.9, ...ROWS, ROWS[ROWS.length - 1] + lead * 1.15];
-    rows.forEach(y => {
-      let x = X1;
-      while (x > X0) {
-        const u = clamp((x - X0) / (X1 - X0), 0, 1), e = u * u * (3 - 2 * u);
-        const w = (t.inkH * 2.3 + fr() * t.inkH * 4.1) * (0.62 + 0.38 * e) * t.flow;
-        const x0 = Math.max(X0, x - w), ww = x - x0;
-        if (ww > t.inkH * 0.9) {
-          const cx = (x0 + x) / 2, h = t.inkH * 1.07;
-          const rot = r1((1 - e) * (fr() * 2 - 1) * 24);
-          const dy = r1((1 - e) * (fr() * 2 - 1) * lead * 0.85);
-          const yy = r1(y - h / 2 + dy);
-          flow += `<rect x="${r1(x0)}" y="${yy}" width="${r1(ww)}" height="${r1(h)}" rx="${r1(h / 2)}" `
-                + `fill="${P.mark}" opacity="${r1(0.06 + 0.42 * e)}" `
-                + `transform="rotate(${rot} ${r1(cx)} ${r1(yy + h / 2)})"/>`;
-        }
-        x = x0 - (t.gap + (1 - u) * t.gap * 3.6);
-      }
-    });
-  }
-
-  const folio = t.folio
-    ? `<rect x="${r1(PX + PW / 2 - 13)}" y="${r1(PY + PH - 52)}" width="26" height="9" rx="4.5" fill="${P.ink}" opacity=".30"/>`
+  const t = tierFor(px);
+  const shadow = t.shadow > 0
+    ? `<filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="${P.outline}" flood-opacity="${t.shadow}"/></filter>`
     : '';
-  const edge = t.edge
-    ? `<rect x="${r1(PX + 1.5)}" y="${r1(PY + 1.5)}" width="${r1(PW - 3)}" height="${r1(PH - 3)}" rx="4" fill="none" stroke="url(#ed)" stroke-width="3"/>`
-    : '';
+  const bezelAttrs = (t.shadow > 0 ? ' filter="url(#sh)"' : '')
+    + (t.outline > 0 ? ` stroke="${P.outline}" stroke-opacity="${t.ol}" stroke-width="${t.outline}"` : '');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 1024 1024">
 <defs>
-  <linearGradient id="bg" x1="0.1" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="${P.a}"/><stop offset="1" stop-color="${P.b}"/></linearGradient>
-  <radialGradient id="lf" cx="0.24" cy="0.14" r="0.8"><stop offset="0" stop-color="${P.lift}" stop-opacity="${P.liftOp}"/><stop offset="1" stop-color="${P.lift}" stop-opacity="0"/></radialGradient>
-  <linearGradient id="pg" x1="0.15" y1="0" x2="0.85" y2="1"><stop offset="0" stop-color="${P.sheet0}"/><stop offset="1" stop-color="${P.sheet1}"/></linearGradient>
-  <linearGradient id="ed" x1="0.08" y1="0" x2="0.92" y2="1">
-    <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.70"/><stop offset="0.42" stop-color="#FFFFFF" stop-opacity="0.16"/>
-    <stop offset="0.58" stop-color="#000000" stop-opacity="0.05"/><stop offset="1" stop-color="#000000" stop-opacity="0.18"/></linearGradient>
-  <filter id="amb" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="24"/></filter>
-  <filter id="con" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="4.5"/></filter>
-  ${t.blur ? `<filter id="ink" x="-3%" y="-3%" width="106%" height="106%"><feGaussianBlur stdDeviation="1.1"/></filter>` : ''}
-  <clipPath id="cp"><path d="${SQ}"/></clipPath>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.ground0}"/><stop offset="1" stop-color="${P.ground1}"/></linearGradient>
+  ${shadow}
 </defs>
 <path d="${SQ}" fill="url(#bg)"/>
-<path d="${SQ}" fill="url(#lf)"/>
-<g clip-path="url(#cp)">
-  ${flow}
-  <rect x="${r1(PX + 8)}" y="${r1(PY + 22)}" width="${PW}" height="${PH}" rx="5" fill="#000000" opacity="${r1(P.shadow * 0.62)}" filter="url(#amb)"/>
-  <rect x="${r1(PX + 2)}" y="${r1(PY + 5)}" width="${PW}" height="${PH}" rx="5" fill="#000000" opacity="${r1(P.shadow * 1.25 * t.contact)}" filter="url(#con)"/>
-  <rect x="${PX}" y="${PY}" width="${PW}" height="${PH}" rx="5" fill="url(#pg)"/>
-  ${edge}
-  ${t.blur ? `<g filter="url(#ink)">${type}</g>` : type}
-  <rect x="${r1(BX)}" y="${r1(ruleY)}" width="${r1(blockW)}" height="${t.ruleH}" fill="${P.accent}" opacity=".92"/>
-  ${folio}
-</g>
-<path d="${SQ}" fill="none" stroke="${P.edge}" stroke-opacity="${P.edgeOp}" stroke-width="4"/>
+${device(t, bezelAttrs)}
+<path d="${SQ}" fill="none" stroke="${P.outline}" stroke-opacity="${px < 64 ? 0.18 : 0.10}" stroke-width="${px < 64 ? 12 : 3}"/>
 </svg>
 `;
 }
 
+// ---- macOS 26+ 的 Icon Composer 格式（AppIcon.icon）---------------------------
+// 系统只给老式 .icns 套一块灰色底板（「不合规图标」的待遇）；要去掉它，必须提供 .icon
+// 经 actool 编进 Assets.car。.icon 的画布是满版 1024：圆角容器由系统画、底色由 icon.json
+// 的 fill 给，所以图层里只有设备本身，按 1024/824 放大，使它在容器内的占比与 .icns 一致。
+// 投影交给系统（group 的 shadow），图层内不画 filter。
+export function layerSvg() {
+  const k = 1024 / 824;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<g transform="translate(512 512) scale(${r1(k * 1000) / 1000}) translate(-512 -512)">
+${device(TIERS[0])}
+</g>
+</svg>
+`;
+}
+
+const srgb = hex => 'srgb:' + [1, 3, 5].map(i => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(5)).join(',') + ',1.00000';
+export function iconJson() {
+  return JSON.stringify({
+    fill: { 'linear-gradient': [srgb(P.ground0), srgb(P.ground1)] },
+    groups: [{
+      layers: [{ 'image-name': 'device.svg', name: 'device', glass: false }],
+      shadow: { kind: 'neutral', opacity: 0.35 },
+      translucency: { enabled: false, value: 0.5 },
+    }],
+    'supported-platforms': { squares: ['macOS'] },
+  }, null, 2) + '\n';
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
+  if (process.argv[2] === '--layer') { process.stdout.write(layerSvg()); process.exit(0); }
+  if (process.argv[2] === '--icon-json') { process.stdout.write(iconJson()); process.exit(0); }
   const px = Number(process.argv[2] || 1024);
   if (!Number.isFinite(px) || px < 8) { console.error('用法: node icon.mjs <px>'); process.exit(1); }
   process.stdout.write(svgFor(px));

@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# 从 icon.mjs 出全套 macOS 图标并打包成 AppIcon.icns。
+# 从 icon.mjs 出全套 macOS 图标：
+#   · AppIcon.icns  —— 老式图标，macOS 14/15 用（Info.plist 的 CFBundleIconFile）
+#   · AppIcon.icon  —— Icon Composer 源（满版图层 + icon.json），入库
+#   · Assets.car    —— 由 actool 编译 AppIcon.icon 而来，macOS 26+ 用（CFBundleIconName）。
+#     只给 .icns 的 app 在 26+ 上会被系统套进一块灰色底板；Assets.car 是去掉它的唯一途径。
+#     actool 随完整 Xcode 分发（CLT 没有）；找不到时跳过这一步并保留已入库的 Assets.car。
 #
 # 光栅化优先用 rsvg-convert（快、无 GUI）；没有则回退 Chrome headless。
-# 不要用 ImageMagick —— 它自带的 MSVG 渲染器不支持 <filter> 和渐变描边，
-# 出来的图没有投影也没有纸的厚度。
+# 不要用 ImageMagick —— 它自带的 MSVG 渲染器不支持 <filter>，
+# 出来的图没有机身投影。
 #
 # 用法：gui/mac/icon/build-icon.sh
 set -euo pipefail
@@ -12,6 +17,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MAC_DIR="$(cd "$HERE/.." && pwd)"
 OUT_ICNS="$MAC_DIR/AppIcon.icns"
 OUT_PNG="$MAC_DIR/AppIcon_1024.png"
+OUT_ICON="$MAC_DIR/AppIcon.icon"
+OUT_CAR="$MAC_DIR/Assets.car"
 
 command -v node >/dev/null || { echo "需要 node"; exit 1; }
 command -v iconutil >/dev/null || { echo "需要 iconutil（Xcode Command Line Tools）"; exit 1; }
@@ -73,6 +80,25 @@ cp "$WORK/1024.png" "$SET_DIR/icon_512x512@2x.png"
 iconutil -c icns "$SET_DIR" -o "$OUT_ICNS"
 cp "$WORK/1024.png" "$OUT_PNG"
 
+# ---- macOS 26+：AppIcon.icon → Assets.car -----------------------------------
+rm -rf "$OUT_ICON"
+mkdir -p "$OUT_ICON/Assets"
+node "$HERE/icon.mjs" --layer     > "$OUT_ICON/Assets/device.svg"
+node "$HERE/icon.mjs" --icon-json > "$OUT_ICON/icon.json"
+if ACTOOL="$(xcrun -f actool 2>/dev/null)"; then
+  mkdir -p "$WORK/car"
+  # actool 同时会产出一个 AppIcon.icns，我们不用它：老系统走上面手工分档的那份。
+  "$ACTOOL" "$OUT_ICON" --compile "$WORK/car" --app-icon AppIcon --platform macosx \
+    --minimum-deployment-target 14.0 --output-partial-info-plist "$WORK/car/partial.plist" \
+    --errors --warnings >/dev/null
+  cp "$WORK/car/Assets.car" "$OUT_CAR"
+  echo "  Assets.car ✓（actool）"
+else
+  echo "  !! 没有 actool（需完整 Xcode），跳过 Assets.car，沿用已入库的版本" >&2
+fi
+
 echo "出图完成（$RASTER）"
 echo "  $OUT_ICNS  ($(du -h "$OUT_ICNS" | cut -f1))"
 echo "  $OUT_PNG"
+echo "  $OUT_ICON"
+[[ -f "$OUT_CAR" ]] && echo "  $OUT_CAR  ($(du -h "$OUT_CAR" | cut -f1))"

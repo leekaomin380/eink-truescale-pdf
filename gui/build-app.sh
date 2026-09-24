@@ -77,6 +77,10 @@ if [ -f "$ICON_SRC" ]; then
     echo ">>> 复制图标"
     cp "$ICON_SRC" "$APP_DIR/Contents/Resources/AppIcon.icns"
 fi
+# macOS 26+ 读 Assets.car（Info.plist 的 CFBundleIconName）；缺了它系统会给图标套灰色底板。
+if [ -f "$MAC_DIR/Assets.car" ]; then
+    cp "$MAC_DIR/Assets.car" "$APP_DIR/Contents/Resources/Assets.car"
+fi
 
 echo ">>> 复制 JS 抽取器"
 cp "$MAC_DIR/wechat/wechat_extractor.js" "$APP_DIR/Contents/Resources/wechat_extractor.js"
