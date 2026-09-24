@@ -2,8 +2,8 @@
 <g transform="translate(512 512) scale(1.2427000000000001) translate(-512 -512)">
 <rect x="290" y="211.3" width="444" height="601.4" rx="40" fill="#FFFFFF"/>
 <rect x="322" y="243.3" width="380" height="537.4" rx="10" fill="#F1EEE6"/>
-  <rect x="369.9" y="321.2" width="284.2" height="30" rx="15" fill="#2B3634" fill-opacity="0.85"/>
-  <rect x="369.9" y="385.2" width="284.2" height="30" rx="15" fill="#2B3634" fill-opacity="0.85"/>
-  <rect x="369.9" y="449.2" width="179.1" height="30" rx="15" fill="#2B3634" fill-opacity="0.85"/>
+  <rect x="369.9" y="321.2" width="284.2" height="30" rx="15" fill="#2B3634"/>
+  <rect x="369.9" y="385.2" width="284.2" height="30" rx="15" fill="#2B3634"/>
+  <rect x="369.9" y="449.2" width="179.1" height="30" rx="15" fill="#2B3634"/>
 </g>
 </svg>

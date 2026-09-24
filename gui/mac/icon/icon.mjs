@@ -6,14 +6,15 @@
 //   · 主体是一台电子纸设备：白色机身框 + 暖灰屏 + 三行字。不画按键、不画品牌字、不画状态栏。
 //   · 屏是 A 系 1:√2。比例即语义：这个 app 讲的就是按屏幕真实物理尺寸出版，屏一旦被拉伸，
 //     这层意思就没了。机身框不受此约束，只按屏外扩固定边宽。
-//   · 浅底、少色：底 / 机身 / 屏 / 墨，四色封顶。深色只留给字，不给大面积。
+//   · 少色：底 / 机身 / 屏 / 墨，四色封顶。深色只留给字，不给大面积。
 //     上一版（深青渐变底 + 纸 + 标题 + 朱线 + 七行字 + 页外散词）被判定为颜色过重、元素过多。
-//   · 浅底在浅色背景上会发虚，靠容器边的一道低不透明度墨线兜底，不靠加深底色。
+//   · 底色不能再浅：#E8EFEC 一档在 Dock 尺寸下白机身与底几乎无对比（2026-09-24 实测），
+//     现为中浅灰青，让白机身靠明度差分离。字行实墨，不加透明度。
 //
 // 分档：大档有投影，小档有轮廓。16/32 是重排过的，不是缩放。
 
 const P = {
-  ground0: '#E8EFEC', ground1: '#DCE5E1',   // 底：极浅的灰青，上亮下暗一档
+  ground0: '#AFC4BC', ground1: '#98B0A7',   // 底：中浅灰青，上亮下暗一档
   bezel: '#FFFFFF', screen: '#F1EEE6',      // 机身 / 电子纸屏
   ink: '#2B3634', outline: '#1F2A28',
 };
@@ -64,7 +65,7 @@ function device(t, bezelAttrs = '') {
   const TX = SX + 0.126 * SW, TW = SW * (1 - 2 * 0.126), TY = SY + 0.145 * SH;
   const lead = t.lead * t.scale, lh = t.line * t.scale;
   const lines = t.lines.map(([a, b], i) =>
-    `<rect x="${r1(TX + a * TW)}" y="${r1(TY + i * lead)}" width="${r1((b - a) * TW)}" height="${r1(lh)}" rx="${r1(lh / 2)}" fill="${P.ink}" fill-opacity="0.85"/>`
+    `<rect x="${r1(TX + a * TW)}" y="${r1(TY + i * lead)}" width="${r1((b - a) * TW)}" height="${r1(lh)}" rx="${r1(lh / 2)}" fill="${P.ink}"/>`
   ).join('\n  ');
   return `<rect x="${r1(BX)}" y="${r1(BY)}" width="${r1(BW)}" height="${r1(BH)}" rx="${r1(bezelR)}" fill="${P.bezel}"${bezelAttrs}/>
 <rect x="${r1(SX)}" y="${r1(SY)}" width="${r1(SW)}" height="${r1(SH)}" rx="${r1(screenR)}" fill="${P.screen}"/>
