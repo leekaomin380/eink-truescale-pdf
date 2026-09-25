@@ -605,6 +605,14 @@ struct ContentView: View {
                 .disabled(vm.isConverting || !hasInput)
                 .keyboardShortcut("s", modifiers: .command)
             }
+
+            Button(action: { vm.exportMarkdown() }) {
+                Label("导出 Markdown…", systemImage: "doc.text")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .disabled(vm.isConverting || !hasInput)
+            .help("导出为 Markdown（含图片），供 AI 阅读")
         }
     }
 

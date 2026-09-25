@@ -20,6 +20,7 @@ import socketserver
 import subprocess
 import tempfile
 import urllib.parse
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -36,6 +37,11 @@ ENV = {
     "LC_ALL": "en_US.UTF-8",
     "PATH": "/opt/homebrew/bin:/usr/local/bin:" + os.environ.get("PATH", ""),
 }
+
+
+# 导出 Markdown 的 pandoc 写出格式：去掉 EPUB 带来的 []{#ch.xhtml} 锚点、
+# ::: 围栏 div 与 {=html} 原始片段（保留内容），表格统一为 pipe table。
+EXPORT_MD_WRITER = ("markdown-fenced_divs-bracketed_spans-native_divs-native_spans-raw_html-raw_attribute-header_attributes-link_attributes-simple_tables-multiline_tables-grid_tables")
 
 
 def sh(cmd, **kw):
@@ -293,6 +299,71 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"ok": True, "saved": str(dest)})
             except Exception as e:
                 self._json({"ok": False, "error": str(e)})
+
+        elif path == "/api/export_md":
+            # 与 mac 版同一策略：一份源 + 一次 pandoc，在导出目录内以
+            # --extract-media=media 运行，图片落 media/ 且 .md 内为相对路径。
+            # 无图片直接回 .md，有图片回 .zip（.md + media/）。
+            import hashlib
+            text = (payload.get("text") or "").strip()
+            title = (payload.get("title") or "").strip()
+            if text:
+                if title and not text.startswith("---"):
+                    safe = title.replace('"', '\\"')
+                    text = f'---\ntitle: "{safe}"\n---\n\n{text}'
+                slug = hashlib.md5(text.encode()).hexdigest()[:8]
+                base = title or "document"
+                fmt = "markdown"
+            else:
+                src = Path(payload.get("path", ""))
+                if not src.is_file():
+                    self._json({"ok": False, "error": "源文件不存在"}); return
+                slug = hashlib.md5(str(src).encode()).hexdigest()[:8]
+                base = src.stem
+                fmt = {"epub": "epub", "fb2": "fb2", "html": "html",
+                       "htm": "html"}.get(src.suffix.lower().lstrip("."),
+                                         "markdown")
+            base = re.sub(r'[/\\:*?"<>|]', "_", base)[:60]
+            exp_dir = WORK / f"export_{slug}"
+            shutil.rmtree(exp_dir, ignore_errors=True)
+            md_dir = exp_dir / "md"
+            md_dir.mkdir(parents=True)
+            if text:
+                src = exp_dir / "input.md"
+                src.write_text(text, encoding="utf-8")
+            md_path = md_dir / f"{base}.md"
+            r = sh(["pandoc", str(src), "-f", fmt, "-t", EXPORT_MD_WRITER, "-s",
+                    "--wrap=none", "--extract-media=media",
+                    f"--resource-path={src.parent}",
+                    "-o", md_path.name], cwd=str(md_dir))
+            if r.returncode != 0 or not md_path.exists():
+                self._json({"ok": False,
+                            "error": (r.stderr or "转换失败")[:800]}); return
+            media_dir = md_dir / "media"
+            files = sorted(f for f in media_dir.rglob("*") if f.is_file()) \
+                if media_dir.is_dir() else []
+            if files:
+                zip_path = exp_dir / f"{base}.zip"
+                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                    zf.write(md_path, md_path.name)
+                    for f in files:
+                        zf.write(f, str(f.relative_to(md_dir)))
+                data, ctype, fname = (zip_path.read_bytes(),
+                                      "application/zip", zip_path.name)
+            else:
+                data, ctype, fname = (md_path.read_bytes(),
+                                      "text/markdown; charset=utf-8",
+                                      md_path.name)
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            # http.server 以 latin-1 编码头部 —— 中文文件名须走 RFC 5987。
+            self.send_header("Content-Disposition",
+                             "attachment; filename*=UTF-8''"
+                             + urllib.parse.quote(fname))
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
         else:
             self.send_error(404)
 

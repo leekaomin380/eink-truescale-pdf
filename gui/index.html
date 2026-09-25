@@ -109,6 +109,7 @@
   <button id="preview" disabled>预览</button>
   <button id="send" class="sec" disabled hidden>发送到 Quaderno</button>
   <button id="save" class="sec" disabled>另存 PDF…</button>
+  <button id="exportmd" class="sec" disabled>导出 Markdown…</button>
 
   <div class="st" id="st"></div>
 </aside>
@@ -264,7 +265,7 @@ function switchMode(mode){
   // 重置状态，避免串味
   SRC=null; PDF=null; PAGES=0; DIRTY=false;
   $('#fname').textContent=''; $('#doctitle').value='';
-  $('#preview').disabled=true; $('#save').disabled=true; $('#send').disabled=true;
+  $('#preview').disabled=true; $('#save').disabled=true; $('#send').disabled=true; $('#exportmd').disabled=true;
   ['#pg','#prev','#next'].forEach(s=>$(s).disabled=true);
   $('#pg').value=1; $('#pgtot').textContent='页';
   $('#page').innerHTML='<div class="empty">转换后在此显示预览<br>按页面真实宽高比呈现</div>';
@@ -321,7 +322,7 @@ $('#preview').onclick = async ()=>{
   if(!r.ok){ st('渲染失败：'+r.error,'err'); return; }
   PDF=r.pdf; PAGES=r.metrics.pages; window.__sizes=r.metrics.page_sizes;
   DIRTY=false;
-  $('#save').disabled=false; $('#send').disabled=false;
+  $('#save').disabled=false; $('#send').disabled=false; $('#exportmd').disabled=false;
   ['#pg','#prev','#next'].forEach(s=>$(s).disabled=false);
   $('#pg').max=PAGES; $('#pgtot').textContent=`/ ${PAGES} 页`;
   update(); st(`渲染完成，共 ${PAGES} 页`,'ok');
@@ -384,6 +385,44 @@ $('#save').onclick = async ()=>{
   const r = await (await fetch('/api/save',{method:'POST',
     body:JSON.stringify({pdf:PDF,dest})})).json();
   st(r.ok?'已保存到 '+r.saved:'保存失败：'+r.error, r.ok?'ok':'err');
+};
+
+// ── 导出 Markdown（无图直接 .md，有图 .zip 含 media/）──────
+$('#exportmd').onclick = async ()=>{
+  $('#exportmd').disabled=true; st('正在导出 Markdown…','run');
+  let body, defName;
+  if(MODE==='text'){
+    const text = $('#textarea').value;
+    if(!text.trim()){ st('无内容可导出','err'); $('#exportmd').disabled=false; return; }
+    const title = $('#doctitle').value.trim();
+    body = {text, title: title||undefined};
+    defName = title ? title.substring(0,60).replace(/[\/\\:*?"<>|]/g,'_') : 'document';
+  } else {
+    if(!SRC){ st('请先选择文件','err'); $('#exportmd').disabled=false; return; }
+    body = {path: SRC};
+    defName = SRC.replace(/\.[^.]+$/,'').split('/').pop();
+  }
+  try {
+    const resp = await fetch('/api/export_md',{method:'POST',body:JSON.stringify(body)});
+    const ct = resp.headers.get('content-type')||'';
+    if(ct.includes('application/json')){
+      const r = await resp.json();
+      st('导出失败：'+(r.error||'未知错误'),'err');
+      $('#exportmd').disabled=false; return;
+    }
+    const isZip = ct.includes('application/zip');
+    defName += isZip ? '.zip' : '.md';
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = defName;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    st(isZip ? '已导出 '+defName+'（解压得 .md 与 media/）' : '已导出 '+defName,'ok');
+  } catch(e){
+    st('导出失败：'+e.message,'err');
+  }
+  $('#exportmd').disabled=false;
 };
 
 init();

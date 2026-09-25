@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import PDFKit
+import UniformTypeIdentifiers
 
 struct SupportedFileFormat {
     let extensions: [String]
@@ -103,6 +104,9 @@ class ConversionViewModel: ObservableObject {
 
     // EPUB / File mode
     @Published var sourceFileURL: URL?
+
+    /// 网页模式最近一次渲染落盘的中间 .md（图片已内联）—— 导出 Markdown 直接复用。
+    private(set) var lastWechatMarkdownURL: URL?
     @Published var sourceFileName = ""
     @Published var pdfTitle = ""  // derived title for delivery filename
 
@@ -659,6 +663,7 @@ class ConversionViewModel: ObservableObject {
             let outPdf = workDir.appendingPathComponent("wechat_\(slug).pdf")
 
             try? markdown.write(to: mdFile, atomically: true, encoding: .utf8)
+            DispatchQueue.main.async { self.lastWechatMarkdownURL = mdFile }
 
             let result = runShell([
                 repoURL.appendingPathComponent("book.sh").path,
@@ -792,6 +797,154 @@ class ConversionViewModel: ObservableObject {
         }
     }
 
+
+    /// 导出为 Markdown，供 AI 阅读 / 二次编辑。
+    ///
+    /// 三种输入统一收敛为「一份源 + 一次 pandoc」：
+    /// - 文件模式：源文件本身（EPUB/FB2/HTML/Markdown）
+    /// - 文本模式：粘贴的文本（有标题则补 YAML frontmatter）
+    /// - 网页模式：渲染时落盘的中间 .md（图片已内联为 data: URI）
+    ///
+    /// pandoc 在导出目录内以 `--extract-media=media` 运行，故图片落在 media/ 且
+    /// .md 里是相对路径 —— 用绝对路径的话，解压到别处后链接全部失效。
+    /// data: URI 同样会被抽出为文件，避免 AI 读到数 MB 的 base64。
+    /// `-s` 保留 frontmatter（否则标题丢失）；`--wrap=none` 不做硬折行。
+    ///
+    /// 无图片时直接存 .md；有图片时打包 .zip（.md + media/）。
+    func exportMarkdown() {
+        let kind = activeKind
+        // 网页模式的中间 .md 是渲染副产物；链接改了但没重新解析时，它属于上一篇。
+        if kind == .wechat && isStale {
+            ensureFresh { self.exportMarkdown() }
+            return
+        }
+        let src = sourceFileURL
+        let text = pasteText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wechatMd = lastWechatMarkdownURL
+
+        // 输入、源格式、默认文件名
+        var inputURL: URL?
+        var inputText: String?
+        var fmt = "markdown"
+        var baseName: String
+        switch kind {
+        case .epub:
+            guard let src = src else { setStatus("请先选择文件", .err); return }
+            inputURL = src
+            switch src.pathExtension.lowercased() {
+            case "epub":        fmt = "epub"
+            case "fb2":         fmt = "fb2"
+            case "html", "htm": fmt = "html"
+            default:            fmt = "markdown"
+            }
+            baseName = src.deletingPathExtension().lastPathComponent
+        case .text:
+            guard !text.isEmpty else { setStatus("请先粘贴文本", .err); return }
+            var content = text
+            if !title.isEmpty && !text.hasPrefix("---") {
+                let safe = title.replacingOccurrences(of: "\"", with: "\\\"")
+                content = "---\ntitle: \"\(safe)\"\n---\n\n\(text)"
+            }
+            inputText = content
+            baseName = title.isEmpty ? "document" : title
+        case .wechat:
+            guard let md = wechatMd,
+                  FileManager.default.fileExists(atPath: md.path) else {
+                setStatus("请先完成网页解析后再导出", .err); return
+            }
+            inputURL = md
+            baseName = title.isEmpty ? "article" : title
+        }
+        baseName = baseName.replacingOccurrences(
+            of: #"[/\\:*?"<>|]"#, with: "_", options: .regularExpression)
+        if baseName.count > 60 { baseName = String(baseName.prefix(60)) }
+
+        setStatus("正在导出 Markdown…", .run)
+
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let fm = FileManager.default
+            let workDir = fm.temporaryDirectory.appendingPathComponent("p2q_export")
+            let mdDir = workDir.appendingPathComponent("md")
+            try? fm.removeItem(at: workDir)
+            try? fm.createDirectory(at: mdDir, withIntermediateDirectories: true)
+
+            func fail(_ msg: String) {
+                DispatchQueue.main.async { self.setStatus(msg, .err) }
+            }
+
+            if let t = inputText {
+                let tmp = workDir.appendingPathComponent("input.md")
+                do { try t.write(to: tmp, atomically: true, encoding: .utf8) }
+                catch { fail("导出失败：\(error.localizedDescription)"); return }
+                inputURL = tmp
+            }
+            guard let input = inputURL else { return }
+
+            let mdName = baseName + ".md"
+            let result = runShell([
+                "pandoc", input.path,
+                "-f", fmt, "-t", Self.exportMarkdownWriter, "-s", "--wrap=none",
+                "--extract-media=media",
+                "--resource-path=\(input.deletingLastPathComponent().path)",
+                "-o", mdName,
+            ], cwd: mdDir)
+            let mdFile = mdDir.appendingPathComponent(mdName)
+            guard result.exitCode == 0, fm.fileExists(atPath: mdFile.path) else {
+                fail("导出失败：\(Self.parseErrorMessage(result.stderr))"); return
+            }
+
+            let mediaDir = mdDir.appendingPathComponent("media")
+            let hasMedia = !((try? fm.contentsOfDirectory(atPath: mediaDir.path)) ?? []).isEmpty
+            let artifact: URL
+            if hasMedia {
+                artifact = workDir.appendingPathComponent(baseName + ".zip")
+                do { try zipDirectory(at: mdDir, to: artifact) }
+                catch { fail("打包失败：\(error.localizedDescription)"); return }
+            } else {
+                artifact = mdFile
+            }
+
+            DispatchQueue.main.async {
+                let panel = NSSavePanel()
+                panel.nameFieldStringValue = artifact.lastPathComponent
+                panel.allowedContentTypes = hasMedia
+                    ? [.zip] : [UTType(filenameExtension: "md") ?? .plainText]
+                panel.begin { resp in
+                    guard resp == .OK, let dest = panel.url else { return }
+                    do {
+                        if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
+                        try fm.copyItem(at: artifact, to: dest)
+                        self.setStatus(hasMedia
+                            ? "已保存到 \(dest.lastPathComponent)（解压得 .md 与 media/）"
+                            : "已保存到 \(dest.lastPathComponent)", .ok)
+                    } catch {
+                        self.setStatus("保存失败：\(error.localizedDescription)", .err)
+                    }
+                }
+            }
+        }
+    }
+
+    /// pandoc 写出格式：去掉 EPUB 转换带来的 `[]{#ch.xhtml}` 锚点、`:::` 围栏 div
+    /// 与 `{=html}` 原始片段（只保留其内容），表格统一写成 pipe table。
+    /// 这些都是给排版器的结构信息，对 AI 阅读是噪声。
+    static let exportMarkdownWriter = "markdown-fenced_divs-bracketed_spans-native_divs-native_spans-raw_html-raw_attribute-header_attributes-link_attributes-simple_tables-multiline_tables-grid_tables"
+
+    /// 递归将目录打包为 zip。使用系统 zip 命令，避免引入第三方库。
+    private func zipDirectory(at dir: URL, to dest: URL) throws {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        proc.arguments = ["-r", "-q", dest.path, "."]
+        proc.currentDirectoryURL = dir
+        try proc.run()
+        proc.waitUntilExit()
+        guard proc.terminationStatus == 0 else {
+            throw NSError(domain: "Quaderno", code: Int(proc.terminationStatus),
+                userInfo: [NSLocalizedDescriptionKey: "zip 命令失败"])
+        }
+    }
+
     // MARK: - Helpers
 
     private func setStatus(_ msg: String, _ kind: StatusKind) {
@@ -838,8 +991,9 @@ class ConversionViewModel: ObservableObject {
         return cmd   // 交给 Process 报错，调用方已有失败分支
     }
 
-    private func runShell(_ args: [String]) -> (stdout: String, stderr: String, exitCode: Int32) {
+    private func runShell(_ args: [String], cwd: URL? = nil) -> (stdout: String, stderr: String, exitCode: Int32) {
         let proc = Process()
+        if let cwd = cwd { proc.currentDirectoryURL = cwd }
         // executableURL 不做 PATH 查找 —— 设 environment["PATH"] 只影响孙进程。
         // 故裸命令名（"typst"/"pdftoppm"）必须自行解析成绝对路径，
         // 否则从 Finder 启动时必然启动失败（Homebrew 不在 launchd 的默认 PATH 里）。
