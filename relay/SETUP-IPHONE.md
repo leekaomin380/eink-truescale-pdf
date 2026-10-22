@@ -1,11 +1,14 @@
 # iPhone → Quaderno 投递 · 配置指南
 
-> 链路：iPhone（快捷指令）→ 同一 Wi-Fi → Mac 中继服务（`iphone_relay.py`）→ 官方 QUADERNO PC App → 设备
-> 首次配置约 10 分钟。配置一次后，日常使用为 **一至两步**：复制/转发 → 点快捷指令。
+> 链路：iPhone（原生 App / 快捷指令）→ 同一 Wi-Fi → Mac 中继服务（`iphone_relay.py`）→ 官方 QUADERNO PC App → 设备
+>
+> 两条 iPhone 侧通道，二选一或并存：
+> - **方案 A（推荐）**：iOS 原生 App `SendToQuaderno` —— 出现在系统分享面板（含微信「···→更多」），有历史记录与状态回传
+> - **方案 B（免装 App）**：快捷指令 —— 配置简单，但依赖快捷指令搭建，微信分享入口不稳定
 
 ---
 
-## 一、Mac 侧：安装并启动中继服务（一次）
+## 一、Mac 侧：安装并启动中继服务（一次，两方案共用）
 
 1. 安装 launchd 服务（开机自启、崩溃自动拉起）：
 
@@ -41,7 +44,43 @@
    launchctl unload ~/Library/LaunchAgents/com.km.p2q-iphone-relay.plist  # 停用
    ```
 
-## 二、iPhone 侧：搭建「投递到 Quaderno」快捷指令
+## 二、方案 A：iOS 原生 App（SendToQuaderno）
+
+工程位于 `ios/SendToQuaderno`（XcodeGen 工程，SwiftUI 主 App + Share Extension，零第三方依赖）。
+
+### 构建（一次）
+
+1. 生成并打开工程：
+
+   ```bash
+   cd "/Users/km/projects/归档/print-to-quaderno/ios/SendToQuaderno"
+   xcodegen generate
+   open SendToQuaderno.xcodeproj
+   ```
+
+2. 在 Xcode 中：选中 SendToQuaderno target → Signing & Capabilities →
+   **Team 选择你的开发者账号**（ShareExtension target 同样要选）。
+   App Group `group.com.figedu.sendtoquaderno` 会随签名自动注册。
+3. iPhone 用数据线连接，设备选择你的 iPhone → **⌘R** 运行。
+   首次需在 iPhone「设置 → 通用 → VPN 与设备管理」信任开发者证书。
+4. 编译验证基线：2026-10-22 于 iOS 27.0 SDK 模拟器构建通过（CODE_SIGNING_ALLOWED=NO）。
+
+### App 内配置（一次）
+
+打开 App → 「服务器设置」→ 填 Mac 地址（`gaomingdemacbook-air.local`）与 token →
+「测试连接」显示 ✅。
+
+### 日常使用
+
+| 场景 | 操作 |
+|------|------|
+| 微信公众号文章 | 文章 ··· → 更多 → 分享面板 → **投递到Quaderno** |
+| Safari 网页 | 分享 → 投递到Quaderno |
+| 任意 App 中的文字 | 拷贝 → 打开 App → 「投递剪贴板内容」 |
+
+主 App 显示每条投递的标题、页数、真实送达状态。
+
+## 三、方案 B：快捷指令（免装 App）
 
 打开「快捷指令」App → 右上角 **+** 新建，按顺序添加以下动作：
 
@@ -79,7 +118,7 @@
 
 在快捷指令详情里打开 **「在分享表中显示」**，接受类型勾选「文本」和「URL」。
 
-## 三、日常使用方式（一至两步）
+## 四、日常使用方式（方案 B 快捷指令）
 
 | 场景 | 操作 |
 |------|------|
@@ -87,7 +126,7 @@
 | Safari 网页 | 分享 → 快捷指令「投递到 Quaderno」 |
 | 微信公众号文章 | 文章右上角 ··· → **更多** → 系统分享表 → **快捷指令**（若列表中没有，先复制链接，再运行快捷指令，剪贴板兜底逻辑会自动取链接） |
 
-## 四、硬约束与已知边界
+## 五、硬约束与已知边界
 
 1. **最终一跳必须经 Mac**：设备须与 Mac 上的官方客户端连接（USB 或客户端无线模式；无线模式耗电，按需开启）。
 2. **Mac 须开机且与 iPhone 同一 Wi-Fi**（`.local` 域名只在局域网内解析）。
@@ -96,7 +135,7 @@
 5. 付费墙/登录内容不抓取，遵守网站访问边界。
 6. token 是唯一鉴权凭据，存于 `~/.config/p2q-relay/token`（权限 600），不要写进 git 或聊天记录。
 
-## 五、真机验收清单（设备连接后执行一次）
+## 六、真机验收清单（设备连接后执行一次）
 
 - [ ] Mac 上 `curl -X POST http://127.0.0.1:8790/deliver ...` 文本投递，返回 `status: delivered`
 - [ ] iPhone 快捷指令投递一段文字，设备上打开排版正常（字号物理 1:1）

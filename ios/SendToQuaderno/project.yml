@@ -1,0 +1,66 @@
+name: SendToQuaderno
+options:
+  bundleIdPrefix: com.figedu
+  developmentLanguage: zh-Hans
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: 1.0.0
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "5.9"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""          # 首次构建前在 Xcode 中选择自己的 Team
+targets:
+  SendToQuaderno:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/App
+    dependencies:
+      - target: ShareExtension
+    entitlements:
+      path: SendToQuaderno.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.figedu.sendtoquaderno
+    info:
+      path: Sources/App/Info.plist
+      properties:
+        CFBundleDisplayName: Quaderno投递
+        UILaunchScreen: {}
+        # 中继走局域网明文 HTTP，个人工具放宽 ATS
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.figedu.sendtoquaderno
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Sources/Shared
+      - path: Sources/ShareExtension
+    entitlements:
+      path: ShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.figedu.sendtoquaderno
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.figedu.sendtoquaderno.ShareExtension
+    info:
+      path: Sources/ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: 投递到Quaderno
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsTextWithMaxCount: 1
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
