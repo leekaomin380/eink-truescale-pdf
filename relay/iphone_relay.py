@@ -54,6 +54,9 @@ QUADERNO_APP = "/Applications/QUADERNO PC App.app"
 WORK = Path(tempfile.gettempdir()) / "p2q_relay"
 WORK.mkdir(exist_ok=True)
 TOKEN_FILE = Path.home() / ".config" / "p2q-relay" / "token"
+API_CFG = Path.home() / ".config" / "p2q-relay" / "api.json"
+VENV_PY = REPO / "relay" / ".venv" / "bin" / "python"
+API_DELIVER = REPO / "relay" / "api_deliver.py"
 
 ENV = {
     **os.environ,
@@ -123,7 +126,34 @@ def pdf_pages(pdf: Path):
         return 0
 
 
-# ---- 送达判定（与 deliver.sh 同源）-------------------------------------------
+# ---- 投递路径 1：Digital Paper API 直传（不经官方客户端）----------------------
+# 配对后 api.json enabled=true 时启用；返回 None 表示该路径不可用（走后备）。
+def deliver_via_api(pdf: Path, title: str):
+    if not (API_CFG.exists() and VENV_PY.exists() and API_DELIVER.exists()):
+        return None
+    try:
+        cfg = json.loads(API_CFG.read_text(encoding="utf-8"))
+        if not cfg.get("enabled"):
+            return None
+    except Exception:
+        return None
+    safe = re.sub(r'[/\\:*?"<>|]', "_", title)[:60] or "document"
+    try:
+        r = subprocess.run(
+            [str(VENV_PY), str(API_DELIVER), "upload", str(pdf), f"{safe}.pdf"],
+            capture_output=True, text=True, env=ENV, timeout=90)
+        out = json.loads(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else {}
+        if out.get("ok"):
+            return "delivered", "API 直传完成" + ("（已核验）" if out.get("verified") else ""), "digital-paper-api"
+        return "api-error", out.get("error", "API 上传失败"), "digital-paper-api"
+    except subprocess.TimeoutExpired:
+        return "api-error", "API 上传超时", "digital-paper-api"
+    except Exception as e:
+        return "api-error", f"API 路径异常: {e}", "digital-paper-api"
+
+
+# ---- 投递路径 2（后备）：官方 QUADERNO PC App ---------------------------------
+# 送达判定与 deliver.sh 同源：源文件被客户端消费 = 已接收；日志 E_MW_* = 失败。
 def find_client_log():
     base = Path.home() / "Library" / "Application Support" / "Fujitsu"
     best, best_mtime = None, -1
@@ -141,7 +171,7 @@ def deliver_pdf(pdf: Path, title: str):
     """返回 (status, detail)。status ∈ delivered / offline / cancelled / unconfirmed"""
     app = Path(QUADERNO_APP)
     if not app.exists():
-        return "client-missing", "未找到 QUADERNO PC App"
+        return "client-missing", "未找到 QUADERNO PC App", "official-client"
     safe = re.sub(r'[/\\:*?"<>|]', "_", (title or "deliver"))[:60] or "deliver"
     copy = WORK / f"{safe}.pdf"
     shutil.copy(pdf, copy)
@@ -160,7 +190,7 @@ def deliver_pdf(pdf: Path, title: str):
     deadline = time.time() + DELIVER_TIMEOUT_S
     while time.time() < deadline:
         if not copy.exists():                      # 源被消费 = 客户端已接收
-            return "delivered", "客户端已接收"
+            return "delivered", "客户端已接收", "official-client"
         if log:
             try:
                 new_tail = "".join(log.read_text(encoding="utf-8",
@@ -170,10 +200,10 @@ def deliver_pdf(pdf: Path, title: str):
                 if m:
                     token = m.group(0).upper()
                     if "DEVICE_NOT_FOUND" in token:
-                        return "offline", "设备离线或未连接"
+                        return "offline", "设备离线或未连接", "official-client"
                     if "CANCELLED" in token:
-                        return "cancelled", "投递被取消"
-                    return "failed", f"客户端报错 {token}"
+                        return "cancelled", "投递被取消", "official-client"
+                    return "failed", f"客户端报错 {token}", "official-client"
             except OSError:
                 pass
         time.sleep(0.25)
@@ -181,7 +211,7 @@ def deliver_pdf(pdf: Path, title: str):
         copy.unlink()
     except OSError:
         pass
-    return "unconfirmed", "超时未确认，请检查客户端与设备连接"
+    return "unconfirmed", "超时未确认，请检查客户端与设备连接", "official-client"
 
 
 # ---- 网页抓取与正文抽取 -------------------------------------------------------
@@ -440,13 +470,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         pages = pdf_pages(out)
         with DELIVER_LOCK:
-            status, detail = deliver_pdf(out, title)
+            result = deliver_via_api(out, title)
+            if result is None:                      # API 路径未启用/不可用 → 后备官方客户端
+                result = deliver_pdf(out, title)
+            status, detail, via = result
 
         self._json({
             "ok": True, "status": status, "detail": detail,
             "title": title, "pages": pages,
             "elapsed_s": round(time.time() - t0, 1),
             "device": "QUADERNO A5",
+            "via": via,
         })
 
 

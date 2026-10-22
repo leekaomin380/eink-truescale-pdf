@@ -8,6 +8,31 @@
 
 ---
 
+## 〇、（可选，推荐）配对 Digital Paper API —— 摆脱官方 PC App 依赖
+
+> 原理：QUADERNO Gen 2 与 Sony Digital Paper 同源，配对后开放 HTTPS 8443 管理 API。
+> 配对一次后，relay **优先 API 直传**（USB ECM 或 Wi-Fi 均可，设备无需连官方客户端）；
+> 未配对或 API 失败时自动降级回官方客户端路径，两路互不影响。
+
+1. 设备开机并与 Mac 同网（Wi-Fi）或 USB 连接（ECM 网络模式）。
+2. 运行交互式配对（设备屏幕会显示 PIN，输入即完成）：
+
+   ```bash
+   "/Users/km/projects/归档/print-to-quaderno/relay/pair_device.sh"
+   ```
+
+   脚本自动发现设备地址（找不到时手动输入 IP 或 `Android.local`），
+   完成后写入 `~/.config/dpt/` 凭据与 `~/.config/p2q-relay/api.json`。
+3. 之后所有投递自动走 API：响应中 `"via": "digital-paper-api"` 即生效。
+   关闭 API 路径：将 api.json 的 `enabled` 改为 `false`（或删除该文件）。
+
+约束与边界：
+- API 是正式管理接口（非 root/越狱），官方固件更新不影响。
+- 上传为文档库直写，投递即可见，无需客户端轮询。
+- dpt-rp1-py 对 FMVDP51（A5）的兼容性待真机验证（社区已验证同代 FMVDP41）。
+
+---
+
 ## 一、Mac 侧：安装并启动中继服务（一次，两方案共用）
 
 1. 安装 launchd 服务（开机自启、崩溃自动拉起）：
