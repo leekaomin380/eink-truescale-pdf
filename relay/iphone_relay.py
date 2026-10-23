@@ -57,6 +57,7 @@ TOKEN_FILE = Path.home() / ".config" / "p2q-relay" / "token"
 API_CFG = Path.home() / ".config" / "p2q-relay" / "api.json"
 VENV_PY = REPO / "relay" / ".venv" / "bin" / "python"
 API_DELIVER = REPO / "relay" / "api_deliver.py"
+DP_PAIR = REPO / "relay" / "dp_pair.py"
 
 ENV = {
     **os.environ,
@@ -150,6 +151,126 @@ def deliver_via_api(pdf: Path, title: str):
         return "api-error", "API 上传超时", "digital-paper-api"
     except Exception as e:
         return "api-error", f"API 路径异常: {e}", "digital-paper-api"
+
+
+# ---- 配对（Digital Paper API，脱离官方 PC App）-------------------------------
+def _dp_pair(*args, timeout=240):
+    """调用 venv 里的 dp_pair.py（Crypto 依赖只在 venv 内）。"""
+    if not (VENV_PY.exists() and DP_PAIR.exists()):
+        return {"ok": False, "error": "缺少 relay/.venv（dpt-rp1-py 未安装）"}
+    try:
+        r = subprocess.run([str(VENV_PY), str(DP_PAIR), *args],
+                           capture_output=True, text=True, env=ENV, timeout=timeout)
+        lines = [l for l in r.stdout.strip().splitlines() if l.strip()]
+        if not lines:
+            return {"ok": False, "error": (r.stderr or "配对脚本无输出")[-300:]}
+        return json.loads(lines[-1])
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "配对操作超时"}
+    except Exception as e:
+        return {"ok": False, "error": f"配对调用失败: {type(e).__name__}: {e}"}
+
+
+def api_state():
+    """当前 API 直传是否已启用。"""
+    try:
+        cfg = json.loads(API_CFG.read_text(encoding="utf-8"))
+        return bool(cfg.get("enabled")), cfg.get("addr", "")
+    except Exception:
+        return False, ""
+
+
+PAIR_HTML = """<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>配对 QUADERNO</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin:0; font:16px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+         background:#f6f7f9; color:#1c1c1e; }
+  main { max-width:520px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  .hint { color:#6b6f76; font-size:14px; margin:0 0 22px; }
+  .state { display:inline-block; padding:6px 12px; border-radius:8px; background:#e9ecf2;
+           font-size:14px; margin-bottom:22px; }
+  label { display:block; font-size:13px; color:#6b6f76; margin:18px 0 6px; }
+  input { width:100%; box-sizing:border-box; padding:11px 12px; font-size:16px;
+          border:1px solid #d3d7de; border-radius:10px; background:#fff; color:inherit; }
+  button { width:100%; margin-top:12px; padding:12px; font-size:16px; border:0;
+           border-radius:10px; background:#0a84ff; color:#fff; }
+  button.dev { background:#fff; color:#1c1c1e; border:1px solid #d3d7de;
+               text-align:left; font-size:15px; }
+  #log { margin-top:20px; white-space:pre-wrap; font-size:14px; color:#3c4149; }
+  @media (prefers-color-scheme: dark) {
+    body { background:#121214; color:#f2f2f7; }
+    .state { background:#242428; }
+    input, button.dev { background:#1c1c1f; color:#f2f2f7; border-color:#3a3a3e; }
+  }
+</style></head>
+<body><main>
+<h1>配对 QUADERNO</h1>
+<p class="hint">配对一次即可：此后投递直连设备 API，不再经过官方 PC App。设备需已连接（USB 或同一 Wi-Fi）。</p>
+<div class="state" id="state">状态读取中…</div>
+<label>访问令牌</label>
+<input id="token" value="__TOKEN__" placeholder="~/.config/p2q-relay/token 的内容">
+<button onclick="discover()">扫描设备</button>
+<div id="devices"></div>
+<div id="pinbox" hidden>
+  <label>设备屏幕显示的 PIN</label>
+  <input id="pin" inputmode="numeric" autocomplete="one-time-code" placeholder="4-8 位数字">
+  <button onclick="finish()">提交 PIN</button>
+</div>
+<pre id="log"></pre>
+</main>
+<script>
+var chosen = null;
+function T() { return document.getElementById('token').value.trim(); }
+function log(s) { document.getElementById('log').textContent = s; }
+async function api(path, body) {
+  const r = await fetch(path, {method:'POST',
+    headers:{'Content-Type':'application/json','X-Relay-Token':T()},
+    body: JSON.stringify(body || {})});
+  return await r.json();
+}
+async function discover() {
+  log('扫描中…');
+  const j = await api('/pair/discover');
+  if (!j.ok) { log(j.error || '扫描失败'); return; }
+  const box = document.getElementById('devices'); box.innerHTML = '';
+  if (!j.devices.length) { log('未发现设备：确认 USB 已连接且设备屏幕已唤醒，或设备与 Mac 在同一 Wi-Fi。'); return; }
+  j.devices.forEach(function(d) {
+    const b = document.createElement('button');
+    b.className = 'dev';
+    b.textContent = d.name + ' · ' + d.addr + (d.usb ? '（USB）' : '（Wi-Fi）');
+    b.onclick = function() { start(d); };
+    box.appendChild(b);
+  });
+  log('发现 ' + j.devices.length + ' 个设备，点选一个。');
+}
+async function start(d) {
+  chosen = d; log('已请求 PIN，请看设备屏幕…');
+  const j = await api('/pair/start', {addr:d.addr, port:d.port, reg_port:d.reg_port});
+  if (!j.ok) { log(j.error || '请求失败'); return; }
+  document.getElementById('pinbox').hidden = false;
+  log('设备屏幕显示 PIN 后，在此输入并提交。');
+}
+async function finish() {
+  const pin = document.getElementById('pin').value.trim();
+  if (!pin) { log('请输入 PIN'); return; }
+  log('提交中…');
+  const j = await api('/pair/finish', {pin:pin});
+  log(j.ok ? ('配对完成：' + j.addr + '，此后投递直连设备。') : (j.error || '配对失败'));
+  if (j.ok) { document.getElementById('pinbox').hidden = true; refresh(); }
+}
+async function refresh() {
+  const r = await fetch('/pair/status'); const j = await r.json();
+  document.getElementById('state').textContent =
+    j.paired ? ('已配对 · ' + j.addr) : '未配对（投递将经官方 PC App）';
+}
+refresh();
+</script>
+</body></html>
+"""
 
 
 # ---- 投递路径 2（后备）：官方 QUADERNO PC App ---------------------------------
@@ -403,15 +524,61 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return tok == TOKEN
 
     def do_GET(self):
-        path = urllib.parse.urlparse(self.path).path
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
         if path == "/health":
+            paired, addr = api_state()
             self._json({"ok": True,
-                        "client_installed": Path(QUADERNO_APP).exists()})
+                        "client_installed": Path(QUADERNO_APP).exists(),
+                        "api_paired": paired,
+                        "api_addr": addr})
+        elif path == "/pair":
+            q = urllib.parse.parse_qs(parsed.query)
+            tok = (q.get("token") or [""])[0]
+            body = PAIR_HTML.replace("__TOKEN__", html_mod.escape(tok)).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif path == "/pair/status":
+            paired, addr = api_state()
+            self._json({"ok": True, "paired": paired, "addr": addr})
         else:
             self.send_error(404)
 
     def do_POST(self):
         path = urllib.parse.urlparse(self.path).path
+        if path in ("/pair/discover", "/pair/start", "/pair/finish"):
+            if not self._auth():
+                self._json({"ok": False, "error": "token 无效"}, 401)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                payload = json.loads(self.rfile.read(length) or b"{}")
+            except Exception as e:
+                self._json({"ok": False, "error": f"请求体解析失败: {e}"}, 400)
+                return
+            if path == "/pair/discover":
+                self._json(_dp_pair("discover", timeout=120))
+            elif path == "/pair/start":
+                addr = str(payload.get("addr") or "").strip()
+                if not addr:
+                    self._json({"ok": False, "error": "缺少 addr"}, 400)
+                    return
+                self._json(_dp_pair(
+                    "start", "--addr", addr,
+                    "--port", str(int(payload.get("port") or 8443)),
+                    "--reg-port", str(int(payload.get("reg_port") or 8443)),
+                    timeout=120))
+            else:
+                pin = str(payload.get("pin") or "").strip()
+                if not pin:
+                    self._json({"ok": False, "error": "缺少 pin"}, 400)
+                    return
+                self._json(_dp_pair("finish", "--pin", pin, timeout=120))
+            return
+
         if path != "/deliver":
             self.send_error(404); return
         if not self._auth():

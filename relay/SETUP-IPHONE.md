@@ -8,28 +8,66 @@
 
 ---
 
-## 〇、（可选，推荐）配对 Digital Paper API —— 摆脱官方 PC App 依赖
+## 〇、（推荐）配对 Digital Paper API —— 摆脱官方 PC App 依赖
 
 > 原理：QUADERNO Gen 2 与 Sony Digital Paper 同源，配对后开放 HTTPS 8443 管理 API。
-> 配对一次后，relay **优先 API 直传**（USB ECM 或 Wi-Fi 均可，设备无需连官方客户端）；
+> 配对一次后，relay **优先 API 直传**（USB ECM 或 Wi-Fi 均可，设备无需运行官方客户端）；
 > 未配对或 API 失败时自动降级回官方客户端路径，两路互不影响。
+>
+> **不配对则必然经过官方 PC App** —— 这与偏好无关，是配置状态：`~/.config/p2q-relay/api.json` 不存在时，投递只有官方客户端一条路。
 
-1. 设备开机并与 Mac 同网（Wi-Fi）或 USB 连接（ECM 网络模式）。
-2. 运行交互式配对（设备屏幕会显示 PIN，输入即完成）：
+前置：设备开机并连接（USB 数据线，或与 Mac 同一 Wi-Fi），**设备屏幕已唤醒（非锁屏）**。
+设备休眠时链路仍在（Bonjour 仍有通告），但单播端口不响应，配对会报 `No route to host`。
 
-   ```bash
-   "/Users/km/projects/归档/print-to-quaderno/relay/pair_device.sh"
-   ```
+### 方式 A：网页配对（推荐，Mac 或 iPhone 浏览器均可）
 
-   脚本自动发现设备地址（找不到时手动输入 IP 或 `Android.local`），
-   完成后写入 `~/.config/dpt/` 凭据与 `~/.config/p2q-relay/api.json`。
-3. 之后所有投递自动走 API：响应中 `"via": "digital-paper-api"` 即生效。
-   关闭 API 路径：将 api.json 的 `enabled` 改为 `false`（或删除该文件）。
+```bash
+# 取 token 与本机名
+cat ~/.config/p2q-relay/token; scutil --get LocalHostName
+```
+
+浏览器打开（token 直接带入，省去手输）：
+
+```
+http://<本机名>.local:8790/pair?token=<token>
+```
+
+点「扫描设备」→ 选中列出的设备（USB 模式显示 `[FE80:…%enN]`，Wi-Fi 显示 IPv4）→
+设备屏幕出现 PIN → 页面填入 PIN → 提交。页面顶部状态变为「已配对」即完成。
+
+### 方式 B：终端配对
+
+```bash
+"/Users/km/projects/归档/print-to-quaderno/relay/pair_device.sh"
+```
+
+脚本自动发现设备（USB ECM 的 IPv6 link-local 与 Wi-Fi 的 IPv4 都支持），
+提示选择设备、请求 PIN、提交 PIN，最后做一次认证连通性测试。
+
+### 生效判据
+
+```bash
+curl -s http://127.0.0.1:8790/health
+# {"ok": true, ..., "api_paired": true, "api_addr": "[FE80:...%en5]"}
+```
+
+此后投递响应中 `"via": "digital-paper-api"` 即表示已脱离官方客户端。
+关闭 API 路径：删除 `~/.config/p2q-relay/api.json`（或将其 `enabled` 置为 `false`）。
+
+### 拍不中时的排查（按顺序）
+
+| 现象 | 含义 | 处理 |
+|---|---|---|
+| 扫描不到任何设备 | 链路未建立 | 插好数据线 / 确认与 Mac 同 Wi-Fi；唤醒设备屏幕 |
+| 扫描到设备但无可连地址 | mDNS 只有 SRV，无 A/AAAA | 设备未取得 IP，唤醒设备后重扫 |
+| `No route to host` | IPv6 link-local 单播不通 | 设备休眠或 USB 连接未激活；在设备上确认 USB 连接模式，并保持屏幕唤醒 |
+| `HTTP 403 / 401` | PIN 错误或会话过期 | 重新「扫描设备 → 请求 PIN」，PIN 每次配对都会刷新 |
+| 配对成功但 ping 失败 | 认证通过、API 不可达 | 设备休眠后 8443 会断；唤醒后重试即可 |
 
 约束与边界：
-- API 是正式管理接口（非 root/越狱），官方固件更新不影响。
+- API 是正式管理接口（非 root/越狱），官方固件更新不影响授权模型。
 - 上传为文档库直写，投递即可见，无需客户端轮询。
-- dpt-rp1-py 对 FMVDP51（A5）的兼容性待真机验证（社区已验证同代 FMVDP41）。
+- dpt-rp1-py 对 FMVDP51（A5）的兼容性以本机实测为准（社区已验证同代 FMVDP41）。
 
 ---
 
