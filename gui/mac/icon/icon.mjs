@@ -89,20 +89,22 @@ function notebook(t, groupAttrs = '') {
 </g>`;
 }
 
+// 双层投影：大范围环境影 + 贴地接触影。withSource=false 时只输出影子本身（烘焙图层用）。
+function shadowFilter(strength, withSource) {
+  return `<filter id="sh" x="-35%" y="-25%" width="170%" height="160%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="28" result="b1"/><feOffset in="b1" dy="30" result="o1"/>
+    <feFlood flood-color="${P.shade}" flood-opacity="${r1(0.75 * strength * 100) / 100}"/><feComposite in2="o1" operator="in" result="s1"/>
+    <feGaussianBlur in="SourceAlpha" stdDeviation="6" result="b2"/><feOffset in="b2" dy="8" result="o2"/>
+    <feFlood flood-color="${P.shade}" flood-opacity="${r1(0.45 * strength * 100) / 100}"/><feComposite in2="o2" operator="in" result="s2"/>
+    <feMerge><feMergeNode in="s1"/><feMergeNode in="s2"/>${withSource ? '<feMergeNode in="SourceGraphic"/>' : ''}</feMerge>
+  </filter>`;
+}
+
 function defs(t) {
   const glow = t.glow > 0
     ? `<radialGradient id="glow" cx="0.5" cy="0.12" r="0.8"><stop offset="0" stop-color="#FFFFFF" stop-opacity="${t.glow}"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>`
     : '';
-  // 双层投影：大范围环境影 + 贴地接触影。
-  const shadow = t.shadow > 0
-    ? `<filter id="sh" x="-35%" y="-25%" width="170%" height="160%">
-    <feGaussianBlur in="SourceAlpha" stdDeviation="28" result="b1"/><feOffset in="b1" dy="30" result="o1"/>
-    <feFlood flood-color="${P.shade}" flood-opacity="${r1(0.75 * t.shadow * 100) / 100}"/><feComposite in2="o1" operator="in" result="s1"/>
-    <feGaussianBlur in="SourceAlpha" stdDeviation="6" result="b2"/><feOffset in="b2" dy="8" result="o2"/>
-    <feFlood flood-color="${P.shade}" flood-opacity="${r1(0.45 * t.shadow * 100) / 100}"/><feComposite in2="o2" operator="in" result="s2"/>
-    <feMerge><feMergeNode in="s1"/><feMergeNode in="s2"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>`
-    : '';
+  const shadow = t.shadow > 0 ? shadowFilter(t.shadow, true) : '';
   return `<defs>
   <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.ground0}"/><stop offset="1" stop-color="${P.ground1}"/></linearGradient>
   <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P.paper0}"/><stop offset="1" stop-color="${P.paper1}"/></linearGradient>
@@ -128,16 +130,42 @@ ${notebook(t, t.shadow > 0 ? ' filter="url(#sh)"' : '')}
 // 系统只给老式 .icns 套一块灰色底板（「不合规图标」的待遇）；要去掉它，必须提供 .icon
 // 经 actool 编进 Assets.car。.icon 的画布是满版 1024：圆角容器由系统画、底色由 icon.json
 // 的 fill 给，所以图层里只有本子本身，按 1024/824 放大，使它在容器内的占比与 .icns 一致。
-// 投影交给系统（group 的 shadow），图层内不画 filter。
-export function layerSvg() {
-  const k = 1024 / 824, t = { ...TIERS[0], shadow: 1, glow: 0 };
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-${defs({ ...t, shadow: 0 })}
-<g transform="translate(512 512) scale(${r1(k * 1000) / 1000}) translate(-512 -512)">
-${notebook(t)}
-</g>
+//
+// 投影不能交给系统：Icon Composer 图层里的 SVG <filter> 不生效，而系统 neutral 投影又小又灰，
+// 实测本子下方取样与底色完全相同（2026-10-26），纸面贴在底上。所以投影单独出一张 SVG，
+// 由 build-icon.sh 光栅成带 alpha 的 PNG，作为本子下面的一层；group 的系统投影关掉。
+const K = 1024 / 824;
+const fullBleed = body => `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+${body}
 </svg>
 `;
+const scaled = inner => `<g transform="translate(512 512) scale(${r1(K * 1000) / 1000}) translate(-512 -512)">
+${inner}
+</g>`;
+
+export function layerSvg() {
+  const t = { ...TIERS[0], shadow: 1, glow: 0 };
+  return fullBleed(`${defs({ ...t, shadow: 0 })}
+${scaled(notebook(t))}`);
+}
+
+// 底板顶部的白色径向光。icon.json 的 fill 只能给线性渐变，光晕只能作为最底下一层图层。
+// 渐变在 .icon 的 SVG 图层里能正常渲染（filter 不行）。
+export function glowLayerSvg() {
+  const t = { ...TIERS[0] };
+  return fullBleed(`${defs({ ...t, shadow: 0 })}
+${scaled(`<rect x="100" y="100" width="824" height="824" fill="url(#glow)"/>`)}`);
+}
+
+// 只有影子、没有本子：本子轮廓作为 SourceAlpha 喂给 filter，滤镜输出时丢掉原图。
+export function shadowLayerSvg() {
+  const t = { ...TIERS[0], shadow: 1, glow: 0 };
+  return fullBleed(`<defs>
+  <linearGradient id="paper"><stop offset="0" stop-color="#000"/></linearGradient>
+  <linearGradient id="band"><stop offset="0" stop-color="#000"/></linearGradient>
+  ${shadowFilter(1, false)}
+</defs>
+${scaled(notebook(t, ' filter="url(#sh)"'))}`);
 }
 
 const srgb = hex => 'srgb:' + [1, 3, 5].map(i => (parseInt(hex.slice(i, i + 2), 16) / 255).toFixed(5)).join(',') + ',1.00000';
@@ -145,8 +173,13 @@ export function iconJson() {
   return JSON.stringify({
     fill: { 'linear-gradient': [srgb(P.ground0), srgb(P.ground1)] },
     groups: [{
-      layers: [{ 'image-name': 'device.svg', name: 'notebook', glass: false }],
-      shadow: { kind: 'neutral', opacity: 0.45 },
+      // 第一项在最上层。
+      layers: [
+        { 'image-name': 'device.svg', name: 'notebook', glass: false },
+        { 'image-name': 'shadow.png', name: 'shadow', glass: false },
+        { 'image-name': 'glow.svg', name: 'glow', glass: false },
+      ],
+      shadow: { kind: 'none', opacity: 0 },
       translucency: { enabled: false, value: 0.5 },
     }],
     'supported-platforms': { squares: ['macOS'] },
@@ -157,6 +190,8 @@ export function iconJson() {
 // 脚本静默输出空串，下游渲染出空白 PNG。
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv[2] === '--layer') { process.stdout.write(layerSvg()); process.exit(0); }
+  if (process.argv[2] === '--glow-layer') { process.stdout.write(glowLayerSvg()); process.exit(0); }
+  if (process.argv[2] === '--shadow-layer') { process.stdout.write(shadowLayerSvg()); process.exit(0); }
   if (process.argv[2] === '--icon-json') { process.stdout.write(iconJson()); process.exit(0); }
   const px = Number(process.argv[2] || 1024);
   if (!Number.isFinite(px) || px < 8) { console.error('用法: node icon.mjs <px>'); process.exit(1); }

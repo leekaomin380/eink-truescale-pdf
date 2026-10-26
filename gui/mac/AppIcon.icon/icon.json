@@ -12,11 +12,21 @@
           "image-name": "device.svg",
           "name": "notebook",
           "glass": false
+        },
+        {
+          "image-name": "shadow.png",
+          "name": "shadow",
+          "glass": false
+        },
+        {
+          "image-name": "glow.svg",
+          "name": "glow",
+          "glass": false
         }
       ],
       "shadow": {
-        "kind": "neutral",
-        "opacity": 0.45
+        "kind": "none",
+        "opacity": 0
       },
       "translucency": {
         "enabled": false,
