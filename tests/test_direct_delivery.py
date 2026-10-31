@@ -471,3 +471,59 @@ class OfficialFallbackTests(unittest.TestCase):
         self.assertIsInstance(result, direct.DirectError)
         self.assertIn('也失败', str(result))
         self.assertTrue(original_kept)
+
+
+class FileManagementTests(unittest.TestCase):
+    def device(self, responses=None):
+        key = direct.RSA.generate(1024).export_key()
+        device = direct.Device({'address': 'Android.local'}, key, 'test-client')
+        calls = []
+        def request(method, endpoint, json_body=None, **kwargs):
+            calls.append((method, endpoint, json_body))
+            if endpoint.startswith('/resolve/'):
+                return {'entry_id': 'root', 'entry_type': 'folder', 'entry_path': 'Document'}
+            return direct.Response(200, {}, (responses or {}).get(endpoint, b'{}'))
+        device.request = request
+        device.resolve = lambda path: request('GET', '/resolve/' + path)
+        return device, calls
+
+    def test_browse_lists_folders_first(self):
+        import json
+        listing = json.dumps({'entry_list': [
+            {'entry_id': 'd1', 'entry_name': 'b.pdf', 'entry_type': 'document', 'file_size': 10},
+            {'entry_id': 'f1', 'entry_name': 'Received', 'entry_type': 'folder'},
+            {'entry_id': 'd2', 'entry_name': 'A.pdf', 'entry_type': 'document'}]}).encode()
+        device, _ = self.device({'/folders/root/entries2': listing})
+        result = device.browse('Document')
+        self.assertEqual([e['name'] for e in result['entries']], ['Received', 'A.pdf', 'b.pdf'])
+        self.assertEqual(result['folder']['id'], 'root')
+
+    def test_each_action_uses_the_documented_endpoint(self):
+        device, calls = self.device({'/documents/d1/file': b'%PDF'})
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / 'out.pdf'
+            device.download('d1', str(target))
+            self.assertEqual(target.read_bytes(), b'%PDF')
+        device.open_document('d1', 'a.pdf')
+        device.delete('d1', 'document', 'a.pdf')
+        device.delete('f1', 'folder', 'Old')
+        device.make_folder('root', '  Reading ')
+        device.move('d1', 'f2', 'a.pdf')
+        self.assertEqual(calls, [
+            ('GET', '/documents/d1/file', None),
+            ('PUT', '/viewer/controls/open2', {'document_id': 'd1', 'page': 1}),
+            ('DELETE', '/documents/d1', None),
+            ('DELETE', '/folders/f1', None),
+            ('POST', '/folders2', {'folder_name': 'Reading', 'parent_folder_id': 'root'}),
+            ('PUT', '/documents/d1', {'parent_folder_id': 'f2'})])
+
+    def test_ids_and_names_are_validated_before_any_request(self):
+        device, calls = self.device()
+        for action in (lambda: device.delete('../folders/x', 'document', 'x'),
+                       lambda: device.move('d1', 'f/2', 'x'),
+                       lambda: device.make_folder('root', 'a/b'),
+                       lambda: device.make_folder('root', '   '),
+                       lambda: device.download('d1', 'relative.pdf')):
+            with self.assertRaises(direct.DirectError):
+                action()
+        self.assertEqual(calls, [])

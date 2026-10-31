@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Local, pinned-TLS Quaderno transport. No official application at runtime.
 Protocol reference: https://github.com/janten/dpt-rp1-py (MIT).
-Only reads and creates documents; never deletes or overwrites device documents.
+Delivery only reads folders and adds documents; it never deletes or overwrites anything.
+Deleting, moving and creating folders happen only as explicit actions from the App's file manager.
 """
 import argparse
 import fcntl
@@ -125,6 +126,16 @@ MESSAGES = {
     '{error}（打开 QUADERNO PC App 后重试，可经官方 App 投递）': (
         '{error} (Open QUADERNO PC App and try again to send through the official app.)',
         '{error}（QUADERNO PC App を開いて再試行すると、公式 App 経由で送信できます）'),
+    # File management (App 设备文件 tab): explicit user actions only.
+    '设备上找不到这个文件夹：{path}': ('Folder not found on the device: {path}', '端末にこのフォルダーが見つかりません：{path}'),
+    '条目标识无效。': ('Invalid item identifier.', '項目の識別子が無効です。'),
+    '已请求设备打开：{name}': ('Asked the device to open: {name}', '端末に表示を要求しました：{name}'),
+    '已下载到 {path}': ('Downloaded to {path}', '{path} にダウンロードしました'),
+    '请选择要保存到的位置。': ('Choose where to save it.', '保存先を選んでください。'),
+    '已删除：{name}': ('Deleted: {name}', '削除しました：{name}'),
+    '已新建文件夹：{name}': ('Created folder: {name}', 'フォルダーを作成しました：{name}'),
+    '已移动：{name}': ('Moved: {name}', '移動しました：{name}'),
+    '文件夹名称不能为空，也不能包含「/」。': ('A folder name cannot be empty or contain "/".', 'フォルダー名は空にできず、「/」も使えません。'),
     # deliver.sh, through the `text` action
     '未找到 pandoc': ('pandoc not found', 'pandoc が見つかりません'),
     '未找到 typst': ('typst not found', 'typst が見つかりません'),
@@ -440,6 +451,51 @@ class Device:
         entries = self.request('GET', '/folders/' + root['entry_id'] + '/entries2').json()['entry_list']
         return {'ok': True, 'message': tr('设备已直连，认证及目录读取通过'), 'root_entries': len(entries), 'connection': self.target}
 
+    # ---- File management: only explicit actions from the App's 设备文件 tab ----
+
+    def browse(self, path):
+        folder = self.resolve(path)
+        if not folder or folder.get('entry_type', 'folder') != 'folder':
+            raise DirectError(tr('设备上找不到这个文件夹：{path}', path=path))
+        items = self.request('GET', '/folders/' + folder['entry_id'] + '/entries2').json()['entry_list']
+        entries = [{'id': item['entry_id'], 'name': item.get('entry_name', ''), 'type': item.get('entry_type', ''),
+                    'path': item.get('entry_path', ''), 'size': item.get('file_size'),
+                    'modified': item.get('modified_date') or item.get('created_date')} for item in items]
+        entries.sort(key=lambda entry: (entry['type'] != 'folder', entry['name'].lower()))
+        return {'ok': True, 'message': '', 'entries': entries,
+                'folder': {'id': folder['entry_id'], 'path': folder.get('entry_path') or path}}
+
+    def open_document(self, document_id, name):
+        self.request('PUT', '/viewer/controls/open2', json_body={'document_id': entry_id(document_id), 'page': 1})
+        return {'ok': True, 'message': tr('已请求设备打开：{name}', name=name)}
+
+    def download(self, document_id, destination):
+        if not destination or not Path(destination).is_absolute():
+            raise DirectError(tr('请选择要保存到的位置。'))
+        destination = Path(destination)
+        content = self.request('GET', '/documents/' + entry_id(document_id) + '/file').content
+        temporary = destination.with_name('.' + destination.name + '.download')
+        temporary.write_bytes(content)
+        os.replace(temporary, destination)
+        return {'ok': True, 'message': tr('已下载到 {path}', path=destination), 'path': str(destination)}
+
+    def delete(self, item_id, kind, name):
+        collection = 'folders' if kind == 'folder' else 'documents'
+        self.request('DELETE', '/' + collection + '/' + entry_id(item_id))
+        return {'ok': True, 'message': tr('已删除：{name}', name=name)}
+
+    def make_folder(self, parent_id, name):
+        name = (name or '').strip()
+        if not name or '/' in name:
+            raise DirectError(tr('文件夹名称不能为空，也不能包含「/」。'))
+        self.request('POST', '/folders2', json_body={'folder_name': name, 'parent_folder_id': entry_id(parent_id)})
+        return {'ok': True, 'message': tr('已新建文件夹：{name}', name=name)}
+
+    def move(self, document_id, folder_id, name):
+        self.request('PUT', '/documents/' + entry_id(document_id),
+                     json_body={'parent_folder_id': entry_id(folder_id)})
+        return {'ok': True, 'message': tr('已移动：{name}', name=name)}
+
     def upload(self, source):
         if not self.cookie:
             self.authenticate()
@@ -495,6 +551,13 @@ def record_delivery(name, display_requested, via='direct'):
         save_private(path, ('\n'.join(lines) + '\n').encode())
     except OSError:
         pass
+
+
+def entry_id(value):
+    """Device entry ids go into URL paths; accept only the id alphabet the device uses."""
+    if not value or not re.fullmatch(r'[A-Za-z0-9_-]+', value):
+        raise DirectError(tr('条目标识无效。'))
+    return value
 
 
 def save_private(path, data):
@@ -821,7 +884,8 @@ def render_and_upload(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'text'])
+    parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'text',
+                                           'browse', 'open-doc', 'download', 'delete', 'mkdir', 'move'])
     parser.add_argument('--address', default='Android.local')
     parser.add_argument('--file')
     parser.add_argument('--input')
@@ -839,6 +903,11 @@ def main():
     parser.add_argument('--leading', default='0.85em')
     parser.add_argument('--font-directory')
     parser.add_argument('values', nargs='*', help='text: MESSAGE [key=value ...]')
+    parser.add_argument('--path', default='Document', help='browse: device folder path')
+    parser.add_argument('--id', help='device entry id for open-doc / download / delete / move; parent for mkdir')
+    parser.add_argument('--kind', choices=['document', 'folder'], default='document')
+    parser.add_argument('--name', default='', help='display name (messages) or new folder name')
+    parser.add_argument('--to', help='download: absolute local path; move: destination folder id')
     parser.add_argument('--title', help='file name for render-upload; default derives one from the text')
     args = parser.parse_args()
     if args.action == 'text':
@@ -861,6 +930,16 @@ def main():
                 result = import_pairing(args.address)
             elif args.action == 'check':
                 result = load_device().check()
+            elif args.action in ('browse', 'open-doc', 'download', 'delete', 'mkdir', 'move'):
+                device = connect_device()
+                result = {
+                    'browse': lambda: device.browse(args.path),
+                    'open-doc': lambda: device.open_document(args.id, args.name),
+                    'download': lambda: device.download(args.id, args.to),
+                    'delete': lambda: device.delete(args.id, args.kind, args.name),
+                    'mkdir': lambda: device.make_folder(args.id, args.name),
+                    'move': lambda: device.move(args.id, args.to, args.name),
+                }[args.action]()
             else:
                 source = Path(args.file)
                 if not source.is_file() or source.suffix.lower() != '.pdf':

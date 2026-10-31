@@ -94,7 +94,7 @@ struct AboutView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
                 }
 
-                Text("FUJITSU 与 QUADERNO 是其各自权利人的商标。本项目是独立的开源项目，与富士通没有关联，也未获得其认可或赞助。设备直连只读取目录并新增文档，不删除或覆盖设备上的文件。")
+                Text("FUJITSU 与 QUADERNO 是其各自权利人的商标。本项目是独立的开源项目，与富士通没有关联，也未获得其认可或赞助。投递只读取目录并新增文档，从不删除或覆盖设备上的文件；删除、移动只在「设备文件」中由你确认后执行。")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .padding(32)

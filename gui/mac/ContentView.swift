@@ -6,6 +6,7 @@ enum InputMode: String, CaseIterable {
     case text = "文本"
     case wechat = "网页"
     case shortcut = "快捷投递"
+    case device = "设备文件"
 
     var title: String {
         switch self {
@@ -13,6 +14,7 @@ enum InputMode: String, CaseIterable {
         case .text: L("文本")
         case .wechat: L("网页")
         case .shortcut: L("快捷投递")
+        case .device: L("设备文件")
         }
     }
 }
@@ -75,7 +77,7 @@ struct ContentView: View {
         case .epub:   return vm.sourceFileURL != nil
         case .text:   return !vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .wechat: return !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .shortcut: return false
+        case .shortcut, .device: return false
         }
     }
 
@@ -97,6 +99,8 @@ struct ContentView: View {
             return vm.wechatURL.isEmpty ? L("网页链接") : vm.wechatURL
         case .shortcut:
             return L("快捷投递")
+        case .device:
+            return L("设备文件")
         }
     }
 
@@ -140,6 +144,9 @@ struct ContentView: View {
                     if inputMode == .shortcut {
                         QuickSendOverview()
                             .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                    } else if inputMode == .device {
+                        DeviceDocumentsView()
+                            .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         previewArea
                     }
@@ -216,6 +223,8 @@ struct ContentView: View {
 
             if inputMode == .shortcut {
                 ScrollView { QuickSendSidebar() }
+            } else if inputMode == .device {
+                DeviceFolderSidebar()
             } else {
                 if inputMode == .text {
                     textWorkspace
@@ -253,7 +262,7 @@ struct ContentView: View {
             clearedPasteText = nil
             clearedWechatURL = nil
 
-            if newMode == .shortcut {
+            if newMode == .shortcut || newMode == .device {
                 autoRenderTask?.cancel()
                 return
             }
@@ -261,7 +270,7 @@ struct ContentView: View {
                 case .epub: .epub
                 case .text: .text
                 case .wechat: .wechat
-                case .shortcut: vm.activeKind
+                case .shortcut, .device: vm.activeKind
             }
 
             // 每个来源的草稿各自保留；切换时只移除与当前来源不再对应的预览。

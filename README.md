@@ -43,8 +43,13 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 | **WeChat articles (微信公众号)** | Paste a link into the app — [jump](#reading-wechat-articles-微信公众号-on-a-quaderno) |
 | Pasted text | Type or paste into the app |
 
+The **Device Files** tab manages what is already on the device: browse folders, open a document
+on the device, download it (with your handwritten notes) to the Mac, create folders, move and
+delete.
+
 Delivered files land in `Document/Received/` on the device and are opened on screen.
-Existing files are never overwritten or deleted.
+Delivery never overwrites or deletes existing files. Deleting and moving happen only in the
+**Device Files** tab, when you choose to and confirm.
 
 The WeChat support exists because QUADERNO is a Japanese device with no path for Chinese
 social-platform content, and 微信公众号 is where much of Chinese long-form writing lives.
@@ -470,9 +475,11 @@ pbpaste ──► [empty check] ──► pandoc ──► typst ──► PDF
 A few notes on why it's built this way:
 
 - **The device speaks an HTTPS API.** The protocol follows the community reference
-  [dpt-rp1-py](https://github.com/janten/dpt-rp1-py); no code from it is bundled. The tool only
+  [dpt-rp1-py](https://github.com/janten/dpt-rp1-py); no code from it is bundled. Delivery only
   authenticates, lists folders, creates documents, uploads, reads back and asks the device to
-  open a file — it never deletes, overwrites or syncs.
+  open a file — it never deletes, overwrites or syncs. The **Device Files** tab adds browsing,
+  downloading, new folders, moving and deleting, each only as an explicit action; deleting
+  always asks first, because handwritten notes go with the document.
 - **The device's identity is pinned.** On first import the certificate chain is verified,
   then the public key is pinned; every later request must present the same key, and a changed
   key is refused rather than accepted.
