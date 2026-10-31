@@ -125,7 +125,7 @@ struct ContentView: View {
             sidebar
                 .frame(minWidth: 300, idealWidth: 360, maxWidth: 520)
             if inputMode == .shortcut {
-                ShortcutDeliveryView(embedded: true)
+                QuickSendOverview()
                     .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 previewArea
@@ -163,18 +163,7 @@ struct ContentView: View {
             Divider()
 
             if inputMode == .shortcut {
-                VStack(alignment: .leading, spacing: 16) {
-                    Label("剪贴板快捷投递", systemImage: "keyboard").font(.headline)
-                    Text("⌃1").font(.system(size: 30, weight: .medium, design: .rounded))
-                    Text("复制需要阅读的文字，按 Control + 1，即可投递到 Quaderno。")
-                        .foregroundStyle(.secondary)
-                    Divider()
-                    Text("在右侧调整快捷投递排版、连接设备或查看快捷键设置。")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                ScrollView { QuickSendSettings() }
             } else {
                 if inputMode == .text {
                     textWorkspace

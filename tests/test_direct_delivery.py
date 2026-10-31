@@ -11,6 +11,8 @@ os.environ['QUADERNO_LANG'] = 'zh-Hans'  # assertions below use the source-langu
 spec = importlib.util.spec_from_file_location('direct', Path(__file__).parents[1] / 'direct/quaderno_direct.py')
 direct = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(direct)
+# Never touch the real pairing / history folder, even in tests that do not patch ROOT.
+direct.ROOT = Path(tempfile.mkdtemp()) / 'Direct'
 
 
 class NamingTests(unittest.TestCase):
@@ -364,3 +366,15 @@ class MessageLanguageTests(unittest.TestCase):
         for source, translations in direct.MESSAGES.items():
             for translated in translations:
                 self.assertEqual(fields(translated), fields(source), source)
+
+
+class HistoryTests(unittest.TestCase):
+    def test_history_keeps_latest_entries_with_source(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(direct, 'ROOT', Path(temp) / 'Direct'), \
+             patch.object(direct, 'HISTORY_LIMIT', 3), patch.dict(os.environ, {'QUADERNO_SOURCE': 'finder'}):
+            for index in range(5):
+                direct.record_delivery(f'{index}.pdf', True)
+            import json
+            entries = [json.loads(line) for line in (Path(temp) / 'Direct/history.jsonl').read_text().splitlines()]
+            self.assertEqual([entry['name'] for entry in entries], ['2.pdf', '3.pdf', '4.pdf'])
+            self.assertEqual({entry['source'] for entry in entries}, {'finder'})

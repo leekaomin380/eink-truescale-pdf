@@ -449,9 +449,27 @@ class Device:
         name = remote.rsplit('/', 1)[-1]
         message = tr('已保存至 Received：{name}（回读通过，已请求设备打开）' if display_requested else
                      '已保存至 Received：{name}（回读通过，设备未接受打开请求，请从 Received 打开）', name=name)
+        record_delivery(name, display_requested)
         return {'ok': True, 'message': message, 'path': remote, 'sha256': expected,
                 'display_requested': display_requested}
 
+
+
+HISTORY_LIMIT = 50
+
+
+def record_delivery(name, display_requested):
+    """Append a verified delivery for the App's「最近投递」. Never fails the delivery itself."""
+    # QUADERNO_SOURCE: clipboard (Ctrl+1) / finder (right-click) / app; set by the caller.
+    entry = {'time': datetime.now().astimezone().isoformat(timespec='seconds'), 'name': name,
+             'source': os.environ.get('QUADERNO_SOURCE', 'app'), 'opened': display_requested}
+    path = ROOT / 'history.jsonl'
+    try:
+        lines = path.read_text().splitlines() if path.exists() else []
+        lines = (lines + [json.dumps(entry, ensure_ascii=False)])[-HISTORY_LIMIT:]
+        save_private(path, ('\n'.join(lines) + '\n').encode())
+    except OSError:
+        pass
 
 
 def save_private(path, data):

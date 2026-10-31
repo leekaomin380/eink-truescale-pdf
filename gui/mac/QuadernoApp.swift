@@ -18,7 +18,6 @@ struct QuadernoApp: App {
         Window("快捷投递", id: "shortcut-delivery") {
             ShortcutDeliveryView()
         }
-        .defaultSize(width: 640, height: 710)
         .windowResizability(.contentSize)
         Window("关于 Quaderno Converter", id: "about") {
             AboutView()

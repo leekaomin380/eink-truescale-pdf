@@ -89,6 +89,7 @@ result_message() {
 # Finder 右键「发送到 QUADERNO」：PDF 原样上传；Markdown / 纯文本按 Ctrl+1 排版渲染，沿用文件名。
 if [[ "${1:-}" == "--files" ]]; then
   shift
+  export QUADERNO_SOURCE=finder
   (( $# )) || fail "$(t "未选择文件")" 1
   SENT=0
   FAILURES=()
@@ -118,6 +119,7 @@ if [[ "${1:-}" == "--files" ]]; then
 fi
 
 # 自动命名仅属于剪贴板入口，不改变主窗口手动输入标题的规则。
+export QUADERNO_SOURCE=clipboard
 pbpaste > "$JOBDIR/input.md"
 [[ -n "$(tr -d '[:space:]' < "$JOBDIR/input.md")" ]] || fail "$(t "剪贴板为空，已取消")" 1
 # Single process: authenticate while rendering, then upload, open and verify.

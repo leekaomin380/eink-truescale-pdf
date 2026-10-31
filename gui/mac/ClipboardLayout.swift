@@ -116,17 +116,21 @@ struct ClipboardLayoutSettings: View {
     @ObservedObject private var store = ClipboardLayoutStore.shared
 
     var body: some View {
-        GroupBox("Ctrl+1 排版") {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("跟随主窗口排版")
+                    Text(store.useShared ? L("与「文件、文本、网页」共用设置") : L("仅影响 ⌃1 与 Finder 右键投递"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("跟随主窗口排版", isOn: Binding(get: { store.useShared }, set: { store.setIndependent(!$0) }))
+                    .toggleStyle(.switch).labelsHidden()
+            }
+            .padding(12)
+            Divider().padding(.leading, 12)
             VStack(alignment: .leading, spacing: 12) {
-                Toggle("使用独立排版", isOn: Binding(get: { !store.useShared }, set: { store.setIndependent($0) }))
-                Text(store.useShared
-                     ? L("跟随「文件、文本、网页」的共用设置；在主窗口调整后，这里同步生效。")
-                     : L("仅影响 Ctrl+1 剪贴板投递，其他三个输入页保持原设置。"))
-                    .font(.callout).foregroundStyle(.secondary)
-                let profile = store.effective
-                Text("当前：\(profile.bodySize) · 边距 \(profile.margin) · \(profile.pageW) × \(profile.pageH)\n\(profile.cjkFont) / \(profile.latinFont)")
-                    .font(.caption).foregroundStyle(.secondary)
-
+                chips
                 if !store.useShared {
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
                         GridRow {
@@ -174,11 +178,68 @@ struct ClipboardLayoutSettings: View {
                     }
                     Button("从共用设置重新复制") { store.copyShared() }
                 }
-                Text("设置自动保存。退出 App 后，Ctrl+1 仍使用这里最后保存的设置。")
-                    .font(.caption).foregroundStyle(.secondary)
                 if !store.errorMessage.isEmpty { Text(store.errorMessage).foregroundStyle(.red).font(.caption) }
-            }.padding(8)
+            }
+            .padding(12)
         }
         .onChange(of: store.independent) { _, _ in store.persist() }
+    }
+
+    private var chips: some View {
+        let profile = store.effective
+        let device = store.devices.indices.contains(profile.deviceIndex) ? store.devices[profile.deviceIndex].name : nil
+        let leading = ConversionViewModel.leadingChoices.first { $0.0 == profile.leading }.map { L("行距 \($0.1)") }
+        let items = [device, profile.bodySize, leading, L("边距 \(profile.margin)"),
+                     profile.cjkFont + " / " + profile.latinFont].compactMap { $0 }
+        return FlowLayout(spacing: 6) {
+            ForEach(items, id: \.self) { item in
+                Text(verbatim: item).font(.caption)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+            }
+        }
+    }
+}
+
+/// 换行排列的标签行。
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        let height = rows.last.map { $0.y + $0.height } ?? 0
+        let width = rows.map(\.width).max() ?? 0
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: bounds.minY + row.y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+        }
+    }
+
+    private struct Row { var indices: [Int] = []; var y: CGFloat = 0; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let extra = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if extra > width && !current.indices.isEmpty {
+                rows.append(current)
+                current = Row(y: current.y + current.height + spacing)
+            }
+            current.width = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
     }
 }

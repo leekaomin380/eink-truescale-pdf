@@ -59,6 +59,7 @@ swiftc \
     "$MAC_DIR/AboutView.swift" \
     "$MAC_DIR/ContentView.swift" \
     "$MAC_DIR/ShortcutDeliveryView.swift" \
+    "$MAC_DIR/QuickSendView.swift" \
     "$MAC_DIR/DirectDelivery.swift" \
     "$MAC_DIR/ClipboardLayout.swift" \
     "$MAC_DIR/ConversionViewModel.swift" \
@@ -71,6 +72,7 @@ swiftc \
     -framework PDFKit \
     -framework UniformTypeIdentifiers \
     -framework WebKit \
+    -framework IOKit \
     -framework CoreImage \
     -target arm64-apple-macos14.0
 
