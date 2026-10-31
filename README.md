@@ -618,6 +618,7 @@ required. We would rather it spread than be credited.
 | [Direct delivery (中文)](docs/DIRECT-DELIVERY.md) | Direct connection, Finder sending, fallback: design and acceptance notes |
 | [USB disconnect investigation](docs/usb-disconnect-investigation.md) | Evidence for the FMVDP51 dropping off USB while plugged in |
 | [Product overview](docs/PRODUCT.md) | Product scope, two-edition strategy, architecture |
+| [Change checklist (中文)](docs/CHECKLIST.md) | What to check before committing device, UI or wording changes |
 | [Development log (中文)](docs/development-log-zh.md) | The full investigation, every dead end and fix |
 | [`calibrate.typ`](calibrate.typ) | 1:1 calibration page source |
 | [`font-menu.typ`](font-menu.typ) | Font size menu source |
