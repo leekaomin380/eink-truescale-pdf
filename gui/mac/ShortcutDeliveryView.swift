@@ -157,69 +157,14 @@ struct ShortcutDeliveryView: View {
     }
 }
 
-/// Finder 右键「快速操作 → 发送到 QUADERNO」。Workflow 只调用 App 包内的 deliver.sh --files。
-enum FinderQuickAction {
-    static let name = "发送到 QUADERNO.workflow"
-    static var bundled: URL? { Bundle.main.url(forResource: "发送到 QUADERNO", withExtension: "workflow") }
-    static var installed: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Services/" + name)
-    }
-    static var isInstalled: Bool { FileManager.default.fileExists(atPath: installed.path) }
-
-    static func install() throws {
-        guard let bundled else { throw CocoaError(.fileNoSuchFile) }
-        let fileManager = FileManager.default
-        try fileManager.createDirectory(at: installed.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if isInstalled { try fileManager.removeItem(at: installed) }
-        try fileManager.copyItem(at: bundled, to: installed)
-        refreshServices()
-    }
-
-    static func uninstall() throws {
-        if isInstalled { try FileManager.default.removeItem(at: installed) }
-        refreshServices()
-    }
-
-    private static func refreshServices() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
-        process.arguments = ["-flush"]
-        try? process.run()
-    }
-}
-
 struct FinderQuickActionSettings: View {
-    @State private var installed = FinderQuickAction.isInstalled
-    @State private var message = ""
-
     var body: some View {
         GroupBox("Finder 右键投递") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("在 Finder 中右键 PDF、Markdown 或 TXT 文件，选择「快速操作 → 发送到 QUADERNO」。PDF 原样上传；Markdown 和 TXT 按 Ctrl+1 排版渲染，文件名沿用原文件名。可多选。")
-                HStack {
-                    Button(installed ? "重新安装" : "安装右键菜单", systemImage: "contextualmenu.and.cursorarrow") {
-                        perform(FinderQuickAction.install, done: "已安装。如菜单未出现，请重新打开 Finder 窗口。")
-                    }.disabled(FinderQuickAction.bundled == nil)
-                    if installed {
-                        Button("移除", systemImage: "trash") {
-                            perform(FinderQuickAction.uninstall, done: "已移除。")
-                        }
-                    }
-                }
-                Text(verbatim: "安装位置：~/Library/Services/。可在「系统设置 → 键盘 → 键盘快捷键 → 服务」中停用或绑定快捷键。移动 App 后无需重新安装（会在「应用程序」与「~/应用程序」中查找）。")
+                Text("在 Finder 中右键 PDF、Markdown 或 TXT 文件，选择菜单底部的「发送到 QUADERNO」。PDF 原样上传；Markdown 和 TXT 按 Ctrl+1 排版渲染，文件名沿用原文件名。可多选。")
+                Text("由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「发送到 QUADERNO」。")
                     .font(.caption).foregroundStyle(.secondary)
-                if !message.isEmpty { Text(message).font(.callout) }
             }.padding(8)
         }
-    }
-
-    private func perform(_ action: () throws -> Void, done: String) {
-        do {
-            try action()
-            message = done
-        } catch {
-            message = "操作失败：" + error.localizedDescription
-        }
-        installed = FinderQuickAction.isInstalled
     }
 }

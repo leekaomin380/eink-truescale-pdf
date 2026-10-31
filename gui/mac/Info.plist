@@ -31,5 +31,27 @@
 		<string>_dp_fujitsu._tcp</string>
 		<string>_digitalpaper._tcp</string>
 	</array>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>发送到 QUADERNO</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>sendToQuaderno</string>
+			<key>NSPortName</key>
+			<string>Quaderno Converter</string>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>com.adobe.pdf</string>
+				<string>net.daringfireball.markdown</string>
+				<string>public.plain-text</string>
+			</array>
+			<key>NSRequiredContext</key>
+			<dict/>
+		</dict>
+	</array>
 </dict>
 </plist>

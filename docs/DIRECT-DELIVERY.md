@@ -70,12 +70,13 @@ Ctrl+1 默认共享「文件、文本、网页」当前共用的字号、字体�
 
 ## Finder 右键投递（2026-10-31）
 
-App「快捷投递 → Finder 右键投递 → 安装右键菜单」会把 `发送到 QUADERNO.workflow` 复制到 `~/Library/Services/`。
-在 Finder 中右键 PDF、Markdown 或 TXT 文件，选择「快速操作 → 发送到 QUADERNO」即可投递，可以多选。
+App 通过 `Info.plist` 的 `NSServices` 提供原生服务「发送到 QUADERNO」，不依赖 Automator 或快捷指令，也不需要安装步骤。
+在 Finder 中右键 PDF、Markdown 或 TXT 文件，该项出现在菜单底部（文件较多时在「服务」子菜单）。
 
-- PDF 原样上传；Markdown 和 TXT 按 Ctrl+1 排版渲染，文件名沿用原文件名。
-- 与 Ctrl+1 相同：保存到 `Document/Received/`，回读校验，不覆盖同名文件。
-- Workflow 只执行 App 包内的 `deliver.sh --files`，并在 `/Applications` 与 `~/Applications` 中查找 App。
+- PDF 原样上传；Markdown 和 TXT 按 Ctrl+1 排版渲染，文件名沿用原文件名。可多选。
+- 与 Ctrl+1 相同：保存到 `Document/Received/`，回读校验，不覆盖同名文件，结果以系统通知显示。
+- `FinderSendService` 收到文件后立即返回，后台执行 App 包内的 `deliver.sh --files`。App 未运行时由系统启动。
 - 其他格式（EPUB 等）会提示暂不支持，不上传。
+- 菜单项未出现：在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选。
 
-实机验证：通过 `automator -i` 运行 workflow，一个 PDF 和一个 Markdown 用时 4.6 秒，两个文件都回读通过。
+验证：通过 `NSPerformService` 调用服务，设备侧完成上传事务。
