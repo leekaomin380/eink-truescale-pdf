@@ -17,6 +17,7 @@ enum DirectDelivery {
             let process = Process()
             process.executableURL = resources.appendingPathComponent("direct/quaderno-direct")
             process.arguments = arguments
+            process.environment = helperEnvironment()
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = pipe

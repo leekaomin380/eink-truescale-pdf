@@ -6,3 +6,10 @@ import Foundation
 func L(_ key: String.LocalizationValue) -> String {
     String(localized: key)
 }
+
+/// 子进程环境：让直连工具与 deliver.sh 的消息语言跟随 App 界面语言。
+func helperEnvironment() -> [String: String] {
+    var environment = ProcessInfo.processInfo.environment
+    environment["QUADERNO_LANG"] = Bundle.main.preferredLocalizations.first ?? "en"
+    return environment
+}

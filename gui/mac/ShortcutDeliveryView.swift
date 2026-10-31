@@ -137,6 +137,7 @@ struct ShortcutDeliveryView: View {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: "/bin/zsh")
                 process.arguments = [scriptURL.path, "--check"]
+                process.environment = helperEnvironment()
                 let pipe = Pipe()
                 process.standardOutput = pipe
                 process.standardError = pipe

@@ -5,6 +5,7 @@ Only reads and creates documents; never deletes or overwrites device documents.
 """
 import argparse
 import fcntl
+import functools
 from contextlib import contextmanager
 import base64
 import hashlib
@@ -31,6 +32,133 @@ import yaml
 
 ROOT = Path.home() / 'Library/Application Support/Quaderno Converter/Direct'
 
+# User-facing messages: zh-Hans source text -> (English, 日本語). Same languages as the App.
+MESSAGES = {
+    '设备请求失败（HTTP {status}）。请检查配对和连接。': (
+        'Device request failed (HTTP {status}). Check the pairing and connection.',
+        '端末へのリクエストに失敗しました（HTTP {status}）。ペアリングと接続を確認してください。'),
+    '设备证书与已配对设备不一致，已拒绝连接。': (
+        "The device certificate does not match the paired device. Connection refused.",
+        '端末の証明書がペアリング済みの端末と一致しないため、接続を拒否しました。'),
+    '设备地址无法连接，请检查 USB / Wi-Fi 和设备唤醒状态。': (
+        'Cannot reach the device address. Check USB / Wi-Fi and make sure the device is awake.',
+        '端末のアドレスに接続できません。USB / Wi-Fi と、端末がスリープ中でないかを確認してください。'),
+    'USB 上未检测到 QUADERNO，设备已断开。请重新插拔 USB 线后重试。': (
+        'No QUADERNO found on USB — the device has disconnected. Unplug and reconnect the USB cable, then try again.',
+        'USB 上に QUADERNO が見つかりません（接続が切れています）。USB ケーブルを挿し直してから再試行してください。'),
+    '未找到可连接的已配对设备。': (
+        'No reachable paired device was found.',
+        '接続できるペアリング済み端末が見つかりません。'),
+    '设备未返回有效的登录凭据。': (
+        'The device did not return valid login credentials.',
+        '端末から有効なログイン資格情報が返されませんでした。'),
+    '设备返回的登录凭据格式异常。': (
+        'The device returned malformed login credentials.',
+        '端末から返されたログイン資格情報の形式が不正です。'),
+    '无法读取设备 Document 目录。': (
+        "Cannot read the device's Document folder.",
+        '端末の Document フォルダーを読み取れません。'),
+    '设备已直连，认证及目录读取通过': (
+        'Device connected directly; authentication and folder reading passed',
+        '端末に直接接続しました。認証とフォルダーの読み取りに成功しました'),
+    '设备 Received 文件夹不存在，未上传文件。': (
+        'The Received folder does not exist on the device. Nothing was uploaded.',
+        '端末に Received フォルダーがないため、アップロードしませんでした。'),
+    '文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。': (
+        'The file was uploaded, but the read-back check did not match. Keep the local PDF and check the device.',
+        'アップロードしましたが、読み戻しの照合が一致しません。ローカルの PDF を残して端末を確認してください。'),
+    '回读已通过，但设备目录未确认新文件。': (
+        "Read-back passed, but the new file was not confirmed in the device's folder.",
+        '読み戻しは成功しましたが、端末のフォルダーで新しいファイルを確認できませんでした。'),
+    '已保存至 Received：{name}（回读通过，已请求设备打开）': (
+        'Saved to Received: {name} (verified; asked the device to open it)',
+        'Received に保存しました：{name}（照合済み、端末に表示を要求しました）'),
+    '已保存至 Received：{name}（回读通过，设备未接受打开请求，请从 Received 打开）': (
+        'Saved to Received: {name} (verified; the device did not accept the open request — open it from Received)',
+        'Received に保存しました：{name}（照合済み。端末が表示要求を受け付けなかったため、Received から開いてください）'),
+    '尚未配置直连。请在 App 的「快捷投递」中迁移现有配对。': (
+        'Direct connection is not set up yet. Import the existing pairing under Quick Send in the app.',
+        '直接接続がまだ設定されていません。App の「クイック送信」で既存のペアリングを移行してください。'),
+    '未找到唯一的已有配对。请先确认当前 Mac 的设备配对信息。': (
+        "Could not find a single existing pairing. Check this Mac's device pairing first.",
+        '既存のペアリングを一意に特定できません。この Mac の端末ペアリング情報を確認してください。'),
+    '请输入主机名或 IP 地址，不含协议和端口。': (
+        'Enter a host name or IP address without a scheme or port.',
+        'ホスト名または IP アドレスを、プロトコルやポートを付けずに入力してください。'),
+    '无法确认设备证书。请连接已配对的设备并检查地址。': (
+        'Cannot verify the device certificate. Connect the paired device and check the address.',
+        '端末の証明書を確認できません。ペアリング済みの端末を接続し、アドレスを確認してください。'),
+    '无法读取设备证书。': (
+        'Cannot read the device certificate.',
+        '端末の証明書を読み取れません。'),
+    '已有不同的设备配置；为避免覆盖，请先保留原配对再更换设备。': (
+        'A different device is already configured. To avoid overwriting it, keep the original pairing before switching devices.',
+        '別の端末がすでに設定されています。上書きを避けるため、元のペアリングを保持してから端末を切り替えてください。'),
+    '剪贴板摘录': ('Clipboard excerpt', 'クリップボードの抜粋'),
+    '另一项设备投递正在进行，请稍后重试。': (
+        'Another delivery to the device is in progress. Try again shortly.',
+        '別の送信が進行中です。しばらくしてから再試行してください。'),
+    '快捷投递排版配置无效，请在 App 中检查排版设置。': (
+        'The quick-send layout settings are invalid. Check the layout in the app.',
+        'クイック送信のレイアウト設定が無効です。App でレイアウトを確認してください。'),
+    '渲染失败：{detail}': ('Rendering failed: {detail}', 'レンダリングに失敗しました：{detail}'),
+    '{error}；PDF 已保留：{path}': ('{error} The PDF was kept: {path}', '{error} PDF は保存してあります：{path}'),
+    '请选择已有的 PDF 文件。': ('Choose an existing PDF file.', '既存の PDF ファイルを選んでください。'),
+    '无法连接设备，请检查 USB / Wi-Fi、设备唤醒状态及设备地址。': (
+        'Cannot connect to the device. Check USB / Wi-Fi, whether the device is awake, and the device address.',
+        '端末に接続できません。USB / Wi-Fi、端末のスリープ状態、端末のアドレスを確認してください。'),
+    '设备协议或配对信息异常，请重新检查连接配置。': (
+        'Unexpected device protocol or pairing data. Check the connection settings again.',
+        '端末のプロトコルまたはペアリング情報に異常があります。接続設定を確認し直してください。'),
+    # deliver.sh, through the `text` action
+    '未找到 pandoc': ('pandoc not found', 'pandoc が見つかりません'),
+    '未找到 typst': ('typst not found', 'typst が見つかりません'),
+    '缺少排版模板': ('The layout template is missing', 'レイアウトテンプレートがありません'),
+    '无法进入渲染目录': ('Cannot enter the rendering folder', 'レンダリング用フォルダーに入れません'),
+    '无法创建临时目录': ('Cannot create a temporary folder', '一時フォルダーを作成できません'),
+    'Quaderno · 投递失败': ('Quaderno · Delivery failed', 'Quaderno · 送信に失敗しました'),
+    'Quaderno · 已保存至 Received': ('Quaderno · Saved to Received', 'Quaderno · Received に保存しました'),
+    '投递失败，请查看设备连接': ('Delivery failed. Check the device connection.', '送信に失敗しました。端末の接続を確認してください。'),
+    '未选择文件': ('No files selected', 'ファイルが選択されていません'),
+    '{file}：暂只支持 PDF、Markdown 和 TXT': (
+        '{file}: only PDF, Markdown and TXT are supported for now',
+        '{file}：現在は PDF・Markdown・TXT のみ対応しています'),
+    '已发送 {sent} 个，失败 {failed} 个。{first}': (
+        'Sent {sent}, failed {failed}. {first}', '{sent} 件送信、{failed} 件失敗。{first}'),
+    '已发送 {sent} 个文件': ('Sent {sent} files', '{sent} 件のファイルを送信しました'),
+    '已发送 1 个文件': ('Sent 1 file', '1 件のファイルを送信しました'),
+    '剪贴板为空，已取消': ('The clipboard is empty — cancelled', 'クリップボードが空のため取り消しました'),
+    'Quaderno · 本机渲染与设备直连自检': (
+        'Quaderno · Local rendering and direct-connection self-check',
+        'Quaderno · ローカルレンダリングと直接接続のセルフチェック'),
+    '✅ PDF 渲染通过': ('✅ PDF rendering passed', '✅ PDF のレンダリングに成功'),
+    '✅ 设备认证与目录读取通过；本次自检未上传文件。': (
+        '✅ Device authentication and folder reading passed; no file was uploaded by this check.',
+        '✅ 端末の認証とフォルダーの読み取りに成功しました。このチェックではファイルをアップロードしていません。'),
+}
+
+
+@functools.lru_cache(maxsize=1)
+def language():
+    """'zh', 'ja' or 'en'. The App passes its own UI language; otherwise follow macOS."""
+    preferred = os.environ.get('QUADERNO_LANG', '')
+    if not preferred:
+        try:
+            output = subprocess.run(['/usr/bin/defaults', 'read', '-g', 'AppleLanguages'],
+                                    capture_output=True, text=True, timeout=3).stdout
+            match = re.search(r'"?([A-Za-z]{2,3})[-_A-Za-z]*"?', output.replace('(', ' '))
+            preferred = match.group(1) if match else ''
+        except (OSError, subprocess.TimeoutExpired):
+            preferred = ''
+    preferred = preferred.lower()
+    return 'zh' if preferred.startswith('zh') else 'ja' if preferred.startswith('ja') else 'en'
+
+
+def tr(text, **values):
+    english, japanese = MESSAGES.get(text, (text, text))
+    template = {'en': english, 'ja': japanese}.get(language(), text)
+    return template.format(**values) if values else template
+
 
 class DirectError(Exception):
     pass
@@ -39,20 +167,20 @@ class DirectError(Exception):
 class DeviceResponseError(DirectError):
     def __init__(self, status):
         self.status = status
-        super().__init__(f'设备请求失败（HTTP {status}）。请检查配对和连接。')
+        super().__init__(tr('设备请求失败（HTTP {status}）。请检查配对和连接。', status=status))
 
 
 class ConnectionFailure(DirectError):
     def __init__(self, code):
         self.code = code
-        message = ("设备证书与已配对设备不一致，已拒绝连接。" if code == 90 else
-                   "设备地址无法连接，请检查 USB / Wi-Fi 和设备唤醒状态。")
+        message = tr("设备证书与已配对设备不一致，已拒绝连接。" if code == 90 else
+                     "设备地址无法连接，请检查 USB / Wi-Fi 和设备唤醒状态。")
         super().__init__(message)
 
 
 class UsbDisconnected(DirectError):
     def __init__(self):
-        super().__init__('USB 上未检测到 QUADERNO，设备已断开。请重新插拔 USB 线后重试。')
+        super().__init__(tr('USB 上未检测到 QUADERNO，设备已断开。请重新插拔 USB 线后重试。'))
 
 
 FUJITSU_USB_VENDOR = 0x04c5
@@ -262,16 +390,16 @@ class Device:
                 except (ConnectionFailure, DeviceResponseError) as error:
                     last_error = error
         if nonce is None:
-            raise last_error or DirectError('未找到可连接的已配对设备。')
+            raise last_error or DirectError(tr('未找到可连接的已配对设备。'))
         signed = pkcs1_15.new(RSA.import_key(self.private_key)).sign(SHA256.new(nonce.encode()))
         response = self.request('PUT', '/auth', json_body={
             'client_id': self.client_id, 'nonce_signed': base64.b64encode(signed).decode()})
         cookie = response.headers.get('set-cookie', '').split(';', 1)[0]
         if not cookie.startswith('Credentials='):
-            raise DirectError('设备未返回有效的登录凭据。')
+            raise DirectError(tr('设备未返回有效的登录凭据。'))
         value = cookie.split('=', 1)[1]
         if not re.fullmatch(r'[A-Za-z0-9+/=_-]+', value):
-            raise DirectError('设备返回的登录凭据格式异常。')
+            raise DirectError(tr('设备返回的登录凭据格式异常。'))
         self.cookie = value
         self.remember_endpoint()
 
@@ -283,9 +411,9 @@ class Device:
         self.authenticate()
         root = self.resolve('Document')
         if not root:
-            raise DirectError('无法读取设备 Document 目录。')
+            raise DirectError(tr('无法读取设备 Document 目录。'))
         entries = self.request('GET', '/folders/' + root['entry_id'] + '/entries2').json()['entry_list']
-        return {'ok': True, 'message': '设备已直连，认证及目录读取通过', 'root_entries': len(entries), 'connection': self.target}
+        return {'ok': True, 'message': tr('设备已直连，认证及目录读取通过'), 'root_entries': len(entries), 'connection': self.target}
 
     def upload(self, source):
         if not self.cookie:
@@ -293,7 +421,7 @@ class Device:
         destination = 'Document/Received'
         parent = self.resolve(destination)
         if not parent or parent.get('entry_type', 'folder') != 'folder':
-            raise DirectError('设备 Received 文件夹不存在，未上传文件。')
+            raise DirectError(tr('设备 Received 文件夹不存在，未上传文件。'))
         remote = destination + '/' + source.name
         if self.resolve(remote):
             remote = destination + '/' + source.stem[:100] + '_' + uuid.uuid4().hex[:8] + '.pdf'
@@ -314,14 +442,13 @@ class Device:
         expected = hashlib.sha256(source.read_bytes()).hexdigest()
         actual = hashlib.sha256(self.request('GET', '/documents/' + document_id + '/file').content).hexdigest()
         if actual != expected:
-            raise DirectError('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。')
+            raise DirectError(tr('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。'))
         info = self.resolve(remote)
         if not info or info['entry_id'] != document_id:
-            raise DirectError('回读已通过，但设备目录未确认新文件。')
+            raise DirectError(tr('回读已通过，但设备目录未确认新文件。'))
         name = remote.rsplit('/', 1)[-1]
-        message = ('已保存至 Received：' + name +
-                   ('（回读通过，已请求设备打开）' if display_requested else
-                    '（回读通过，设备未接受打开请求，请从 Received 打开）'))
+        message = tr('已保存至 Received：{name}（回读通过，已请求设备打开）' if display_requested else
+                     '已保存至 Received：{name}（回读通过，设备未接受打开请求，请从 Received 打开）', name=name)
         return {'ok': True, 'message': message, 'path': remote, 'sha256': expected,
                 'display_requested': display_requested}
 
@@ -343,7 +470,7 @@ def save_private(path, data):
 
 def load_device():
     if not (ROOT / 'connection.json').exists():
-        raise DirectError('尚未配置直连。请在 App 的「快捷投递」中迁移现有配对。')
+        raise DirectError(tr('尚未配置直连。请在 App 的「快捷投递」中迁移现有配对。'))
     settings = json.loads((ROOT / 'connection.json').read_text())
     return Device(settings, (ROOT / 'privatekey.pem').read_bytes(),
                   (ROOT / 'clientid.txt').read_text().strip())
@@ -354,10 +481,10 @@ def import_pairing(address):
     origin = Path.home() / 'Library/Application Support/Fujitsu/QUADERNO PC App'
     candidates = [p for p in origin.rglob('privatekey.dat') if (p.parent / 'deviceid.dat').is_file()]
     if len(candidates) != 1:
-        raise DirectError('未找到唯一的已有配对。请先确认当前 Mac 的设备配对信息。')
+        raise DirectError(tr('未找到唯一的已有配对。请先确认当前 Mac 的设备配对信息。'))
     parsed = urlparse('https://' + address)
     if not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.port:
-        raise DirectError('请输入主机名或 IP 地址，不含协议和端口。')
+        raise DirectError(tr('请输入主机名或 IP 地址，不含协议和端口。'))
     # Bootstrap validates the device's existing certificate chain and canonical hostname.
     # Store its public-key pin, so runtime no longer depends on vendor-installed trust roots.
     result = subprocess.run(['/usr/bin/curl', '--silent', '--show-error', '--noproxy', '*',
@@ -365,10 +492,10 @@ def import_pairing(address):
         'digitalpaper.local:8443:' + address + ':8443', '--output', '/dev/null',
         '--write-out', '%{certs}', 'https://digitalpaper.local:8443/'], capture_output=True, timeout=20)
     if result.returncode:
-        raise DirectError('无法确认设备证书。请连接已配对的设备并检查地址。')
+        raise DirectError(tr('无法确认设备证书。请连接已配对的设备并检查地址。'))
     match = re.search(rb'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', result.stdout, re.S)
     if not match:
-        raise DirectError('无法读取设备证书。')
+        raise DirectError(tr('无法读取设备证书。'))
     public_key = RSA.import_key(match.group()).publickey().export_key(format='DER')
     pin = 'sha256//' + base64.b64encode(hashlib.sha256(public_key).digest()).decode()
     settings = {'address': address, 'public_key_pin': pin}
@@ -381,7 +508,7 @@ def import_pairing(address):
     if (ROOT / 'connection.json').exists():
         old = json.loads((ROOT / 'connection.json').read_text())
         if old.get('public_key_pin') != settings['public_key_pin']:
-            raise DirectError('已有不同的设备配置；为避免覆盖，请先保留原配对再更换设备。')
+            raise DirectError(tr('已有不同的设备配置；为避免覆盖，请先保留原配对再更换设备。'))
     save_private(ROOT / 'privatekey.pem', key)
     save_private(ROOT / 'clientid.txt', client_id.encode())
     save_private(ROOT / 'connection.json', json.dumps(settings).encode())
@@ -435,7 +562,7 @@ def prepare_markdown(text):
             candidates.append(stripped)
     if not title and candidates:
         title = clean_title(re.split(r'[。！？!?]', candidates[0], maxsplit=1)[0])
-    title = title or '剪贴板摘录'
+    title = title or tr('剪贴板摘录')
     metadata['title'] = title
     # Keep original body exactly; title selection changes metadata and filename only.
     rendered = '---\n' + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False) + '---\n\n' + body
@@ -457,7 +584,7 @@ def connection_lock(timeout=30):
                 acquired = True
             except BlockingIOError:
                 if time.monotonic() >= deadline:
-                    raise DirectError('另一项设备投递正在进行，请稍后重试。')
+                    raise DirectError(tr('另一项设备投递正在进行，请稍后重试。'))
                 time.sleep(0.1)
         yield
     finally:
@@ -489,7 +616,7 @@ def load_clipboard_layout():
             raise ValueError('printTime')
         return profile, mode
     except (OSError, ValueError, KeyError, TypeError):
-        raise DirectError('快捷投递排版配置无效，请在 App 中检查排版设置。')
+        raise DirectError(tr('快捷投递排版配置无效，请在 App 中检查排版设置。'))
 
 
 def apply_clipboard_layout(args, directory):
@@ -563,12 +690,12 @@ def render_and_upload(args):
             if result.returncode:
                 output.unlink(missing_ok=True)
                 (directory / 'render.log').write_bytes(result.stderr)
-                raise DirectError('渲染失败：' + result.stderr.decode(errors='replace')[-160:])
+                raise DirectError(tr('渲染失败：{detail}', detail=result.stderr.decode(errors='replace')[-160:]))
             try:
                 authentication.result()
                 result = device.upload(output)
             except Exception as error:
-                raise DirectError(str(error) + '；PDF 已保留：' + str(output)) from error
+                raise DirectError(tr('{error}；PDF 已保留：{path}', error=error, path=output)) from error
     output.unlink(missing_ok=True)
     result['layout_source'] = mode
     return result
@@ -576,7 +703,7 @@ def render_and_upload(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload'])
+    parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'text'])
     parser.add_argument('--address', default='Android.local')
     parser.add_argument('--file')
     parser.add_argument('--input')
@@ -593,8 +720,14 @@ def main():
     parser.add_argument('--size', default='10.5pt')
     parser.add_argument('--leading', default='0.85em')
     parser.add_argument('--font-directory')
+    parser.add_argument('values', nargs='*', help='text: MESSAGE [key=value ...]')
     parser.add_argument('--title', help='file name for render-upload; default derives one from the text')
     args = parser.parse_args()
+    if args.action == 'text':
+        # deliver.sh: print MESSAGE translated, with key=value substitutions.
+        message, *pairs = args.values or ['']
+        print(tr(message, **dict(pair.split('=', 1) for pair in pairs)))
+        return
     try:
         if args.action == 'prepare':
             title, rendered = prepare_markdown(Path(args.input).read_text())
@@ -613,16 +746,16 @@ def main():
             else:
                 source = Path(args.file)
                 if not source.is_file() or source.suffix.lower() != '.pdf':
-                    raise DirectError('请选择已有的 PDF 文件。')
+                    raise DirectError(tr('请选择已有的 PDF 文件。'))
                 result = load_device().upload(source)
         print(json.dumps(result, ensure_ascii=False))
     except Exception as error:
         if isinstance(error, (OSError, subprocess.TimeoutExpired)):
-            message = '无法连接设备，请检查 USB / Wi-Fi、设备唤醒状态及设备地址。'
+            message = tr('无法连接设备，请检查 USB / Wi-Fi、设备唤醒状态及设备地址。')
         elif isinstance(error, DirectError):
             message = str(error)
         else:
-            message = '设备协议或配对信息异常，请重新检查连接配置。'
+            message = tr('设备协议或配对信息异常，请重新检查连接配置。')
         print(json.dumps({'ok': False, 'message': message}, ensure_ascii=False))
         sys.exit(1)
 

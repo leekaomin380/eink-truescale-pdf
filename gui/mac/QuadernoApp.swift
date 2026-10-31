@@ -55,6 +55,7 @@ final class FinderSendService: NSObject {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = [script.path, "--files"] + urls.map(\.path)
+            process.environment = helperEnvironment()
             try? process.run()
             process.waitUntilExit()
         }

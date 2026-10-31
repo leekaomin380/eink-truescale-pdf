@@ -1,11 +1,13 @@
 """Offline invariants: clipboard naming, source preservation, no overwrite, pinned transport."""
 import hashlib
 import importlib.util
+import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
+os.environ['QUADERNO_LANG'] = 'zh-Hans'  # assertions below use the source-language text
 spec = importlib.util.spec_from_file_location('direct', Path(__file__).parents[1] / 'direct/quaderno_direct.py')
 direct = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(direct)
@@ -335,3 +337,30 @@ class ClipboardLayoutTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class MessageLanguageTests(unittest.TestCase):
+    def tearDown(self):
+        direct.language.cache_clear()
+
+    def message_in(self, language, text, **values):
+        direct.language.cache_clear()
+        with patch.dict(os.environ, {'QUADERNO_LANG': language}):
+            return direct.tr(text, **values)
+
+    def test_app_language_selects_translation(self):
+        text = '已保存至 Received：{name}（回读通过，已请求设备打开）'
+        self.assertEqual(self.message_in('en', text, name='a.pdf'),
+                         'Saved to Received: a.pdf (verified; asked the device to open it)')
+        self.assertTrue(self.message_in('ja', text, name='a.pdf').startswith('Received に保存しました：a.pdf'))
+        self.assertTrue(self.message_in('zh-Hans', text, name='a.pdf').startswith('已保存至 Received：a.pdf'))
+
+    def test_unsupported_language_falls_back_to_english(self):
+        self.assertEqual(self.message_in('de-DE', '未选择文件'), 'No files selected')
+
+    def test_every_template_keeps_its_placeholders(self):
+        import string
+        fields = lambda text: {name for _, name, _, _ in string.Formatter().parse(text) if name}
+        for source, translations in direct.MESSAGES.items():
+            for translated in translations:
+                self.assertEqual(fields(translated), fields(source), source)
