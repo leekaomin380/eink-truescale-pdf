@@ -104,11 +104,14 @@ rm -R -- "$APP_DIR"
 ditto "$EXPORT_DIR/$APP_NAME.app" "$APP_DIR"
 
 print ">>> 验证 Developer ID 与 Hardened Runtime"
+# 直连工具（PyInstaller 运行时）的每个 Mach-O 也必须换成 Developer ID，否则公证会拒绝。
+DIRECT_MACHO=("${(@f)$(find "$APP_DIR/Contents/Resources/direct" -type f -exec sh -c 'file -b "$1" | grep -q Mach-O && echo "$1"' _ {} \;)}")
 for f in \
   "$APP_DIR" \
   "$APP_DIR/Contents/Resources/bin/pandoc" \
   "$APP_DIR/Contents/Resources/bin/typst" \
-  "$APP_DIR/Contents/Resources/lib/libgmp.10.dylib"; do
+  "$APP_DIR/Contents/Resources/lib/libgmp.10.dylib" \
+  "${DIRECT_MACHO[@]}"; do
   signature=$(codesign -dv --verbose=4 "$f" 2>&1)
   print -r -- "$signature" | grep -Fq 'Authority=Developer ID Application:' \
     || { print -u2 "不是 Developer ID Application 签名：$f"; exit 1; }
