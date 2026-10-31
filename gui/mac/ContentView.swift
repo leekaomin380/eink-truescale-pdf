@@ -5,6 +5,16 @@ enum InputMode: String, CaseIterable {
     case epub = "文件"
     case text = "文本"
     case wechat = "网页"
+    case shortcut = "快捷投递"
+
+    var title: String {
+        switch self {
+        case .epub: L("文件")
+        case .text: L("文本")
+        case .wechat: L("网页")
+        case .shortcut: L("快捷投递")
+        }
+    }
 }
 
 /// 按条件切换主/次按钮样式。
@@ -24,6 +34,7 @@ private struct PrimaryStyled: ViewModifier {
 struct ContentView: View {
     @Environment(\.undoManager) private var undoManager
     @StateObject private var vm = ConversionViewModel()
+    @ObservedObject private var navigation = MainNavigation.shared
     @State private var inputMode: InputMode = .epub
     @State private var isDragOver = false
     @State private var previewImage: NSImage?
@@ -43,10 +54,10 @@ struct ContentView: View {
     @State private var autoRenderTask: Task<Void, Never>?
 
     private let cjkNames: [String: String] = [
-        "PingFang SC": "苹方", "Songti SC": "宋体", "Heiti SC": "黑体",
-        "STSong": "华文宋体", "Hiragino Sans GB": "冬青黑体",
-        "Noto Serif CJK SC": "思源宋体", "Source Han Sans SC": "思源黑体",
-        "Source Han Serif SC": "思源宋体"
+        "PingFang SC": L("苹方"), "Songti SC": L("宋体"), "Heiti SC": L("黑体"),
+        "STSong": L("华文宋体"), "Hiragino Sans GB": L("冬青黑体"),
+        "Noto Serif CJK SC": L("思源宋体"), "Source Han Sans SC": L("思源黑体"),
+        "Source Han Serif SC": L("思源宋体")
     ]
 
     private func cjkDisplayName(for name: String) -> String {
@@ -64,20 +75,28 @@ struct ContentView: View {
         case .epub:   return vm.sourceFileURL != nil
         case .text:   return !vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .wechat: return !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .shortcut: return false
         }
     }
 
     /// 标题栏显示当前文档，而非固定的应用名 —— macOS 惯例，
     /// 也让同时开多个窗口时能一眼分辨。
     private var windowTitle: String {
+        switch navigation.page {
+        case .settings: return L("设置")
+        case .about: return L("关于 Quaderno Converter")
+        case nil: break
+        }
         switch inputMode {
         case .epub:
-            return vm.sourceFileName.isEmpty ? "电子书转换" : vm.sourceFileName
+            return vm.sourceFileName.isEmpty ? L("电子书转换") : vm.sourceFileName
         case .text:
             let t = vm.pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-            return t.isEmpty ? "粘贴文本" : t
+            return t.isEmpty ? L("粘贴文本") : t
         case .wechat:
-            return vm.wechatURL.isEmpty ? "网页链接" : vm.wechatURL
+            return vm.wechatURL.isEmpty ? L("网页链接") : vm.wechatURL
+        case .shortcut:
+            return L("快捷投递")
         }
     }
 
@@ -108,11 +127,27 @@ struct ContentView: View {
     }
 
     var body: some View {
-        HSplitView {
-            sidebar
-                .frame(minWidth: 300, idealWidth: 360, maxWidth: 520)
-            previewArea
+        Group {
+            switch navigation.page {
+            case .settings:
+                AppSettingsView()
+            case .about:
+                AboutView()
+            case nil:
+                HSplitView {
+                    sidebar
+                        .frame(minWidth: 300, idealWidth: 360, maxWidth: 520)
+                    if inputMode == .shortcut {
+                        QuickSendOverview()
+                            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        previewArea
+                    }
+                }
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .toolbar { pageToolbar }
         .onChange(of: vm.currentPage) { _, _ in
             updatePreview()
         }
@@ -124,6 +159,7 @@ struct ContentView: View {
         .onChange(of: vm.selectedLatinFont)   { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         .onChange(of: vm.bodySize)            { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         .onChange(of: vm.margin)              { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
+        .onChange(of: vm.printTime) { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         .onChange(of: vm.leading)             { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         .onChange(of: vm.selectedDeviceIndex) { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         // 选中文件即视为「要看结果」，无需再点一次按钮。
@@ -136,44 +172,68 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Toolbar: 设置 / 关于
+
+    @ToolbarContentBuilder
+    private var pageToolbar: some ToolbarContent {
+        if navigation.page != nil {
+            ToolbarItem(placement: .navigation) {
+                Button("返回", systemImage: "chevron.left") { navigation.page = nil }
+                    .help(L("返回输入页"))
+            }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            // Buttons, not Toggles: a toolbar Toggle writes its binding while the toolbar is built.
+            Button { togglePage(.settings) } label: {
+                Label("设置", systemImage: navigation.page == .settings ? "gearshape.fill" : "gearshape")
+            }
+            .help(L("设置"))
+            Button { togglePage(.about) } label: {
+                Label("关于", systemImage: navigation.page == .about ? "info.circle.fill" : "info.circle")
+            }
+            .help(L("关于 Quaderno Converter"))
+        }
+    }
+
+    private func togglePage(_ page: MainPage) {
+        navigation.page = navigation.page == page ? nil : page
+    }
+
     // MARK: - Sidebar
 
     private var sidebar: some View {
         VStack(spacing: 0) {
             inputModePicker
-
             Divider()
 
-            if inputMode == .text {
-                textWorkspace
+            if inputMode == .shortcut {
+                ScrollView { QuickSendSidebar() }
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if inputMode == .epub { epubSection }
-                        else { wechatSection }
-
-                        Divider()
-                        settingsSection
+                if inputMode == .text {
+                    textWorkspace
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if inputMode == .epub { epubSection }
+                            else { wechatSection }
+                            Divider()
+                            settingsSection
+                        }
+                        .padding(16)
                     }
-                    .padding(16)
                 }
+                Divider()
+                sidebarFooter
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(2)
             }
-
-            Divider()
-
-            sidebarFooter
-                // 底部操作区不能参与垂直压缩。文本编辑器和设置区内容较长时，
-                // SwiftUI 默认会压缩整个 VStack，导致第二行的「发送到 Quaderno」
-                // 与「另存 PDF」被推到窗口下方，实际存在却完全不可见。
-                .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(2)
         }
     }
 
     private var inputModePicker: some View {
         Picker("输入来源", selection: $inputMode) {
             ForEach(InputMode.allCases, id: \.self) { mode in
-                Text(mode.rawValue).tag(mode)
+                Text(mode.title).tag(mode)
             }
         }
         .labelsHidden()
@@ -185,10 +245,15 @@ struct ContentView: View {
             clearedPasteText = nil
             clearedWechatURL = nil
 
+            if newMode == .shortcut {
+                autoRenderTask?.cancel()
+                return
+            }
             vm.activeKind = switch newMode {
                 case .epub: .epub
                 case .text: .text
                 case .wechat: .wechat
+                case .shortcut: vm.activeKind
             }
 
             // 每个来源的草稿各自保留；切换时只移除与当前来源不再对应的预览。
@@ -249,7 +314,7 @@ struct ContentView: View {
                             Image(systemName: "doc.badge.plus")
                                 .font(.system(size: 24))
                                 .foregroundColor(isDragOver ? .accentColor : .secondary)
-                            Text(isDragOver ? "松开载入" : "拖入文件或点击选择")
+                            Text(isDragOver ? L("松开载入") : L("拖入文件或点击选择"))
                                 .font(.callout)
                                 .foregroundColor(.secondary)
                             Text("EPUB / HTML / FB2 / Markdown")
@@ -263,7 +328,7 @@ struct ContentView: View {
                             Image(systemName: "doc.badge.plus")
                                 .font(.caption)
                                 .foregroundColor(isDragOver ? .accentColor : .secondary)
-                            Text(isDragOver ? "松开载入" : "更换文件")
+                            Text(isDragOver ? L("松开载入") : L("更换文件"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -411,7 +476,7 @@ struct ContentView: View {
 
             if let dev = vm.selectedDevice {
                 HStack(spacing: 6) {
-                    Text(dev.sizeVerified ? "✓ 已实测" : "⚠ 未实测")
+                    Text(dev.sizeVerified ? L("✓ 已实测") : L("⚠ 未实测"))
                         .font(.caption2)
                         .foregroundColor(dev.sizeVerified ? .green : .orange)
                     Text("显示区 \(dev.displaySizeLabel)")
@@ -607,12 +672,12 @@ struct ContentView: View {
             }
 
             Button(action: { vm.exportMarkdown() }) {
-                Label("导出 Markdown…", systemImage: "doc.text")
+                Label(inputMode == .wechat ? L("导出 Markdown（.md）…") : L("导出 Markdown…"), systemImage: "doc.text")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .disabled(vm.isConverting || !hasInput)
-            .help("导出为 Markdown（含图片），供 AI 阅读")
+            .help(inputMode == .wechat ? L("直接保存 .md，保留正文、原文地址与图片链接，供 AI 阅读") : L("导出为 Markdown（含图片），供 AI 阅读"))
         }
     }
 
@@ -622,7 +687,7 @@ struct ContentView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.uturn.backward.circle.fill")
                         .foregroundColor(.accentColor)
-                    Text(inputMode == .wechat ? "链接已清空" : "正文已清空")
+                    Text(inputMode == .wechat ? L("链接已清空") : L("正文已清空"))
                         .font(.caption)
                     Spacer()
                     Button("撤销") {
@@ -689,7 +754,7 @@ struct ContentView: View {
         undoManager?.registerUndo(withTarget: vm) { target in
             target.pasteText = previousText
         }
-        undoManager?.setActionName("清空正文")
+        undoManager?.setActionName(L("清空正文"))
 
         vm.pasteText = ""
         vm.currentPdfURL = nil
@@ -724,7 +789,7 @@ struct ContentView: View {
         undoManager?.registerUndo(withTarget: vm) { target in
             target.wechatURL = previousURL
         }
-        undoManager?.setActionName("清空链接")
+        undoManager?.setActionName(L("清空链接"))
 
         vm.wechatURL = ""
         vm.currentPdfURL = nil

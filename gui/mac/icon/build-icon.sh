@@ -45,10 +45,15 @@ mkdir -p "$SET_DIR"
 render() {  # $1 = px, $2 = 输出 png
   local px="$1" out="$2" svg="$WORK/i$px.svg"
   node "$HERE/icon.mjs" "$px" > "$svg"
+  raster "$svg" "$px" "$out"
+}
+
+raster() {  # $1 = svg, $2 = px, $3 = 输出 png（保留 alpha）
+  local svg="$1" px="$2" out="$3"
   if [[ "$RASTER" == rsvg ]]; then
     rsvg-convert -w "$px" -h "$px" "$svg" -o "$out"
   else
-    local html="$WORK/i$px.html"
+    local html="${svg%.svg}.html"
     printf '<!doctype html><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:transparent}svg{display:block}</style>' > "$html"
     cat "$svg" >> "$html"
     "$CHROME" --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
@@ -84,6 +89,10 @@ cp "$WORK/1024.png" "$OUT_PNG"
 rm -rf "$OUT_ICON"
 mkdir -p "$OUT_ICON/Assets"
 node "$HERE/icon.mjs" --layer     > "$OUT_ICON/Assets/device.svg"
+node "$HERE/icon.mjs" --glow-layer > "$OUT_ICON/Assets/glow.svg"
+# 投影烘焙成 PNG 图层：.icon 里的 SVG filter 不生效（见 icon.mjs 的 shadowLayerSvg）。
+node "$HERE/icon.mjs" --shadow-layer > "$WORK/shadow.svg"
+raster "$WORK/shadow.svg" 1024 "$OUT_ICON/Assets/shadow.png"
 node "$HERE/icon.mjs" --icon-json > "$OUT_ICON/icon.json"
 if ACTOOL="$(xcrun -f actool 2>/dev/null)"; then
   mkdir -p "$WORK/car"

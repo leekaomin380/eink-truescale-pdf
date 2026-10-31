@@ -55,7 +55,12 @@ SDK_ARGS=()
 swiftc \
     "${SDK_ARGS[@]}" \
     "$MAC_DIR/QuadernoApp.swift" \
+    "$MAC_DIR/Localization.swift" \
+    "$MAC_DIR/AboutView.swift" \
     "$MAC_DIR/ContentView.swift" \
+    "$MAC_DIR/QuickSendView.swift" \
+    "$MAC_DIR/DirectDelivery.swift" \
+    "$MAC_DIR/ClipboardLayout.swift" \
     "$MAC_DIR/ConversionViewModel.swift" \
     "$MAC_DIR/wechat/WeChatExtractor.swift" \
     "$MAC_DIR/wechat/ImageInliner.swift" \
@@ -66,6 +71,7 @@ swiftc \
     -framework PDFKit \
     -framework UniformTypeIdentifiers \
     -framework WebKit \
+    -framework IOKit \
     -framework CoreImage \
     -target arm64-apple-macos14.0
 
@@ -85,7 +91,21 @@ fi
 echo ">>> 复制 JS 抽取器"
 cp "$MAC_DIR/wechat/wechat_extractor.js" "$APP_DIR/Contents/Resources/wechat_extractor.js"
 
+echo ">>> 复制直连工具（自带 Python 运行时）"
+DIRECT_RUNTIME="$REPO/direct/runtime-dist/quaderno-direct"
+[[ -x "$DIRECT_RUNTIME/quaderno-direct" ]] || { echo "!!! 请先运行 ./direct/build-helper.sh"; exit 1; }
+ditto "$DIRECT_RUNTIME" "$APP_DIR/Contents/Resources/direct"
+
+echo ">>> 编译多语言文案（zh-Hans / en / ja）"
+python3 "$SCRIPT_DIR/l10n-compile.py" "$MAC_DIR/Localization/Localizable.xcstrings" "$APP_DIR/Contents/Resources"
+for lproj in "$MAC_DIR"/Localization/*.lproj; do
+  mkdir -p "$APP_DIR/Contents/Resources/${lproj:t}"
+  cp "$lproj"/*.strings "$APP_DIR/Contents/Resources/${lproj:t}/" 2>/dev/null || true
+done
+
 echo ">>> 复制运行时依赖"
+cp "$REPO/deliver.sh" "$APP_DIR/Contents/Resources/deliver.sh"
+chmod +x "$APP_DIR/Contents/Resources/deliver.sh"
 cp "$REPO/config.sh" "$APP_DIR/Contents/Resources/config.sh"
 cp "$REPO/devices.json" "$APP_DIR/Contents/Resources/devices.json"
 cp "$REPO/book.sh" "$APP_DIR/Contents/Resources/book.sh"
@@ -174,6 +194,16 @@ for f in "$BIN_DIR"/* "$LIB_DIR"/*; do
   codesign -f "${SIGN_FLAGS[@]}" -s "$SIGN_IDENTITY" "$f" >/dev/null 2>&1
 done
 
+echo ">>> 签名直连运行时"
+find "$APP_DIR/Contents/Resources/direct" -type f | while IFS= read -r runtime_file; do
+  if file -b "$runtime_file" | grep -q 'Mach-O'; then
+    codesign -f "${SIGN_FLAGS[@]}" -s "$SIGN_IDENTITY" "$runtime_file" >/dev/null 2>&1
+  fi
+done
+find "$APP_DIR/Contents/Resources/direct" -type d -name '*.framework' | while IFS= read -r framework; do
+  codesign -f "${SIGN_FLAGS[@]}" -s "$SIGN_IDENTITY" "$framework" >/dev/null 2>&1
+done
+
 # 自检：bundle 内的二进制不得再引用 Homebrew 路径
 # `|| true` 不可省：grep 无匹配时返回 1，在 set -e 下会让这条赋值直接中断构建 ——
 # 也就是「检查通过」反而使构建失败。此坑已实际踩到一次。
@@ -197,6 +227,7 @@ echo "    ✅ 无残留 Homebrew 路径引用"
 echo ">>> 打包第三方许可文本"
 LIC_DIR="$APP_DIR/Contents/Resources/licenses"
 mkdir -p "$LIC_DIR"
+cp "$REPO/direct/licenses/"* "$LIC_DIR/"
 for pkg in pandoc typst gmp; do
   pfx=$(brew --prefix "$pkg" 2>/dev/null) || continue
   for name in COPYING.md COPYING COPYING.LESSERv3 LICENSE NOTICE; do

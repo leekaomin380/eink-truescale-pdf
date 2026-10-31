@@ -116,6 +116,11 @@ $endif$
 $if(pagewidth)$
 #set page(width: $pagewidth$, height: $pageheight$$if(pagemargin)$, margin: $pagemargin$$endif$)
 $endif$
+// QUADERNO 的底部文件名栏会覆盖靠近屏幕下沿的页脚。
+// 默认 footer-descent=30% 会把页脚向下推入底边距；本次 12mm 边距下
+// 页码基线距底边仅约 6mm。改为从底边距上沿开始排页脚，
+// 基线上移 3.6mm，不改变正文区域或分页。关闭时间时同样生效。
+#set page(footer-descent: 0pt)
 $if(printtime)$
 #set page(
   footer: context {

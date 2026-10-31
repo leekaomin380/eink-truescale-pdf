@@ -8,10 +8,10 @@ struct SupportedFileFormat {
     let typeName: String
 
     static let all: [SupportedFileFormat] = [
-        SupportedFileFormat(extensions: ["epub"], typeName: "EPUB 电子书"),
-        SupportedFileFormat(extensions: ["html", "htm"], typeName: "HTML 文档"),
-        SupportedFileFormat(extensions: ["fb2"], typeName: "FB2 电子书"),
-        SupportedFileFormat(extensions: ["md", "markdown"], typeName: "Markdown 文档")
+        SupportedFileFormat(extensions: ["epub"], typeName: L("EPUB 电子书")),
+        SupportedFileFormat(extensions: ["html", "htm"], typeName: L("HTML 文档")),
+        SupportedFileFormat(extensions: ["fb2"], typeName: L("FB2 电子书")),
+        SupportedFileFormat(extensions: ["md", "markdown"], typeName: L("Markdown 文档"))
     ]
 
     static var allowedExtensions: [String] {
@@ -105,8 +105,8 @@ class ConversionViewModel: ObservableObject {
     // EPUB / File mode
     @Published var sourceFileURL: URL?
 
-    /// 网页模式最近一次渲染落盘的中间 .md（图片已内联）—— 导出 Markdown 直接复用。
-    private(set) var lastWechatMarkdownURL: URL?
+    /// 网页正文按原文链接缓存，与 PDF 排版和图片内联独立。
+    private var cachedWebArticle: (url: String, title: String, markdown: String)?
     @Published var sourceFileName = ""
     @Published var pdfTitle = ""  // derived title for delivery filename
 
@@ -119,7 +119,7 @@ class ConversionViewModel: ObservableObject {
     func selectSourceFile(url: URL) -> Bool {
         guard SupportedFileFormat.isSupported(url: url) else {
             let ext = url.pathExtension.isEmpty ? "" : ".\(url.pathExtension.lowercased())"
-            setStatus("暂不支持 \(ext) 文件\n支持 EPUB、HTML、FB2 和 Markdown", .err)
+            setStatus(L("暂不支持 \(ext) 文件\n支持 EPUB、HTML、FB2 和 Markdown"), .err)
             return false
         }
         sourceFileURL = url
@@ -149,11 +149,11 @@ class ConversionViewModel: ObservableObject {
     static let marginChoices   = ["8mm", "10mm", "12mm", "14mm", "16mm"]
 
     static let leadingChoices: [(String, String)] = [
-        ("0.7em",  "1.4 倍"),
-        ("0.8em",  "1.5 倍"),
-        ("0.85em", "1.55 倍"),
-        ("0.9em",  "1.6 倍"),
-        ("1.0em",  "1.7 倍"),
+        ("0.7em",  L("1.4 倍")),
+        ("0.8em",  L("1.5 倍")),
+        ("0.85em", L("1.55 倍")),
+        ("0.9em",  L("1.6 倍")),
+        ("1.0em",  L("1.7 倍")),
     ]
 
     /// 上次渲染所依据的输入指纹（内容 + 全部排版参数）。
@@ -246,7 +246,7 @@ class ConversionViewModel: ObservableObject {
     /// 这是「发送/另存自行保证正确」的入口。
     func ensureFresh(then next: @escaping () -> Void) {
         guard isStale else { next(); return }
-        setStatus("内容有变，正在重新渲染…", .run)
+        setStatus(L("内容有变，正在重新渲染…"), .run)
         renderCurrentInput { ok in
             guard ok else { return }   // 失败时状态已由渲染流程写明
             next()
@@ -274,8 +274,10 @@ class ConversionViewModel: ObservableObject {
         // File I/O only — fast, safe on main thread
         loadConfig()
         loadDevices()
+        applySavedPreferences()
+        publishSharedLayout()
         hasQuaderno = FileManager.default.fileExists(
-            atPath: "/Applications/QUADERNO PC App.app")
+            atPath: repoURL.appendingPathComponent("direct/quaderno-direct").path)
 
         // Populate font lists with config defaults so pickers are immediately usable
         if !config.fonts.isEmpty { latinFonts = [config.fonts[0]] }
@@ -290,6 +292,7 @@ class ConversionViewModel: ObservableObject {
                 self.cjkFonts = fonts.cjk
                 self.latinFonts = fonts.latin
                 self.reconcileSavedFonts()
+                self.publishSharedLayout()
             }
         }
     }
@@ -346,6 +349,7 @@ class ConversionViewModel: ObservableObject {
         static let margin    = "pref.margin"
         static let leading   = "pref.leading"
         static let deviceIdx = "pref.deviceIndex"
+        static let printTime = "pref.printTime"
     }
 
     /// 用已保存的偏好覆盖出厂默认值。
@@ -356,6 +360,7 @@ class ConversionViewModel: ObservableObject {
     /// 导致中文字体下拉整个空掉）。故所有值取用前都要校验。
     private func applySavedPreferences() {
         let d = UserDefaults.standard
+        if d.object(forKey: PrefKey.printTime) != nil { printTime = d.bool(forKey: PrefKey.printTime) }
         // 字号/边距/行距：只接受仍在选项表里的值
         if let v = d.string(forKey: PrefKey.bodySize),
            Self.bodySizeChoices.contains(v) { bodySize = v }
@@ -391,6 +396,15 @@ class ConversionViewModel: ObservableObject {
         d.set(margin,            forKey: PrefKey.margin)
         d.set(leading,           forKey: PrefKey.leading)
         d.set(selectedDeviceIndex, forKey: PrefKey.deviceIdx)
+        d.set(printTime, forKey: PrefKey.printTime)
+        publishSharedLayout()
+    }
+
+    private func publishSharedLayout() {
+        let profile = ClipboardLayoutProfile(cjkFont: selectedCjkFont, latinFont: selectedLatinFont,
+            bodySize: bodySize, margin: margin, leading: leading, pageW: config.pageW, pageH: config.pageH,
+            docLang: docLang, printTime: printTime, deviceIndex: selectedDeviceIndex)
+        ClipboardLayoutStore.shared.updateShared(profile, cjk: cjkFonts, latin: latinFonts, devices: devices)
     }
 
     private func loadDevices() {
@@ -469,8 +483,8 @@ class ConversionViewModel: ObservableObject {
         m.measureMm = measure
         m.cjkPerLine = cjk
         m.latinPerLine = lat
-        m.cjkVerdict = cjk > 45 ? "偏密" : cjk > 40 ? "偏长" : cjk >= 28 ? "合适" : "偏短"
-        m.latinVerdict = lat > 75 ? "偏长" : lat >= 45 ? "合适" : "偏短"
+        m.cjkVerdict = cjk > 45 ? L("偏密") : cjk > 40 ? L("偏长") : cjk >= 28 ? L("合适") : L("偏短")
+        m.latinVerdict = lat > 75 ? L("偏长") : lat >= 45 ? L("合适") : L("偏短")
         if let p = pages { m.pages = p }
         if let s = pageSizes {
             m.pageSizes = s
@@ -483,10 +497,10 @@ class ConversionViewModel: ObservableObject {
 
     func convertEpub() {
         guard let src = sourceFileURL else {
-            setStatus("请先选择文件", .err)
+            setStatus(L("请先选择文件"), .err)
             return
         }
-        setStatus("渲染中…", .run)
+        setStatus(L("渲染中…"), .run)
         isConverting = true
 
         DispatchQueue.global(qos: .userInitiated).async { [self] in
@@ -508,7 +522,7 @@ class ConversionViewModel: ObservableObject {
                 isConverting = false
                 if result.exitCode != 0 {
                     let cleanErr = Self.parseErrorMessage(result.stderr)
-                    setStatus("渲染失败：\(cleanErr)", .err)
+                    setStatus(L("渲染失败：\(cleanErr)"), .err)
                     self.finishPendingRender(success: false)
                     return
                 }
@@ -519,7 +533,7 @@ class ConversionViewModel: ObservableObject {
                 self.currentPage = 1
                 let sizes = getPageSizes(pdf: outPdf, pages: self.totalPages)
                 self.renderMetrics = computeMetrics(pages: self.totalPages, pageSizes: sizes)
-                setStatus("渲染完成，共 \(self.totalPages) 页", .ok)
+                setStatus(L("渲染完成，共 \(self.totalPages) 页"), .ok)
                 self.markRendered()
                 self.finishPendingRender(success: true)
             }
@@ -529,10 +543,10 @@ class ConversionViewModel: ObservableObject {
     func convertText() {
         let text = pasteText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            setStatus("请先粘贴文本", .err)
+            setStatus(L("请先粘贴文本"), .err)
             return
         }
-        setStatus("渲染中…", .run)
+        setStatus(L("渲染中…"), .run)
         isConverting = true
 
         var finalText = text
@@ -544,10 +558,10 @@ class ConversionViewModel: ObservableObject {
         renderMarkdown(finalText, title: title)
     }
 
-    func convertWechat() {
+    func convertWechat(markdownOnly: Bool = false) {
         let raw = wechatURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else {
-            setStatus("请先粘贴链接", .err)
+            setStatus(L("请先粘贴链接"), .err)
             return
         }
         // 放宽为任意 http(s) 网页 —— 抽取器已支持通用容器（article / main /
@@ -558,10 +572,10 @@ class ConversionViewModel: ObservableObject {
               let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https",
               url.host?.isEmpty == false else {
-            setStatus("请粘贴 http(s) 开头的网页链接", .err)
+            setStatus(L("请粘贴 http(s) 开头的网页链接"), .err)
             return
         }
-        setStatus("抓取网页…", .run)
+        setStatus(L("抓取网页…"), .run)
         isConverting = true
 
         fetchWechatHTML(url: url) { [weak self] result in
@@ -570,11 +584,11 @@ class ConversionViewModel: ObservableObject {
             case .failure(let e):
                 DispatchQueue.main.async {
                     self.isConverting = false
-                    self.setStatus("抓取失败：\(e.localizedDescription)", .err)
+                    self.setStatus(L("抓取失败：\(e.localizedDescription)"), .err)
                 }
             case .success(let html):
                 DispatchQueue.main.async {
-                    self.setStatus("抽取正文…", .run)
+                    self.setStatus(L("抽取正文…"), .run)
                     LocalExtraction.run(html: html, url: raw) { [weak self] outcome in
                         guard let self = self else { return }
                         guard let article = outcome.article else {
@@ -582,46 +596,40 @@ class ConversionViewModel: ObservableObject {
                                 self.isConverting = false
                                 let msg: String
                                 if outcome.reason.contains("RISK_GRAY") {
-                                    msg = "微信要求验证，请稍后再试或在微信中打开一次该文章"
+                                    msg = L("微信要求验证，请稍后再试或在微信中打开一次该文章")
                                 } else if outcome.reason.contains("CONTENT_GONE") {
-                                    msg = "该文章已被删除或无法查看"
+                                    msg = L("该文章已被删除或无法查看")
                                 } else if outcome.reason.contains("NEEDS_JS") {
                                     // 骨架在但正文空 —— 页面靠 JS 渲染，而 WKWebView
                                     // 为隐私与速度屏蔽了全部网络请求，故拿不到正文。
                                     // 这类站点本工具无解，直接给出可行的替代路径。
-                                    msg = "该页面正文由脚本动态加载，无法抓取 —— 请在浏览器中复制正文，改用「粘贴文本」"
+                                    msg = L("该页面正文由脚本动态加载，无法抓取 —— 请在浏览器中复制正文，改用「粘贴文本」")
                                 } else if outcome.reason.contains("STRUCT_MISSING") || outcome.reason.contains("EXTRACT_EMPTY") {
-                                    msg = "未能识别正文结构（可能是首页/列表页，请用文章本身的链接）"
+                                    msg = L("未能识别正文结构（可能是首页/列表页，请用文章本身的链接）")
                                 } else if outcome.reason == "js_not_bundled" {
-                                    msg = "JS 抽取器未打包，请重新构建 app"
+                                    msg = L("JS 抽取器未打包，请重新构建 app")
                                 } else {
-                                    msg = "抽取失败：\(outcome.reason)"
+                                    msg = L("抽取失败：\(outcome.reason)")
                                 }
                                 self.setStatus(msg, .err)
                             }
                             return
                         }
-                        DispatchQueue.main.async {
-                            self.setStatus("下载图片…", .run)
-                        }
                         let title = article.title
-                        let author = article.author
                         DispatchQueue.main.async {
                             if !title.isEmpty { self.pasteTitle = title }
                         }
-                        var md = article.markdown
-                        if !title.isEmpty && !md.hasPrefix("---") {
-                            let safeTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
-                            var frontmatter = "---\ntitle: \"\(safeTitle)\"\n"
-                            if let author = author, !author.isEmpty {
-                                frontmatter += "author: \"\(author.replacingOccurrences(of: "\"", with: "\\\""))\"\n"
-                            }
-                            frontmatter += "---\n\n"
-                            md = frontmatter + md
+                        let md = Self.webArticleMarkdown(article, sourceURL: raw)
+                        self.cachedWebArticle = (url: raw, title: title, markdown: md)
+                        if markdownOnly {
+                            self.isConverting = false
+                            self.saveWebMarkdown(markdown: md, title: title)
+                            return
                         }
+                        self.setStatus(L("下载图片…"), .run)
                         ImageInliner.inline(markdown: md) { [weak self] finalMd in
                             DispatchQueue.main.async {
-                                self?.setStatus("渲染中…", .run)
+                                self?.setStatus(L("渲染中…"), .run)
                             }
                             self?.renderMarkdown(finalMd, title: title)
                         }
@@ -645,7 +653,7 @@ class ConversionViewModel: ObservableObject {
             }
             guard let data = data else {
                 completion(.failure(NSError(domain: "Quaderno", code: 3,
-                    userInfo: [NSLocalizedDescriptionKey: "未从微信获取到数据"])))
+                    userInfo: [NSLocalizedDescriptionKey: L("未从微信获取到数据")])))
                 return
             }
             let htmlString = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) ?? ""
@@ -663,7 +671,6 @@ class ConversionViewModel: ObservableObject {
             let outPdf = workDir.appendingPathComponent("wechat_\(slug).pdf")
 
             try? markdown.write(to: mdFile, atomically: true, encoding: .utf8)
-            DispatchQueue.main.async { self.lastWechatMarkdownURL = mdFile }
 
             let result = runShell([
                 repoURL.appendingPathComponent("book.sh").path,
@@ -679,7 +686,7 @@ class ConversionViewModel: ObservableObject {
             DispatchQueue.main.async { [self] in
                 isConverting = false
                 if result.exitCode != 0 {
-                    setStatus("渲染失败：\(result.stderr.suffix(200))", .err)
+                    setStatus(L("渲染失败：\(result.stderr.suffix(200))"), .err)
                     self.finishPendingRender(success: false)
                     return
                 }
@@ -689,7 +696,7 @@ class ConversionViewModel: ObservableObject {
                 self.currentPage = 1
                 let sizes = getPageSizes(pdf: outPdf, pages: self.totalPages)
                 self.renderMetrics = computeMetrics(pages: self.totalPages, pageSizes: sizes)
-                setStatus("渲染完成，共 \(self.totalPages) 页", .ok)
+                setStatus(L("渲染完成，共 \(self.totalPages) 页"), .ok)
                 self.markRendered()
                 self.finishPendingRender(success: true)
             }
@@ -723,16 +730,10 @@ class ConversionViewModel: ObservableObject {
 
     func deliverToDevice() {
         guard let pdfURL = currentPdfURL else {
-            setStatus("无可发送的内容", .err)
+            setStatus(L("无可发送的内容"), .err)
             return
         }
-        setStatus("正在发送到 Quaderno…", .run)
-
-        let app = "/Applications/QUADERNO PC App.app"
-        guard FileManager.default.fileExists(atPath: app) else {
-            setStatus("未找到 QUADERNO 客户端", .err)
-            return
-        }
+        setStatus(L("正在发送到 Quaderno…"), .run)
 
         // Deliver a copy to protect the original (invariant I2)
         // Use title as filename — QUADERNO client displays file name in its list
@@ -745,7 +746,7 @@ class ConversionViewModel: ObservableObject {
             copyName = pdfURL.lastPathComponent
         }
         let copyURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("p2q_deliver")
+            .appendingPathComponent("p2q_deliver_" + UUID().uuidString)
             .appendingPathComponent(copyName)
         try? FileManager.default.createDirectory(
             at: copyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -755,22 +756,24 @@ class ConversionViewModel: ObservableObject {
             }
             try FileManager.default.copyItem(at: pdfURL, to: copyURL)
         } catch {
-            setStatus("创建投递副本失败：\(error.localizedDescription)", .err)
+            setStatus(L("创建投递副本失败：\(error.localizedDescription)"), .err)
             return
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-gj", "-na", app, "--args", "--print", copyURL.path]
-        try? process.run()
-        process.waitUntilExit()
-
-        setStatus("已交客户端，稍后同步到设备", .ok)
+        Task { @MainActor in
+            let result = await DirectDelivery.run(["upload", "--file", copyURL.path])
+            if result.success {
+                try? FileManager.default.removeItem(at: copyURL)
+                setStatus(result.message, .ok)
+            } else {
+                setStatus(result.message + L("（本地投递副本已保留）"), .err)
+            }
+        }
     }
 
     func savePDF() {
         guard let pdfURL = currentPdfURL else {
-            setStatus("无可保存的内容", .err)
+            setStatus(L("无可保存的内容"), .err)
             return
         }
 
@@ -787,41 +790,33 @@ class ConversionViewModel: ObservableObject {
                 }
                 try FileManager.default.copyItem(at: pdfURL, to: dest)
                 DispatchQueue.main.async {
-                    self?.setStatus("已保存到 \(dest.path)", .ok)
+                    self?.setStatus(L("已保存到 \(dest.path)"), .ok)
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self?.setStatus("保存失败：\(error.localizedDescription)", .err)
+                    self?.setStatus(L("保存失败：\(error.localizedDescription)"), .err)
                 }
             }
         }
     }
 
 
-    /// 导出为 Markdown，供 AI 阅读 / 二次编辑。
-    ///
-    /// 三种输入统一收敛为「一份源 + 一次 pandoc」：
-    /// - 文件模式：源文件本身（EPUB/FB2/HTML/Markdown）
-    /// - 文本模式：粘贴的文本（有标题则补 YAML frontmatter）
-    /// - 网页模式：渲染时落盘的中间 .md（图片已内联为 data: URI）
-    ///
-    /// pandoc 在导出目录内以 `--extract-media=media` 运行，故图片落在 media/ 且
-    /// .md 里是相对路径 —— 用绝对路径的话，解压到别处后链接全部失效。
-    /// data: URI 同样会被抽出为文件，避免 AI 读到数 MB 的 base64。
-    /// `-s` 保留 frontmatter（否则标题丢失）；`--wrap=none` 不做硬折行。
-    ///
-    /// 无图片时直接存 .md；有图片时打包 .zip（.md + media/）。
+    /// 网页直接导出 UTF-8 .md，保留原始图片链接；文件/文本仍由 pandoc 转换。
     func exportMarkdown() {
         let kind = activeKind
-        // 网页模式的中间 .md 是渲染副产物；链接改了但没重新解析时，它属于上一篇。
-        if kind == .wechat && isStale {
-            ensureFresh { self.exportMarkdown() }
+        guard !isConverting else { return }
+        if kind == .wechat {
+            let raw = wechatURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let article = cachedWebArticle, article.url == raw {
+                saveWebMarkdown(markdown: article.markdown, title: article.title)
+            } else {
+                convertWechat(markdownOnly: true)
+            }
             return
         }
         let src = sourceFileURL
         let text = pasteText.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let wechatMd = lastWechatMarkdownURL
 
         // 输入、源格式、默认文件名
         var inputURL: URL?
@@ -830,7 +825,7 @@ class ConversionViewModel: ObservableObject {
         var baseName: String
         switch kind {
         case .epub:
-            guard let src = src else { setStatus("请先选择文件", .err); return }
+            guard let src = src else { setStatus(L("请先选择文件"), .err); return }
             inputURL = src
             switch src.pathExtension.lowercased() {
             case "epub":        fmt = "epub"
@@ -840,7 +835,7 @@ class ConversionViewModel: ObservableObject {
             }
             baseName = src.deletingPathExtension().lastPathComponent
         case .text:
-            guard !text.isEmpty else { setStatus("请先粘贴文本", .err); return }
+            guard !text.isEmpty else { setStatus(L("请先粘贴文本"), .err); return }
             var content = text
             if !title.isEmpty && !text.hasPrefix("---") {
                 let safe = title.replacingOccurrences(of: "\"", with: "\\\"")
@@ -849,18 +844,13 @@ class ConversionViewModel: ObservableObject {
             inputText = content
             baseName = title.isEmpty ? "document" : title
         case .wechat:
-            guard let md = wechatMd,
-                  FileManager.default.fileExists(atPath: md.path) else {
-                setStatus("请先完成网页解析后再导出", .err); return
-            }
-            inputURL = md
-            baseName = title.isEmpty ? "article" : title
+            return // 网页导出在上方独立处理。
         }
         baseName = baseName.replacingOccurrences(
             of: #"[/\\:*?"<>|]"#, with: "_", options: .regularExpression)
         if baseName.count > 60 { baseName = String(baseName.prefix(60)) }
 
-        setStatus("正在导出 Markdown…", .run)
+        setStatus(L("正在导出 Markdown…"), .run)
 
         DispatchQueue.global(qos: .userInitiated).async { [self] in
             let fm = FileManager.default
@@ -876,7 +866,7 @@ class ConversionViewModel: ObservableObject {
             if let t = inputText {
                 let tmp = workDir.appendingPathComponent("input.md")
                 do { try t.write(to: tmp, atomically: true, encoding: .utf8) }
-                catch { fail("导出失败：\(error.localizedDescription)"); return }
+                catch { fail(L("导出失败：\(error.localizedDescription)")); return }
                 inputURL = tmp
             }
             guard let input = inputURL else { return }
@@ -891,7 +881,7 @@ class ConversionViewModel: ObservableObject {
             ], cwd: mdDir)
             let mdFile = mdDir.appendingPathComponent(mdName)
             guard result.exitCode == 0, fm.fileExists(atPath: mdFile.path) else {
-                fail("导出失败：\(Self.parseErrorMessage(result.stderr))"); return
+                fail(L("导出失败：\(Self.parseErrorMessage(result.stderr))")); return
             }
 
             let mediaDir = mdDir.appendingPathComponent("media")
@@ -900,7 +890,7 @@ class ConversionViewModel: ObservableObject {
             if hasMedia {
                 artifact = workDir.appendingPathComponent(baseName + ".zip")
                 do { try zipDirectory(at: mdDir, to: artifact) }
-                catch { fail("打包失败：\(error.localizedDescription)"); return }
+                catch { fail(L("打包失败：\(error.localizedDescription)")); return }
             } else {
                 artifact = mdFile
             }
@@ -916,12 +906,46 @@ class ConversionViewModel: ObservableObject {
                         if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
                         try fm.copyItem(at: artifact, to: dest)
                         self.setStatus(hasMedia
-                            ? "已保存到 \(dest.lastPathComponent)（解压得 .md 与 media/）"
-                            : "已保存到 \(dest.lastPathComponent)", .ok)
+                            ? L("已保存到 \(dest.lastPathComponent)（解压得 .md 与 media/）")
+                            : L("已保存到 \(dest.lastPathComponent)"), .ok)
                     } catch {
-                        self.setStatus("保存失败：\(error.localizedDescription)", .err)
+                        self.setStatus(L("保存失败：\(error.localizedDescription)"), .err)
                     }
                 }
+            }
+        }
+    }
+
+    /// JSON 字符串也是合法 YAML 双引号标量，能安全保留引号、反斜线和换行。
+    static func webArticleMarkdown(_ article: ExtractedArticle, sourceURL: String) -> String {
+        func quoted(_ value: String) -> String {
+            let data = try! JSONEncoder().encode(value)
+            return String(decoding: data, as: UTF8.self)
+        }
+        var fields = ["title: \(quoted(article.title))", "source: \(quoted(sourceURL))"]
+        for (key, value) in [("author", article.author), ("date", article.date), ("site", article.site)] {
+            if let value = value, !value.isEmpty { fields.append("\(key): \(quoted(value))") }
+        }
+        return "---\n" + fields.joined(separator: "\n") + "\n---\n\n" + article.markdown + "\n"
+    }
+
+    private func saveWebMarkdown(markdown: String, title: String) {
+        let safeName = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"[/\\:*?"<>|\x00-\x1F]"#, with: "_", options: .regularExpression)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = (safeName.isEmpty ? "article" : String(safeName.prefix(60))) + ".md"
+        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        panel.begin { [weak self] response in
+            guard let self = self else { return }
+            guard response == .OK, let destination = panel.url else {
+                self.setStatus(L("已取消 Markdown 导出"), .info)
+                return
+            }
+            do {
+                try markdown.write(to: destination, atomically: true, encoding: .utf8)
+                self.setStatus(L("已保存到 \(destination.lastPathComponent)"), .ok)
+            } catch {
+                self.setStatus(L("保存失败：\(error.localizedDescription)"), .err)
             }
         }
     }
@@ -941,7 +965,7 @@ class ConversionViewModel: ObservableObject {
         proc.waitUntilExit()
         guard proc.terminationStatus == 0 else {
             throw NSError(domain: "Quaderno", code: Int(proc.terminationStatus),
-                userInfo: [NSLocalizedDescriptionKey: "zip 命令失败"])
+                userInfo: [NSLocalizedDescriptionKey: L("zip 命令失败")])
         }
     }
 
@@ -1059,6 +1083,6 @@ class ConversionViewModel: ObservableObject {
             }
         }
 
-        return lines.first(where: { $0.contains("❌") })?.replacingOccurrences(of: "❌ ", with: "") ?? "渲染未完成"
+        return lines.first(where: { $0.contains("❌") })?.replacingOccurrences(of: "❌ ", with: "") ?? L("渲染未完成")
     }
 }
