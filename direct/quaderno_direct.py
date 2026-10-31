@@ -31,7 +31,7 @@ from Crypto.Signature import pkcs1_15
 import yaml
 
 ROOT = Path.home() / 'Library/Application Support/Quaderno Converter/Direct'
-APP_BUNDLE_ID = 'com.eink-truescale.gui'
+APP_BUNDLE_ID = 'io.github.leekaomin380.quaderno-converter'
 
 # User-facing messages: zh-Hans source text -> (English, 日本語). Same languages as the App.
 MESSAGES = {

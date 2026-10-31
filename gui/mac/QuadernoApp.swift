@@ -4,6 +4,10 @@ import SwiftUI
 struct QuadernoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        LegacyPreferences.migrate()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -53,6 +57,26 @@ final class FinderSendService: NSObject {
             process.environment = helperEnvironment()
             try? process.run()
             process.waitUntilExit()
+        }
+    }
+}
+
+/// bundle ID 曾为 com.eink-truescale.gui（与 App Store 版 TrueScalePDF 相同，2026-10-31 更换）。
+/// 首次启动时从旧偏好文件复制排版、界面语言等设置。直接读文件：按域名读取会落到
+/// 同 ID 的 App Store 版沙盒容器，而不是本 App 曾经使用的偏好。
+enum LegacyPreferences {
+    private static let doneKey = "migratedFromLegacyBundleID"
+
+    static func migrate() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: doneKey) else { return }
+        defaults.set(true, forKey: doneKey)
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Preferences/com.eink-truescale.gui.plist")
+        guard let data = try? Data(contentsOf: url),
+              let legacy = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else { return }
+        for (key, value) in legacy where key.hasPrefix("pref.") || key == "isAdvancedExpanded" || key == AppLanguage.key {
+            if defaults.object(forKey: key) == nil { defaults.set(value, forKey: key) }
         }
     }
 }
