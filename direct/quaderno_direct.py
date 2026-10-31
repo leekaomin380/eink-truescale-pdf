@@ -142,21 +142,21 @@ MESSAGES = {
     '缺少排版模板': ('The layout template is missing', 'レイアウトテンプレートがありません'),
     '无法进入渲染目录': ('Cannot enter the rendering folder', 'レンダリング用フォルダーに入れません'),
     '无法创建临时目录': ('Cannot create a temporary folder', '一時フォルダーを作成できません'),
-    'Quaderno · 投递失败': ('Quaderno · Delivery failed', 'Quaderno · 送信に失敗しました'),
-    'Quaderno · 已保存至 Received': ('Quaderno · Saved to Received', 'Quaderno · Received に保存しました'),
+    'TrueScale · 投递失败': ('TrueScale · Delivery failed', 'TrueScale · 送信に失敗しました'),
+    'TrueScale · 已保存至 Received': ('TrueScale · Saved to Received', 'TrueScale · Received に保存しました'),
     '投递失败，请查看设备连接': ('Delivery failed. Check the device connection.', '送信に失敗しました。端末の接続を確認してください。'),
     '未选择文件': ('No files selected', 'ファイルが選択されていません'),
     '{file}：暂只支持 PDF、Markdown 和 TXT': (
         '{file}: only PDF, Markdown and TXT are supported for now',
         '{file}：現在は PDF・Markdown・TXT のみ対応しています'),
-    '已发送 {sent} 个，失败 {failed} 个。{first}': (
+    '已投递 {sent} 个，失败 {failed} 个。{first}': (
         'Sent {sent}, failed {failed}. {first}', '{sent} 件送信、{failed} 件失敗。{first}'),
-    '已发送 {sent} 个文件': ('Sent {sent} files', '{sent} 件のファイルを送信しました'),
-    '已发送 1 个文件': ('Sent 1 file', '1 件のファイルを送信しました'),
+    '已投递 {sent} 个文件': ('Sent {sent} files', '{sent} 件のファイルを送信しました'),
+    '已投递 1 个文件': ('Sent 1 file', '1 件のファイルを送信しました'),
     '剪贴板为空，已取消': ('The clipboard is empty — cancelled', 'クリップボードが空のため取り消しました'),
-    'Quaderno · 本机渲染与设备直连自检': (
-        'Quaderno · Local rendering and direct-connection self-check',
-        'Quaderno · ローカルレンダリングと直接接続のセルフチェック'),
+    'TrueScale · 本机渲染与设备直连自检': (
+        'TrueScale · Local rendering and direct-connection self-check',
+        'TrueScale · ローカルレンダリングと直接接続のセルフチェック'),
     '✅ PDF 渲染通过': ('✅ PDF rendering passed', '✅ PDF のレンダリングに成功'),
     '✅ 设备认证与目录读取通过；本次自检未上传文件。': (
         '✅ Device authentication and folder reading passed; no file was uploaded by this check.',

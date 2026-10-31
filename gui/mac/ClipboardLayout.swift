@@ -120,7 +120,7 @@ struct ClipboardLayoutSettings: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("跟随主窗口排版")
-                    Text(store.useShared ? L("与「文件、文本、网页」共用设置") : L("仅影响 ⌃1 与 Finder 右键投递"))
+                    Text(store.useShared ? L("与「文件、文本、网页」共用设置") : L("只用于 ⌃1 与 Finder 右键投递"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -130,7 +130,7 @@ struct ClipboardLayoutSettings: View {
             .padding(12)
             Divider().padding(.leading, 12)
             VStack(alignment: .leading, spacing: 12) {
-                chips
+                LayoutChips()
                 if !store.useShared {
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
                         GridRow {
@@ -185,13 +185,19 @@ struct ClipboardLayoutSettings: View {
         .onChange(of: store.independent) { _, _ in store.persist() }
     }
 
-    private var chips: some View {
+}
+
+/// 当前 ⌃1 / Finder 投递排版的参数标签（设置页与快捷键投递页共用）。
+struct LayoutChips: View {
+    @ObservedObject private var store = ClipboardLayoutStore.shared
+
+    var body: some View {
         let profile = store.effective
         let device = store.devices.indices.contains(profile.deviceIndex) ? store.devices[profile.deviceIndex].name : nil
         let leading = ConversionViewModel.leadingChoices.first { $0.0 == profile.leading }.map { L("行距 \($0.1)") }
         let items = [device, profile.bodySize, leading, L("边距 \(profile.margin)"),
                      profile.cjkFont + " / " + profile.latinFont].compactMap { $0 }
-        return FlowLayout(spacing: 6) {
+        FlowLayout(spacing: 6) {
             ForEach(items, id: \.self) { item in
                 Text(verbatim: item).font(.caption)
                     .padding(.horizontal, 8).padding(.vertical, 3)

@@ -160,7 +160,7 @@ struct DeviceFolderSidebar: View {
                 Spacer()
             }
 
-            if monitor.usbModel == nil && !model.loaded {
+            if !model.loaded && !monitor.isReady {
                 Text("连接设备并唤醒后点刷新。使用 Wi-Fi 时也可以直接刷新。")
                     .font(.caption).foregroundStyle(.secondary)
             }

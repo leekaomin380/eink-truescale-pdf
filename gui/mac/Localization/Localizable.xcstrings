@@ -116,7 +116,7 @@
         }
       }
     },
-    "App 内发送": {
+    "App 内投递": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -356,18 +356,18 @@
         }
       }
     },
-    "USB 未连接": {
+    "USB 已连接，但设备网络未就绪。请唤醒设备；仍不行请拔插 USB 线。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Not connected by USB"
+            "value": "Connected by USB, but the device's network is not ready. Wake the device; if that doesn't help, replug the USB cable."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "USB 未接続"
+            "value": "USB は接続されていますが、端末のネットワークが準備できていません。端末をスリープ解除し、それでもだめなら USB ケーブルを挿し直してください。"
           }
         }
       }
@@ -400,6 +400,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "macOS では App がグローバルショートカットを代わりに割り当てられないため、「ショートカット」で一度だけ設定します。1 分ほどで終わります。"
+          }
+        }
+      }
+    },
+    "macOS 不提供查询服务开关的接口。菜单中没有这一项时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中打开「投递到 QUADERNO」。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS offers no way to check whether a service is switched on. If the menu item is missing, turn on “Send to QUADERNO” in System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS にはサービスの有効・無効を確認する方法がありません。メニューに表示されない場合は「システム設定 → キーボード → キーボードショートカット → サービス → ファイルとフォルダ」で「QUADERNO へ送信」をオンにしてください。"
           }
         }
       }
@@ -448,6 +464,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "·"
+          }
+        }
+      }
+    },
+    "⌃1 与 Finder 投递的排版": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layout for ⌃1 and Finder Sending"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃1 と Finder 送信のレイアウト"
           }
         }
       }
@@ -548,6 +580,22 @@
         }
       }
     },
+    "与 Finder 右键投递共用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared with sending from Finder."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder からの送信と共通です。"
+          }
+        }
+      }
+    },
     "与「文件、文本、网页」共用设置": {
       "localizations": {
         "en": {
@@ -592,22 +640,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "和文フォント"
-          }
-        }
-      }
-    },
-    "仅影响 ⌃1 与 Finder 右键投递": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Applies only to ⌃1 and Finder sends"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌃1 と Finder からの送信にのみ適用"
           }
         }
       }
@@ -1012,22 +1044,6 @@
         }
       }
     },
-    "发送到 Quaderno": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send to Quaderno"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quaderno へ送信"
-          }
-        }
-      }
-    },
     "取消": {
       "localizations": {
         "en": {
@@ -1056,6 +1072,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "PDF を別名で保存…"
+          }
+        }
+      }
+    },
+    "只用于 ⌃1 与 Finder 右键投递": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used only for ⌃1 and Finder sending"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃1 と Finder からの送信にのみ使用"
           }
         }
       }
@@ -1200,6 +1232,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "端末で開く"
+          }
+        }
+      }
+    },
+    "在设置中修改…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change in Settings…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定で変更…"
           }
         }
       }
@@ -1492,22 +1540,6 @@
         }
       }
     },
-    "已启用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有効"
-          }
-        }
-      }
-    },
     "已复制命令": {
       "localizations": {
         "en": {
@@ -1524,18 +1556,34 @@
         }
       }
     },
-    "已连接": {
+    "已连接 · USB": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connected"
+            "value": "Connected · USB"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "接続済み"
+            "value": "接続済み · USB"
+          }
+        }
+      }
+    },
+    "已连接 · 网络": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected · Network"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続済み · ネットワーク"
           }
         }
       }
@@ -1616,6 +1664,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "WeChat が認証を求めています。時間をおいて再試行するか、WeChat で一度記事を開いてください。"
+          }
+        }
+      }
+    },
+    "快捷键": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hotkey"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカット"
           }
         }
       }
@@ -1776,6 +1840,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "送信方法"
+          }
+        }
+      }
+    },
+    "投递到 QUADERNO": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send to QUADERNO"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QUADERNO へ送信"
           }
         }
       }
@@ -2116,7 +2196,7 @@
         }
       }
     },
-    "无可发送的内容": {
+    "无可投递的内容": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2276,6 +2356,22 @@
         }
       }
     },
+    "未连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未接続"
+          }
+        }
+      }
+    },
     "本机检查通过": {
       "localizations": {
         "en": {
@@ -2340,22 +2436,6 @@
         }
       }
     },
-    "正在发送到 Quaderno…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sending to Quaderno…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quaderno へ送信中…"
-          }
-        }
-      }
-    },
     "正在导出 Markdown…": {
       "localizations": {
         "en": {
@@ -2368,6 +2448,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Markdown を書き出し中…"
+          }
+        }
+      }
+    },
+    "正在投递到 QUADERNO…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending to QUADERNO…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QUADERNO へ送信中…"
           }
         }
       }
@@ -2692,7 +2788,23 @@
         }
       }
     },
-    "由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「发送到 QUADERNO」。": {
+    "由本 App 提供": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provided by this app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この App が提供"
+          }
+        }
+      }
+    },
+    "由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「投递到 QUADERNO」。": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2772,7 +2884,7 @@
         }
       }
     },
-    "直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复发送。": {
+    "直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复投递。": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -3236,22 +3348,6 @@
         }
       }
     },
-    "设备设置…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Device Settings…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "端末の設定…"
-          }
-        }
-      }
-    },
     "设备通信协议参考（MIT）。未打包或调用其代码。": {
       "localizations": {
         "en": {
@@ -3476,18 +3572,18 @@
         }
       }
     },
-    "请插好 USB 线并唤醒设备；使用 Wi-Fi 时运行自检确认": {
+    "请用 USB 连接并唤醒设备；使用 Wi-Fi 时确认设备与 Mac 在同一网络。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Plug in the USB cable and wake the device; on Wi-Fi, run Check to confirm"
+            "value": "Connect the device by USB and wake it; on Wi-Fi, make sure it is on the same network as the Mac."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "USB ケーブルを接続して端末をスリープ解除してください。Wi-Fi の場合はチェックで確認します"
+            "value": "USB で接続して端末をスリープ解除してください。Wi-Fi の場合は Mac と同じネットワークにあるか確認してください。"
           }
         }
       }

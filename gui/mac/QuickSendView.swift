@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import IOKit
+import Network
 
 // 「快捷键投递」页（左栏排版，右栏用法）、全局的连接状态与最近投递，以及主窗口内的「设置」页。
 
@@ -20,7 +21,7 @@ struct DeliveryRecord: Decodable, Identifiable {
         switch source {
         case "clipboard": "⌃1"
         case "finder": L("Finder 右键")
-        default: L("App 内发送")
+        default: L("App 内投递")
         }
     }
 }
@@ -30,8 +31,31 @@ struct DeliveryRecord: Decodable, Identifiable {
 final class QuickSendMonitor: ObservableObject {
     static let shared = QuickSendMonitor()
     @Published private(set) var usbModel: String?
+    /// 正在发布 _dp_fujitsu._tcp 的设备型号（USB 或 Wi-Fi）。只有设备网络可用时才会出现。
+    @Published private(set) var advertisedModel: String?
     @Published private(set) var history: [DeliveryRecord] = []
     private var timer: Timer?
+    private var browser: NWBrowser?
+
+    /// 只看 USB 总线会把「插着线但网络未就绪」误报为已连接（实测：休眠后链路 inactive）。
+    enum Link: Equatable {
+        case ready(model: String, usb: Bool)
+        case usbNotReady(model: String)
+        case disconnected
+    }
+
+    var link: Link {
+        if let model = advertisedModel ?? usbModel, advertisedModel != nil {
+            return .ready(model: model, usb: usbModel != nil)
+        }
+        if let model = usbModel { return .usbNotReady(model: model) }
+        return .disconnected
+    }
+
+    var isReady: Bool {
+        if case .ready = link { return true }
+        return false
+    }
     private var viewers = 0
 
     private let historyURL = FileManager.default.homeDirectoryForCurrentUser
@@ -40,6 +64,7 @@ final class QuickSendMonitor: ObservableObject {
     func start() {
         viewers += 1
         refresh()
+        startBrowsing()
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
             Task { @MainActor in QuickSendMonitor.shared.refresh() }
@@ -59,6 +84,23 @@ final class QuickSendMonitor: ObservableObject {
         if model != usbModel { usbModel = model }
         let records = loadHistory()
         if records.map(\.id) != history.map(\.id) { history = records }
+    }
+
+    /// 事件驱动，无需轮询；首次使用时 macOS 会请求「本地网络」权限。
+    private func startBrowsing() {
+        guard browser == nil else { return }
+        let browser = NWBrowser(for: .bonjour(type: "_dp_fujitsu._tcp", domain: "local."), using: .tcp)
+        browser.browseResultsChangedHandler = { results, _ in
+            let names: [String] = results.compactMap {
+                if case let .service(name, _, _, _) = $0.endpoint { return name }
+                return nil
+            }
+            // 实例名形如「Digital Paper FMVDP51」，取最后的型号。
+            let model = names.first.map { $0.split(separator: " ").last.map(String.init) ?? $0 }
+            Task { @MainActor in QuickSendMonitor.shared.advertisedModel = model }
+        }
+        browser.start(queue: .main)
+        self.browser = browser
     }
 
     private func loadHistory() -> [DeliveryRecord] {
@@ -124,9 +166,37 @@ final class MainNavigation: ObservableObject {
 struct QuickSendSidebar: View {
     @ObservedObject private var monitor = QuickSendMonitor.shared
 
+    @State private var showSetup = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            SettingsSection("排版") { ClipboardLayoutSettings() }
+            SettingsSection("快捷键") {
+                HStack(spacing: 12) {
+                    Text(verbatim: "⌃1").font(.caption.weight(.semibold)).frame(width: 34, height: 22)
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.tertiary))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("剪贴板快捷键")
+                        Text("由 macOS「快捷指令」提供").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("设置快捷键…") { showSetup = true }.buttonStyle(.link)
+                }
+                .padding(12)
+            }
+            SettingsSection("排版") {
+                VStack(alignment: .leading, spacing: 10) {
+                    LayoutChips()
+                    HStack {
+                        Text("与 Finder 右键投递共用。").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("在设置中修改…") { MainNavigation.shared.show(.settings) }.buttonStyle(.link)
+                    }
+                }
+                .padding(12)
+            }
+        }
+        .sheet(isPresented: $showSetup) {
+            HotkeySetupSheet(scriptURL: Bundle.main.url(forResource: "deliver", withExtension: "sh"))
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -180,6 +250,7 @@ struct AppSettingsView: View {
                 SettingsSection("语言") { LanguageSettings() }
                 SettingsSection("设备") { deviceGroup }
                 SettingsSection("投递入口") { entriesGroup }
+                SettingsSection("⌃1 与 Finder 投递的排版") { ClipboardLayoutSettings() }
                 SettingsSection("常见问题") { faq }
             }
             .padding(32)
@@ -194,17 +265,11 @@ struct AppSettingsView: View {
     private var deviceGroup: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                Circle().fill(monitor.usbModel == nil ? Color.red : Color.green).frame(width: 10, height: 10)
+                let status = LinkStatus(monitor.link)
+                Circle().fill(status.color).frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 2) {
-                    if let model = monitor.usbModel {
-                        Text("已连接").fontWeight(.semibold)
-                        Text(verbatim: QuadernoUSB.displayName(for: model) + " · USB")
-                            .font(.caption).foregroundStyle(.secondary)
-                    } else {
-                        Text("USB 未连接").fontWeight(.semibold)
-                        Text("请插好 USB 线并唤醒设备；使用 Wi-Fi 时运行自检确认")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                    Text(verbatim: status.title).fontWeight(.semibold)
+                    Text(verbatim: status.detail).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if checking { ProgressView().controlSize(.small) }
@@ -262,7 +327,8 @@ struct AppSettingsView: View {
                     Text("PDF、Markdown、TXT · 无需设置").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("已启用").foregroundStyle(.green)
+                Text("由本 App 提供").foregroundStyle(.secondary)
+                    .help(L("macOS 不提供查询服务开关的接口。菜单中没有这一项时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中打开「投递到 QUADERNO」。"))
             }
             .padding(12)
         }
@@ -273,8 +339,8 @@ struct AppSettingsView: View {
             Text("提示「no such file or directory」？").fontWeight(.medium)
             Text("通常是快捷指令仍引用已经移动的源码目录。重新复制本页命令并替换旧命令即可。命令使用 App 内置脚本，归档源码不会影响它；移动或重命名 App 后，需要重新复制命令。")
             Text("Ctrl+1 自动取内容自带标题、Markdown 标题或第一句正文作为文件名，并附加时间。App 主窗口仍使用手动标题。设备已有同名文件时另存新文件，避免覆盖手写批注。")
-            Text("直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复发送。")
-            Text("由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「发送到 QUADERNO」。")
+            Text("直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复投递。")
+            Text("由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「投递到 QUADERNO」。")
         }
         .font(.callout)
         .padding(12)
@@ -626,17 +692,14 @@ struct USBStatusBadge: View {
 
     var body: some View {
         Button { MainNavigation.shared.show(.settings) } label: {
+            let status = LinkStatus(monitor.link)
             HStack(spacing: 6) {
-                Circle().fill(monitor.usbModel == nil ? Color.red : Color.green).frame(width: 8, height: 8)
-                if let model = monitor.usbModel {
-                    Text(verbatim: QuadernoUSB.displayName(for: model))
-                } else {
-                    Text("USB 未连接")
-                }
+                Circle().fill(status.color).frame(width: 8, height: 8)
+                Text(verbatim: status.title)
             }
             .font(.callout)
         }
-        .help(L("设备设置…"))
+        .help(LinkStatus(monitor.link).detail)
         .onAppear { monitor.start() }
     }
 }
@@ -684,5 +747,29 @@ struct RecentDeliveriesList: View {
         let when = record.date.map { RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()) } ?? record.time
         let route = record.via == "official" ? L("经 QUADERNO PC App") : L("回读校验通过")
         return [when, record.sourceLabel, route].joined(separator: " · ")
+    }
+}
+
+/// 三态连接状态的颜色与文案（工具栏与设置页共用）。
+struct LinkStatus {
+    let color: Color
+    let title: String
+    let detail: String
+
+    init(_ link: QuickSendMonitor.Link) {
+        switch link {
+        case let .ready(model, usb):
+            color = .green
+            title = QuadernoUSB.displayName(for: model)
+            detail = usb ? L("已连接 · USB") : L("已连接 · 网络")
+        case let .usbNotReady(model):
+            color = .yellow
+            title = QuadernoUSB.displayName(for: model)
+            detail = L("USB 已连接，但设备网络未就绪。请唤醒设备；仍不行请拔插 USB 线。")
+        case .disconnected:
+            color = .red
+            title = L("未连接")
+            detail = L("请用 USB 连接并唤醒设备；使用 Wi-Fi 时确认设备与 Mac 在同一网络。")
+        }
     }
 }

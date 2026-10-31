@@ -670,7 +670,7 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 if vm.hasQuaderno {
                     Button(action: { vm.ensureFresh { vm.deliverToDevice() } }) {
-                        Text("发送到 Quaderno")
+                        Text("投递到 QUADERNO")
                             .frame(maxWidth: .infinity)
                     }
                     .modifier(PrimaryStyled(isPrimary: inputMode != .wechat))

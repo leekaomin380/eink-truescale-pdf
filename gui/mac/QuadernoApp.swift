@@ -39,7 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Finder 右键「发送到 QUADERNO」（Info.plist NSServices）。PDF 原样上传，Markdown / TXT 按 Ctrl+1 排版渲染。
+/// Finder 右键「投递到 QUADERNO」（Info.plist NSServices）。PDF 原样上传，Markdown / TXT 按 Ctrl+1 排版渲染。
 final class FinderSendService: NSObject {
     @objc func sendToQuaderno(_ pasteboard: NSPasteboard, userData: String?,
                               error: AutoreleasingUnsafeMutablePointer<NSString?>) {
