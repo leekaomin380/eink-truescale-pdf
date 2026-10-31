@@ -20,7 +20,8 @@ struct DeviceEntry: Identifiable, Hashable {
         self.name = name
         type = json["type"] as? String ?? ""
         path = json["path"] as? String ?? ""
-        size = json["size"] as? Int
+        // 设备把 file_size 作为字符串返回（实测），兼容数字。
+        size = (json["size"] as? Int) ?? (json["size"] as? String).flatMap { Int($0) }
         modified = (json["modified"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
     }
 }
@@ -48,7 +49,8 @@ final class DeviceFilesModel: ObservableObject {
         return parts.indices.map { (parts[$0], parts[...$0].joined(separator: "/")) }
     }
 
-    func load(_ path: String? = nil) async {
+    /// keepMessage：操作成功后刷新时保留「已删除」等结果消息；普通浏览时清除旧消息。
+    func load(_ path: String? = nil, keepMessage: Bool = false) async {
         loading = true
         defer { loading = false }
         let result = await DirectDelivery.run(["browse", "--path", path ?? folderPath])
@@ -60,6 +62,7 @@ final class DeviceFilesModel: ObservableObject {
         folderID = listing.id
         entries = listing.entries
         loaded = true
+        if !keepMessage { message = "" }
     }
 
     func goUp() async {
@@ -72,7 +75,7 @@ final class DeviceFilesModel: ObservableObject {
     func perform(_ arguments: [String]) async -> Bool {
         let result = await DirectDelivery.run(arguments)
         report(result.message, error: !result.success)
-        if result.success { await load() }
+        if result.success { await load(keepMessage: true) }
         return result.success
     }
 
@@ -202,17 +205,20 @@ struct DeviceDocumentsView: View {
             Divider()
 
             Table(model.documents, selection: $selection) {
-                TableColumn("名称") { doc in Label(doc.name, systemImage: "doc.richtext").lineLimit(1) }
+                TableColumn("名称") { doc in
+                    Label(doc.name, systemImage: "doc.richtext").lineLimit(1).truncationMode(.middle).help(doc.name)
+                }
+                .width(min: 140, ideal: 200)
                 TableColumn("大小") { doc in
                     Text(doc.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "—")
                         .foregroundStyle(.secondary)
                 }
-                .width(min: 60, ideal: 80, max: 110)
+                .width(min: 50, ideal: 64, max: 100)
                 TableColumn("修改时间") { doc in
-                    Text(doc.modified.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "—")
+                    Text(doc.modified.map { $0.formatted(date: .numeric, time: .shortened) } ?? "—")
                         .foregroundStyle(.secondary)
                 }
-                .width(min: 110, ideal: 150, max: 200)
+                .width(min: 100, ideal: 124, max: 180)
             }
             .contextMenu(forSelectionType: DeviceEntry.ID.self) { ids in
                 if let doc = model.documents.first(where: { ids.contains($0.id) }) {
