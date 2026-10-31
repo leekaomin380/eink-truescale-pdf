@@ -67,3 +67,15 @@ Ctrl+1 默认共享「文件、文本、网页」当前共用的字号、字体�
 默认及已导出的本地字体可使用缩小扫描范围；数学、未知文字脚本或字体文件不可用时保留完整系统字体回退，不依赖不存在的字体缓存。
 
 同一合成短文的单次脚本对照：旧版约 4.38 秒，新版默认共享排版约 1.75 秒（包含回读校验，关闭了通知用于比较；不包含快捷键系统调度和墨水屏刷新，不代表长文或多图内容时延）。独立 14pt 与共享 10.5pt 已分别从设备回读 PDF，验证字号发生变化且共用设置未被改动。验收后恢复默认共享模式。
+
+## Finder 右键投递（2026-10-31）
+
+App「快捷投递 → Finder 右键投递 → 安装右键菜单」会把 `发送到 QUADERNO.workflow` 复制到 `~/Library/Services/`。
+在 Finder 中右键 PDF、Markdown 或 TXT 文件，选择「快速操作 → 发送到 QUADERNO」即可投递，可以多选。
+
+- PDF 原样上传；Markdown 和 TXT 按 Ctrl+1 排版渲染，文件名沿用原文件名。
+- 与 Ctrl+1 相同：保存到 `Document/Received/`，回读校验，不覆盖同名文件。
+- Workflow 只执行 App 包内的 `deliver.sh --files`，并在 `/Applications` 与 `~/Applications` 中查找 App。
+- 其他格式（EPUB 等）会提示暂不支持，不上传。
+
+实机验证：通过 `automator -i` 运行 workflow，一个 PDF 和一个 Markdown 用时 4.6 秒，两个文件都回读通过。

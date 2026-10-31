@@ -536,7 +536,10 @@ def render_and_upload(args):
     title, markdown = prepare_markdown(text)
     rendered = directory / 'render.md'
     rendered.write_text(markdown)
-    output = directory / (title + '_' + datetime.now().strftime('%Y%m%d-%H%M%S') + '.pdf')
+    # A file sent from Finder keeps its own name; clipboard text gets a dated title.
+    name = clean_title(getattr(args, 'title', None) or '')
+    stem = name or title + '_' + datetime.now().strftime('%Y%m%d-%H%M%S')
+    output = directory / (stem + '.pdf')
     command = [args.pandoc, str(rendered), '-f', args.format, '--template=' + args.template,
                '-o', str(output), '--pdf-engine=' + args.typst]
     if args.print_time:
@@ -590,6 +593,7 @@ def main():
     parser.add_argument('--size', default='10.5pt')
     parser.add_argument('--leading', default='0.85em')
     parser.add_argument('--font-directory')
+    parser.add_argument('--title', help='file name for render-upload; default derives one from the text')
     args = parser.parse_args()
     try:
         if args.action == 'prepare':

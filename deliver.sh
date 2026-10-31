@@ -1,5 +1,5 @@
 #!/bin/zsh
-# 剪贴板 Markdown → 自动命名 PDF → QUADERNO 直连（不调用官方客户端）。
+# 剪贴板 Markdown（或 --files 指定的文件）→ PDF → QUADERNO 直连（不调用官方客户端）。
 set -uo pipefail
 export LANG="en_US.UTF-8" LC_ALL="en_US.UTF-8"
 SCRIPT_DIR="${0:A:h}"
@@ -66,20 +66,61 @@ if [[ "${1:-}" == "--check" || "${1:-}" == "-c" ]]; then
   exit 0
 fi
 
+# Markdown → PDF → upload in one helper process; sets RESULT / RESULT_CODE.
+render_upload() {
+  local -a args=(render-upload --input "$1" --directory "$JOBDIR"
+    --pandoc "$(command -v pandoc)" --typst "$(command -v typst)"
+    --template "$TEMPLATE" --format "$MD_FORMAT"
+    --page-width "$PAGE_W" --page-height "$PAGE_H" --margin "$PAGE_MARGIN"
+    --size "$BODY_SIZE" --leading "$LEADING")
+  local font
+  for font in "${FONTS[@]}"; do args+=(--font "$font"); done
+  [[ -d "$JOBDIR/fonts" ]] && args+=(--font-directory "$JOBDIR/fonts")
+  [[ -n "${2:-}" ]] && args+=(--title "$2")
+  RESULT=$("$DIRECT_HELPER" "${args[@]}")
+  RESULT_CODE=$?
+}
+result_message() {
+  printf '%s' "$RESULT" | /usr/bin/plutil -extract message raw -o - - 2>/dev/null || print -r -- "$1"
+}
+
+# Finder 右键「发送到 QUADERNO」：PDF 原样上传；Markdown / 纯文本按 Ctrl+1 排版渲染，沿用文件名。
+if [[ "${1:-}" == "--files" ]]; then
+  shift
+  (( $# )) || fail "未选择文件" 1
+  SENT=0
+  FAILURES=()
+  for file in "$@"; do
+    case "${file:e:l}" in
+      pdf) RESULT=$("$DIRECT_HELPER" upload --file "$file"); RESULT_CODE=$? ;;
+      md|markdown|txt) render_upload "$file" "${file:t:r}" ;;
+      *) FAILURES+=("${file:t}：暂只支持 PDF、Markdown 和 TXT"); continue ;;
+    esac
+    if (( RESULT_CODE == 0 )); then
+      (( SENT++ ))
+      print -r -- "$RESULT"
+    else
+      print -ru2 -- "$RESULT"
+      FAILURES+=("${file:t}：$(result_message "投递失败，请查看设备连接")")
+    fi
+  done
+  if (( ${#FAILURES} )); then
+    fail "已发送 $SENT 个，失败 ${#FAILURES} 个。${FAILURES[1]}" 4
+  fi
+  if (( SENT == 1 )); then
+    notify "Quaderno · 已保存至 Received" "$(result_message "已发送 1 个文件")"
+  else
+    notify "Quaderno · 已保存至 Received" "已发送 $SENT 个文件"
+  fi
+  exit 0
+fi
+
 # 自动命名仅属于剪贴板入口，不改变主窗口手动输入标题的规则。
 pbpaste > "$JOBDIR/input.md"
 [[ -n "$(tr -d '[:space:]' < "$JOBDIR/input.md")" ]] || fail "剪贴板为空，已取消" 1
 # Single process: authenticate while rendering, then upload, open and verify.
-RENDERARGS=(render-upload --input "$JOBDIR/input.md" --directory "$JOBDIR"
-  --pandoc "$(command -v pandoc)" --typst "$(command -v typst)"
-  --template "$TEMPLATE" --format "$MD_FORMAT"
-  --page-width "$PAGE_W" --page-height "$PAGE_H" --margin "$PAGE_MARGIN"
-  --size "$BODY_SIZE" --leading "$LEADING")
-for font in "${FONTS[@]}"; do RENDERARGS+=(--font "$font"); done
-[[ -d "$JOBDIR/fonts" ]] && RENDERARGS+=(--font-directory "$JOBDIR/fonts")
-RESULT=$("$DIRECT_HELPER" "${RENDERARGS[@]}")
-RESULT_CODE=$?
-MESSAGE=$(printf '%s' "$RESULT" | /usr/bin/plutil -extract message raw -o - - 2>/dev/null) || MESSAGE="投递失败，请查看设备连接"
+render_upload "$JOBDIR/input.md"
+MESSAGE=$(result_message "投递失败，请查看设备连接")
 if (( RESULT_CODE != 0 )); then
   print -ru2 -- "$RESULT"
   fail "$MESSAGE" 4

@@ -278,6 +278,24 @@ class SpeedSafetyTests(unittest.TestCase):
                     direct.render_and_upload(args)
             self.assertEqual(next(directory.glob('*.pdf')).read_bytes(), b'%PDF-preserved')
 
+    def test_finder_file_keeps_its_own_name(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temp, patch.object(direct, 'ROOT', Path(temp) / 'config'):
+            directory = Path(temp); input_file = directory / 'notes.md'; input_file.write_text('# 别的标题\n正文')
+            args = SimpleNamespace(directory=temp, input=str(input_file), pandoc='pandoc', typst='typst',
+                format='markdown', template='template', font=[], page_width='157mm', page_height='209mm',
+                margin='14mm', size='10pt', leading='0.85em', font_directory=None, title='读书笔记: 第一章')
+            uploaded = []
+            class FakeDevice:
+                def authenticate(self): pass
+                def upload(self, source): uploaded.append(source.name); return {'ok': True}
+            def render(command, **kw):
+                Path(command[command.index('-o') + 1]).write_bytes(b'%PDF')
+                return SimpleNamespace(returncode=0, stderr=b'')
+            with patch.object(direct, 'load_device', return_value=FakeDevice()), patch.object(direct.subprocess, 'run', side_effect=render):
+                direct.render_and_upload(args)
+            self.assertEqual(uploaded, ['读书笔记_ 第一章.pdf'])
+
 
 class ClipboardLayoutTests(unittest.TestCase):
     def profile(self, size):
