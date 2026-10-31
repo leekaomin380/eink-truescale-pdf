@@ -126,16 +126,6 @@ struct QuickSendSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            HStack(spacing: 10) {
-                Circle().fill(monitor.usbModel == nil ? Color.red : Color.green).frame(width: 8, height: 8)
-                if let model = monitor.usbModel {
-                    Text(verbatim: QuadernoUSB.displayName(for: model) + " · USB").font(.callout)
-                } else {
-                    Text("USB 未连接").font(.callout)
-                }
-                Spacer()
-                Button("设备设置…") { MainNavigation.shared.show(.settings) }.buttonStyle(.link)
-            }
             SettingsSection("排版") { ClipboardLayoutSettings() }
         }
         .padding(20)
@@ -319,19 +309,28 @@ struct QuickSendOverview: View {
     @ObservedObject private var monitor = QuickSendMonitor.shared
 
     var body: some View {
-        VStack(spacing: 36) {
-            HStack(alignment: .top, spacing: 18) {
-                step(icon: Image(systemName: "doc.on.doc"), title: "复制文字", detail: "任何应用中的 Markdown 或纯文本")
-                arrow
-                step(icon: Text(verbatim: "⌃1").font(.system(size: 22, weight: .semibold)), title: "按 ⌃1", detail: "自动命名，排版成 PDF")
-                arrow
-                step(icon: Image(systemName: "ipad"), title: "在设备上打开", detail: "存入 Received，校验后自动打开")
+        ScrollView {
+            VStack(spacing: 36) {
+                // 窄窗口时三步改为竖排，避免横排超出右栏被两侧裁切。
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 18) { steps(arrow: arrow) }
+                    VStack(spacing: 18) { steps(arrow: EmptyView()) }
+                }
+                recent
             }
-            recent
+            .padding(32)
+            .frame(maxWidth: .infinity)
         }
-        .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .underPageBackgroundColor))
+    }
+
+    @ViewBuilder private func steps<Arrow: View>(arrow: Arrow) -> some View {
+        step(icon: Image(systemName: "doc.on.doc"), title: "复制文字", detail: "任何应用中的 Markdown 或纯文本")
+        arrow
+        step(icon: Text(verbatim: "⌃1").font(.system(size: 22, weight: .semibold)), title: "按 ⌃1", detail: "自动命名，排版成 PDF")
+        arrow
+        step(icon: Image(systemName: "ipad"), title: "在设备上打开", detail: "存入 Received，校验后自动打开")
     }
 
     private var arrow: some View {
@@ -651,5 +650,26 @@ struct SetupGuideSheet: View {
     private func close() {
         UserDefaults.standard.set(true, forKey: Pairing.guideDismissedKey)
         dismiss()
+    }
+}
+
+/// 窗口工具栏中的全局 USB 连接状态；点击打开设置页。
+struct USBStatusBadge: View {
+    @ObservedObject private var monitor = QuickSendMonitor.shared
+
+    var body: some View {
+        Button { MainNavigation.shared.show(.settings) } label: {
+            HStack(spacing: 6) {
+                Circle().fill(monitor.usbModel == nil ? Color.red : Color.green).frame(width: 8, height: 8)
+                if let model = monitor.usbModel {
+                    Text(verbatim: QuadernoUSB.displayName(for: model))
+                } else {
+                    Text("USB 未连接")
+                }
+            }
+            .font(.callout)
+        }
+        .help(L("设备设置…"))
+        .onAppear { monitor.start() }
     }
 }

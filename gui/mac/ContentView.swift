@@ -189,6 +189,7 @@ struct ContentView: View {
                     .help(L("返回输入页"))
             }
         }
+        ToolbarItem(placement: .primaryAction) { USBStatusBadge() }
         ToolbarItemGroup(placement: .primaryAction) {
             // Buttons, not Toggles: a toolbar Toggle writes its binding while the toolbar is built.
             Button { togglePage(.settings) } label: {
