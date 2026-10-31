@@ -10,7 +10,8 @@ struct QuadernoApp: App {
                 .frame(minWidth: 900, minHeight: 600)
         }
         .commands {
-            CommandGroup(after: .appInfo) {
+            CommandGroup(replacing: .appInfo) {
+                AboutMenu()
                 ShortcutDeliveryMenu()
             }
         }
@@ -18,6 +19,10 @@ struct QuadernoApp: App {
             ShortcutDeliveryView()
         }
         .defaultSize(width: 640, height: 710)
+        .windowResizability(.contentSize)
+        Window("关于 Quaderno Converter", id: "about") {
+            AboutView()
+        }
         .windowResizability(.contentSize)
     }
 }
@@ -42,7 +47,7 @@ final class FinderSendService: NSObject {
         let urls = pasteboard.readObjects(forClasses: [NSURL.self],
                                           options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
         guard !urls.isEmpty, let script = Bundle.main.url(forResource: "deliver", withExtension: "sh") else {
-            error.pointee = "未收到可投递的文件。" as NSString
+            error.pointee = L("未收到可投递的文件。") as NSString
             return
         }
         // Return immediately; deliver.sh reports success or failure as a notification.

@@ -107,7 +107,7 @@ final class ClipboardLayoutStore: ObservableObject {
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
             errorMessage = ""
         } catch {
-            errorMessage = "快捷投递排版保存失败：\(error.localizedDescription)"
+            errorMessage = L("快捷投递排版保存失败：\(error.localizedDescription)")
         }
     }
 }
@@ -120,8 +120,8 @@ struct ClipboardLayoutSettings: View {
             VStack(alignment: .leading, spacing: 12) {
                 Toggle("使用独立排版", isOn: Binding(get: { !store.useShared }, set: { store.setIndependent($0) }))
                 Text(store.useShared
-                     ? "跟随「文件、文本、网页」的共用设置；在主窗口调整后，这里同步生效。"
-                     : "仅影响 Ctrl+1 剪贴板投递，其他三个输入页保持原设置。")
+                     ? L("跟随「文件、文本、网页」的共用设置；在主窗口调整后，这里同步生效。")
+                     : L("仅影响 Ctrl+1 剪贴板投递，其他三个输入页保持原设置。"))
                     .font(.callout).foregroundStyle(.secondary)
                 let profile = store.effective
                 Text("当前：\(profile.bodySize) · 边距 \(profile.margin) · \(profile.pageW) × \(profile.pageH)\n\(profile.cjkFont) / \(profile.latinFont)")

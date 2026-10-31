@@ -24,7 +24,7 @@ struct ShortcutDeliveryView: View {
     }
 
     private var command: String {
-        guard let path = scriptURL?.path else { return "投递脚本缺失，请重新安装完整 App。" }
+        guard let path = scriptURL?.path else { return L("投递脚本缺失，请重新安装完整 App。") }
         return "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
@@ -44,7 +44,7 @@ struct ShortcutDeliveryView: View {
                         Text("通过 USB 或同一局域网直接投递，无需运行 QUADERNO PC App。")
                         HStack {
                             TextField("设备地址", text: $address)
-                            Button(connecting ? "连接中…" : "迁移现有配对") {
+                            Button(connecting ? L("连接中…") : L("迁移现有配对")) {
                                 connecting = true
                                 Task {
                                     let result = await DirectDelivery.run(["import-pairing", "--address", address])
@@ -67,7 +67,7 @@ struct ShortcutDeliveryView: View {
                             .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                             .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                         HStack {
-                            Button(copied ? "已复制命令" : "复制命令", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                            Button(copied ? L("已复制命令") : L("复制命令"), systemImage: copied ? "checkmark" : "doc.on.doc") {
                                 NSPasteboard.general.clearContents()
                                 NSPasteboard.general.setString(command, forType: .string)
                                 copied = true
@@ -84,11 +84,11 @@ struct ShortcutDeliveryView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("唤醒设备并连接 USB，或确保 Mac 与设备处于同一局域网。")
                         HStack {
-                            Button(checking ? "正在自检…" : "运行自检", systemImage: "stethoscope") { runCheck() }
+                            Button(checking ? L("正在自检…") : L("运行自检"), systemImage: "stethoscope") { runCheck() }
                                 .disabled(checking || connecting || scriptURL == nil)
                             if checking { ProgressView().controlSize(.small) }
                             if let passed = checkPassed {
-                                Label(passed ? "本机检查通过" : "检查未通过，请查看详情",
+                                Label(passed ? L("本机检查通过") : L("检查未通过，请查看详情"),
                                       systemImage: passed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                                     .foregroundStyle(passed ? .green : .orange)
                             }
@@ -117,7 +117,7 @@ struct ShortcutDeliveryView: View {
         }.frame(width: embedded ? nil : 640, height: embedded ? nil : 710)
     }
 
-    private func step(_ number: String, _ title: String, _ detail: String) -> some View {
+    private func step(_ number: String, _ title: LocalizedStringKey, _ detail: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text(number).font(.caption.bold()).frame(width: 22, height: 22)
                 .background(Color.accentColor.opacity(0.12), in: Circle())

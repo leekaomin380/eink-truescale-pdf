@@ -12,7 +12,7 @@ enum DirectDelivery {
     static func run(_ arguments: [String]) async -> Result {
         await Task.detached(priority: .userInitiated) {
             guard let resources = Bundle.main.resourceURL else {
-                return Result(success: false, message: "缺少直连工具，请重新安装 App", details: "")
+                return Result(success: false, message: L("缺少直连工具，请重新安装 App"), details: "")
             }
             let process = Process()
             process.executableURL = resources.appendingPathComponent("direct/quaderno-direct")
@@ -27,10 +27,10 @@ enum DirectDelivery {
                 let output = String(decoding: data, as: UTF8.self)
                 let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
                 return Result(success: process.terminationStatus == 0 && json?["ok"] as? Bool == true,
-                              message: json?["message"] as? String ?? "直连失败，请检查设备连接",
+                              message: json?["message"] as? String ?? L("直连失败，请检查设备连接"),
                               details: output)
             } catch {
-                return Result(success: false, message: "无法运行直连工具", details: error.localizedDescription)
+                return Result(success: false, message: L("无法运行直连工具"), details: error.localizedDescription)
             }
         }.value
     }

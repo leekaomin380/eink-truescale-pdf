@@ -55,6 +55,8 @@ SDK_ARGS=()
 swiftc \
     "${SDK_ARGS[@]}" \
     "$MAC_DIR/QuadernoApp.swift" \
+    "$MAC_DIR/Localization.swift" \
+    "$MAC_DIR/AboutView.swift" \
     "$MAC_DIR/ContentView.swift" \
     "$MAC_DIR/ShortcutDeliveryView.swift" \
     "$MAC_DIR/DirectDelivery.swift" \
@@ -92,6 +94,13 @@ echo ">>> 复制直连工具（自带 Python 运行时）"
 DIRECT_RUNTIME="$REPO/direct/runtime-dist/quaderno-direct"
 [[ -x "$DIRECT_RUNTIME/quaderno-direct" ]] || { echo "!!! 请先运行 ./direct/build-helper.sh"; exit 1; }
 ditto "$DIRECT_RUNTIME" "$APP_DIR/Contents/Resources/direct"
+
+echo ">>> 编译多语言文案（zh-Hans / en / ja）"
+python3 "$SCRIPT_DIR/l10n-compile.py" "$MAC_DIR/Localization/Localizable.xcstrings" "$APP_DIR/Contents/Resources"
+for lproj in "$MAC_DIR"/Localization/*.lproj; do
+  mkdir -p "$APP_DIR/Contents/Resources/${lproj:t}"
+  cp "$lproj"/*.strings "$APP_DIR/Contents/Resources/${lproj:t}/" 2>/dev/null || true
+done
 
 echo ">>> 复制运行时依赖"
 cp "$REPO/deliver.sh" "$APP_DIR/Contents/Resources/deliver.sh"
