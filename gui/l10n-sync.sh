@@ -17,7 +17,7 @@ fi
 
 swiftc "${SDK_ARGS[@]}" -target arm64-apple-macos14.0 -parse-as-library \
   -emit-localized-strings -emit-localized-strings-path "$WORK" \
-  -c "$MAC_DIR"/*.swift "$MAC_DIR"/wechat/*.swift -module-name QuadernoConverter -o "$WORK/unused.o" \
+  -c "$MAC_DIR"/*.swift "$MAC_DIR"/wechat/*.swift -module-name TrueScale -o "$WORK/unused.o" \
   -wmo 2>&1 | grep -E "error" || true
 [[ -f "$CATALOG" ]] || print -r -- '{"sourceLanguage":"zh-Hans","strings":{},"version":"1.0"}' > "$CATALOG"
 xcrun xcstringstool sync "$CATALOG" --stringsdata "$WORK"/*.stringsdata

@@ -16,7 +16,7 @@ faster than a back-and-forth would.
 **Entry point** (check one)
 - [ ] `deliver.sh` (hotkey / clipboard)
 - [ ] `book.sh` (CLI ebook conversion)
-- [ ] Native app (`Quaderno Converter.app`)
+- [ ] Native app (`TrueScale for QUADERNO.app`)
 - [ ] `gui.sh` (web fallback)
 
 **Output of `./test.sh`**

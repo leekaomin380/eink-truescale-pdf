@@ -228,6 +228,22 @@
         }
       }
     },
+    "Finder 右键投递无需设置，已经可以使用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending from Finder needs no setup and already works."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder からの送信は設定不要で、すでに使えます。"
+          }
+        }
+      }
+    },
     "GPL-2.0，含引导程序例外": {
       "localizations": {
         "en": {
@@ -468,6 +484,22 @@
         }
       }
     },
+    "三步完成设置。完成后，投递不再需要打开 QUADERNO PC App。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Three steps to set up. After that, sending no longer needs QUADERNO PC App open."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3 ステップで設定します。設定後は QUADERNO PC App を開かずに送信できます。"
+          }
+        }
+      }
+    },
     "下载图片…": {
       "localizations": {
         "en": {
@@ -560,6 +592,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "共通設定から再コピー"
+          }
+        }
+      }
+    },
+    "以后再说": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "後で"
           }
         }
       }
@@ -692,18 +740,18 @@
         }
       }
     },
-    "关于 Quaderno Converter": {
+    "关于 TrueScale for QUADERNO": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "About Quaderno Converter"
+            "value": "About TrueScale for QUADERNO"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quaderno Converter について"
+            "value": "TrueScale for QUADERNO について"
           }
         }
       }
@@ -1060,6 +1108,38 @@
         }
       }
     },
+    "导入现有配对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import the existing pairing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既存のペアリングを移行"
+          }
+        }
+      }
+    },
+    "导入配对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Pairing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングを移行"
+          }
+        }
+      }
+    },
     "导出 Markdown…": {
       "localizations": {
         "en": {
@@ -1284,6 +1364,22 @@
         }
       }
     },
+    "开始使用 TrueScale for QUADERNO": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get Started with TrueScale for QUADERNO"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TrueScale for QUADERNO を始める"
+          }
+        }
+      }
+    },
     "引导程序": {
       "localizations": {
         "en": {
@@ -1472,6 +1568,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "送信方法"
+          }
+        }
+      }
+    },
+    "投递脚本缺失，请重新安装完整 App。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The delivery script is missing. Please reinstall the complete app."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信スクリプトがありません。App を入れ直してください。"
           }
         }
       }
@@ -1972,6 +2084,22 @@
         }
       }
     },
+    "正在自检…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チェック中…"
+          }
+        }
+      }
+    },
     "正文": {
       "localizations": {
         "en": {
@@ -2100,6 +2228,22 @@
         }
       }
     },
+    "渲染一份测试 PDF 并连接设备，不上传文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renders a test PDF and connects to the device without uploading anything."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テスト PDF をレンダリングして端末に接続します。ファイルはアップロードしません。"
+          }
+        }
+      }
+    },
     "渲染中…": {
       "localizations": {
         "en": {
@@ -2208,6 +2352,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "バージョン %@"
+          }
+        }
+      }
+    },
+    "用 USB 线连接 QUADERNO 并唤醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect QUADERNO by USB and wake it"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB ケーブルで QUADERNO を接続してスリープ解除"
           }
         }
       }
@@ -2772,6 +2932,22 @@
         }
       }
     },
+    "设置 ⌃1 快捷键（可选）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up the ⌃1 hotkey (optional)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃1 ショートカットの設定（任意）"
+          }
+        }
+      }
+    },
     "设置…": {
       "localizations": {
         "en": {
@@ -2816,6 +2992,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "設定後、テキストをコピーして ⌃1 を押して試してください"
+          }
+        }
+      }
+    },
+    "设置快捷键…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Up Hotkey…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカットを設定…"
           }
         }
       }
@@ -2948,6 +3140,22 @@
         }
       }
     },
+    "读取 QUADERNO PC App 在这台 Mac 上建立的配对，只需一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reads the pairing QUADERNO PC App created on this Mac. Needed only once."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この Mac で QUADERNO PC App が作成したペアリングを読み込みます。一度だけ必要です。"
+          }
+        }
+      }
+    },
     "跟随主窗口排版": {
       "localizations": {
         "en": {
@@ -3024,6 +3232,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "既存のペアリングを移行…"
+          }
+        }
+      }
+    },
+    "运行自检": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run the check"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セルフチェックを実行"
           }
         }
       }
@@ -3124,6 +3348,22 @@
         }
       }
     },
+    "连接后这里会自动变为已连接。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This turns to connected automatically once it is plugged in."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続すると自動的に接続済みになります。"
+          }
+        }
+      }
+    },
     "连接设置": {
       "localizations": {
         "en": {
@@ -3216,6 +3456,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "App に同梱しているコンポーネント"
+          }
+        }
+      }
+    },
+    "需要先安装 QUADERNO PC App，并与设备配对一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First install QUADERNO PC App and pair it with the device once."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先に QUADERNO PC App をインストールし、端末と一度ペアリングしてください。"
           }
         }
       }

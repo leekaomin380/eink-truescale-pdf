@@ -48,7 +48,7 @@ struct AboutView: View {
                 HStack(spacing: 16) {
                     Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 72, height: 72)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(verbatim: "Quaderno Converter").font(.title.bold())
+                        Text(verbatim: "TrueScale for QUADERNO").font(.title.bold())
                         Text("版本 \(version)").foregroundStyle(.secondary)
                         Text(verbatim: "© 2026 高明 (Gaoming Li) · MIT License").font(.callout).foregroundStyle(.secondary)
                     }

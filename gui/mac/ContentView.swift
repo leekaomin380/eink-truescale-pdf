@@ -84,7 +84,7 @@ struct ContentView: View {
     private var windowTitle: String {
         switch navigation.page {
         case .settings: return L("设置")
-        case .about: return L("关于 Quaderno Converter")
+        case .about: return L("关于 TrueScale for QUADERNO")
         case nil: break
         }
         switch inputMode {
@@ -148,6 +148,13 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar { pageToolbar }
+        .sheet(isPresented: $navigation.showSetupGuide) { SetupGuideSheet() }
+        .onAppear {
+            // 首次使用且尚未配对时自动打开设置向导；「以后再说」后不再自动弹出。
+            if !Pairing.isPaired && !UserDefaults.standard.bool(forKey: Pairing.guideDismissedKey) {
+                navigation.showSetupGuide = true
+            }
+        }
         .onChange(of: vm.currentPage) { _, _ in
             updatePreview()
         }
@@ -191,7 +198,7 @@ struct ContentView: View {
             Button { togglePage(.about) } label: {
                 Label("关于", systemImage: navigation.page == .about ? "info.circle.fill" : "info.circle")
             }
-            .help(L("关于 Quaderno Converter"))
+            .help(L("关于 TrueScale for QUADERNO"))
         }
     }
 

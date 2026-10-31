@@ -79,9 +79,9 @@ MESSAGES = {
     '已保存至 Received：{name}（回读通过，设备未接受打开请求，请从 Received 打开）': (
         'Saved to Received: {name} (verified; the device did not accept the open request — open it from Received)',
         'Received に保存しました：{name}（照合済み。端末が表示要求を受け付けなかったため、Received から開いてください）'),
-    '尚未配置直连。请在 App 的「快捷投递」中迁移现有配对。': (
-        'Direct connection is not set up yet. Import the existing pairing under Quick Send in the app.',
-        '直接接続がまだ設定されていません。App の「クイック送信」で既存のペアリングを移行してください。'),
+    '尚未配置直连。请在 App 的「设置 → 设备」中迁移现有配对。': (
+        'Direct connection is not set up yet. Import the existing pairing in the app under Settings → Device.',
+        '直接接続がまだ設定されていません。App の「設定 → 端末」で既存のペアリングを移行してください。'),
     '未找到唯一的已有配对。请先确认当前 Mac 的设备配对信息。': (
         "Could not find a single existing pairing. Check this Mac's device pairing first.",
         '既存のペアリングを一意に特定できません。この Mac の端末ペアリング情報を確認してください。'),
@@ -513,7 +513,7 @@ def save_private(path, data):
 
 def load_device():
     if not (ROOT / 'connection.json').exists():
-        raise DirectError(tr('尚未配置直连。请在 App 的「快捷投递」中迁移现有配对。'))
+        raise DirectError(tr('尚未配置直连。请在 App 的「设置 → 设备」中迁移现有配对。'))
     settings = json.loads((ROOT / 'connection.json').read_text())
     return Device(settings, (ROOT / 'privatekey.pem').read_bytes(),
                   (ROOT / 'clientid.txt').read_text().strip())

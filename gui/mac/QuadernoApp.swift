@@ -16,7 +16,7 @@ struct QuadernoApp: App {
         }
         .commands {
             CommandGroup(replacing: .appInfo) {
-                Button(L("关于 Quaderno Converter")) { MainNavigation.shared.show(.about) }
+                Button(L("关于 TrueScale for QUADERNO")) { MainNavigation.shared.show(.about) }
             }
             CommandGroup(replacing: .appSettings) {
                 Button(L("设置…")) { MainNavigation.shared.show(.settings) }

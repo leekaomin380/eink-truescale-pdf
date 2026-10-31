@@ -4,6 +4,16 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>TrueScale for QUADERNO</string>
+	<key>CFBundleExecutable</key>
+	<string>TrueScale</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.leekaomin380.quaderno-converter</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>zh-Hans</string>
@@ -11,34 +21,24 @@
 		<string>ja</string>
 	</array>
 	<key>CFBundleName</key>
-	<string>Quaderno Converter</string>
-	<key>CFBundleDisplayName</key>
-	<string>电子书转换 · Quaderno</string>
-	<key>CFBundleIdentifier</key>
-	<string>io.github.leekaomin380.quaderno-converter</string>
-	<key>CFBundleVersion</key>
-	<string>2</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.1.0</string>
+	<string>TrueScale for QUADERNO</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<key>CFBundleExecutable</key>
-	<string>QuadernoConverter</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.2.0</string>
+	<key>CFBundleVersion</key>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>直接连接你的 QUADERNO 设备，用于文档投递及送达校验。</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_dp_fujitsu._tcp</string>
 		<string>_digitalpaper._tcp</string>
 	</array>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>直接连接你的 QUADERNO 设备，用于文档投递及送达校验。</string>
 	<key>NSServices</key>
 	<array>
 		<dict>
@@ -50,15 +50,15 @@
 			<key>NSMessage</key>
 			<string>sendToQuaderno</string>
 			<key>NSPortName</key>
-			<string>Quaderno Converter</string>
+			<string>TrueScale for QUADERNO</string>
+			<key>NSRequiredContext</key>
+			<dict/>
 			<key>NSSendFileTypes</key>
 			<array>
 				<string>com.adobe.pdf</string>
 				<string>net.daringfireball.markdown</string>
 				<string>public.plain-text</string>
 			</array>
-			<key>NSRequiredContext</key>
-			<dict/>
 		</dict>
 	</array>
 </dict>

@@ -1,14 +1,14 @@
 #!/bin/zsh
 # gui/build-app.sh — 编译原生 SwiftUI 应用并组装 .app bundle
 # 用法: ./gui/build-app.sh
-# 产出: gui/Quaderno Converter.app
+# 产出: gui/TrueScale for QUADERNO.app
 
 set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 REPO="${SCRIPT_DIR:A:h}"
 MAC_DIR="$SCRIPT_DIR/mac"
-APP_NAME="Quaderno Converter"
+APP_NAME="TrueScale for QUADERNO"
 APP_DIR="$SCRIPT_DIR/$APP_NAME.app"
 
 echo ">>> 清理旧 .app"
@@ -65,7 +65,7 @@ swiftc \
     "$MAC_DIR/wechat/WeChatExtractor.swift" \
     "$MAC_DIR/wechat/ImageInliner.swift" \
     "$MAC_DIR/wechat/LocalExtraction.swift" \
-    -o "$APP_DIR/Contents/MacOS/QuadernoConverter" \
+    -o "$APP_DIR/Contents/MacOS/TrueScale" \
     -framework SwiftUI \
     -framework AppKit \
     -framework PDFKit \

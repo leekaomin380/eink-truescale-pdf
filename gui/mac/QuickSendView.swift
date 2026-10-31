@@ -111,6 +111,7 @@ enum MainPage { case settings, about }
 final class MainNavigation: ObservableObject {
     static let shared = MainNavigation()
     @Published var page: MainPage?
+    @Published var showSetupGuide = false
 
     func show(_ target: MainPage) {
         page = target
@@ -181,7 +182,11 @@ struct AppSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("设置").font(.largeTitle.weight(.semibold))
+                HStack(alignment: .firstTextBaseline) {
+                    Text("设置").font(.largeTitle.weight(.semibold))
+                    Spacer()
+                    Button("设置向导…") { MainNavigation.shared.showSetupGuide = true }
+                }
                 SettingsSection("语言") { LanguageSettings() }
                 SettingsSection("设备") { deviceGroup }
                 SettingsSection("投递入口") { entriesGroup }
@@ -256,7 +261,7 @@ struct AppSettingsView: View {
                     Text("由 macOS「快捷指令」提供").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("设置向导…") { showSetup = true }.buttonStyle(.link).disabled(scriptURL == nil)
+                Button("设置快捷键…") { showSetup = true }.buttonStyle(.link).disabled(scriptURL == nil)
             }
             .padding(12)
             Divider().padding(.leading, 12)
@@ -296,29 +301,12 @@ struct AppSettingsView: View {
     }
 
     private func runCheck() {
-        guard let scriptURL else { return }
         checking = true
         checkPassed = nil
         Task {
-            let result = await Task.detached(priority: .userInitiated) { () -> (Bool, String) in
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-                process.arguments = [scriptURL.path, "--check"]
-                process.environment = helperEnvironment()
-                let pipe = Pipe()
-                process.standardOutput = pipe
-                process.standardError = pipe
-                do {
-                    try process.run()
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    process.waitUntilExit()
-                    return (process.terminationStatus == 0, String(decoding: data, as: UTF8.self))
-                } catch {
-                    return (false, error.localizedDescription)
-                }
-            }.value
-            checkPassed = result.0
-            checkOutput = result.1
+            let result = await SelfCheck.run()
+            checkPassed = result.passed
+            checkOutput = result.output
             checking = false
             monitor.refresh()
         }
@@ -504,5 +492,164 @@ struct LanguageSettings: View {
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, _ in
             DispatchQueue.main.async { NSApp.terminate(nil) }
         }
+    }
+}
+
+// MARK: - 自检与配对状态（设置页与设置向导共用）
+
+enum SelfCheck {
+    /// deliver.sh --check：渲染测试 PDF、认证并读取目录，不上传文件。
+    static func run() async -> (passed: Bool, output: String) {
+        guard let script = Bundle.main.url(forResource: "deliver", withExtension: "sh") else {
+            return (false, L("投递脚本缺失，请重新安装完整 App。"))
+        }
+        return await Task.detached(priority: .userInitiated) { () -> (Bool, String) in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = [script.path, "--check"]
+            process.environment = helperEnvironment()
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            do {
+                try process.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                return (process.terminationStatus == 0, String(decoding: data, as: UTF8.self))
+            } catch {
+                return (false, error.localizedDescription)
+            }
+        }.value
+    }
+}
+
+enum Pairing {
+    /// 直连工具保存配对的位置（目录名沿用旧 App 名，避免迁移凭据）。
+    static var isPaired: Bool {
+        FileManager.default.fileExists(atPath: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Quaderno Converter/Direct/connection.json").path)
+    }
+    static var officialAppInstalled: Bool {
+        FileManager.default.fileExists(atPath: "/Applications/QUADERNO PC App.app")
+    }
+    static let guideDismissedKey = "setupGuideDismissed"
+}
+
+// MARK: - 首次使用的设置向导
+
+struct SetupGuideSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var monitor = QuickSendMonitor.shared
+    @State private var paired = Pairing.isPaired
+    @State private var importing = false
+    @State private var importMessage = ""
+    @State private var checking = false
+    @State private var checkPassed: Bool?
+    @State private var checkOutput = ""
+    @State private var showHotkey = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("开始使用 TrueScale for QUADERNO").font(.title2.weight(.semibold))
+                Text("三步完成设置。完成后，投递不再需要打开 QUADERNO PC App。").foregroundStyle(.secondary)
+            }
+            step(1, done: monitor.usbModel != nil, "用 USB 线连接 QUADERNO 并唤醒") {
+                if let model = monitor.usbModel {
+                    Text(verbatim: QuadernoUSB.displayName(for: model) + " · USB").foregroundStyle(.secondary)
+                } else {
+                    Text("连接后这里会自动变为已连接。").foregroundStyle(.secondary)
+                }
+            }
+            step(2, done: paired, "导入现有配对") {
+                Text(Pairing.officialAppInstalled
+                     ? L("读取 QUADERNO PC App 在这台 Mac 上建立的配对，只需一次。")
+                     : L("需要先安装 QUADERNO PC App，并与设备配对一次。"))
+                    .foregroundStyle(.secondary)
+                if !paired {
+                    HStack {
+                        Button(importing ? L("连接中…") : L("导入配对")) { importPairing() }
+                            .disabled(importing || !Pairing.officialAppInstalled)
+                        if importing { ProgressView().controlSize(.small) }
+                    }
+                }
+                if !importMessage.isEmpty { Text(importMessage).font(.callout) }
+            }
+            step(3, done: checkPassed == true, "运行自检") {
+                Text("渲染一份测试 PDF 并连接设备，不上传文件。").foregroundStyle(.secondary)
+                HStack {
+                    Button(checking ? L("正在自检…") : L("自检")) { runCheck() }.disabled(checking || !paired)
+                    if checking { ProgressView().controlSize(.small) }
+                }
+                if checkPassed == false {
+                    DisclosureGroup("自检详情") {
+                        Text(checkOutput).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }.font(.caption)
+                }
+            }
+            step(4, done: false, optional: true, "设置 ⌃1 快捷键（可选）") {
+                Text("Finder 右键投递无需设置，已经可以使用。").foregroundStyle(.secondary)
+                Button("设置快捷键…") { showHotkey = true }
+            }
+            Divider()
+            HStack {
+                Button("以后再说") { close() }
+                Spacer()
+                Button("完成") { close() }.keyboardShortcut(.defaultAction).disabled(!paired)
+            }
+        }
+        .padding(28)
+        .frame(width: 540)
+        .sheet(isPresented: $showHotkey) {
+            HotkeySetupSheet(scriptURL: Bundle.main.url(forResource: "deliver", withExtension: "sh"))
+        }
+        .onAppear { monitor.start() }
+        .onDisappear { monitor.stop() }
+    }
+
+    private func step<Content: View>(_ number: Int, done: Bool, optional: Bool = false, _ title: LocalizedStringKey,
+                                     @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                Circle().fill(done ? Color.green : Color.accentColor.opacity(optional ? 0.08 : 0.12))
+                if done {
+                    Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(.white)
+                } else {
+                    Text(verbatim: "\(number)").font(.callout.weight(.semibold)).foregroundStyle(.tint)
+                }
+            }
+            .frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).fontWeight(.semibold)
+                content()
+            }
+        }
+    }
+
+    private func importPairing() {
+        importing = true
+        Task {
+            let result = await DirectDelivery.run(["import-pairing", "--address", "Android.local"])
+            importMessage = result.message
+            paired = Pairing.isPaired
+            importing = false
+        }
+    }
+
+    private func runCheck() {
+        checking = true
+        checkPassed = nil
+        Task {
+            let result = await SelfCheck.run()
+            checkPassed = result.passed
+            checkOutput = result.output
+            checking = false
+        }
+    }
+
+    private func close() {
+        UserDefaults.standard.set(true, forKey: Pairing.guideDismissedKey)
+        dismiss()
     }
 }
