@@ -1,5 +1,7 @@
 # eink-truescale-pdf
 
+> 当前 macOS App 已改用设备直连，Ctrl+1 剪贴板投递自动命名。配置、验收与限制见 [直连投递](docs/DIRECT-DELIVERY.md)。下方未更新的官方客户端说明描述旧版投递路径。
+
 Current project handoff documents:
 
 - [Product overview](docs/PRODUCT.md) — current product scope, two-edition strategy, users, architecture and quality bar.
@@ -112,6 +114,17 @@ It's short, and every non-obvious line is commented.
 ---
 
 ## Bind the hotkey
+
+### Desktop app: 快捷投递
+
+Open **快捷投递** from the fourth source tab beside 文件 / 文本 / 网页, or **Quaderno Converter → 快捷投递设置…**.
+The page provides a copyable command, Shortcuts setup instructions (suggested key:
+Control + 1), a local self-check, and troubleshooting. The command uses `deliver.sh`
+inside the installed app, with bundled pandoc and typst, so moving the source checkout
+does not break it. If the app itself is moved or renamed, copy the command again.
+Self-check renders a PDF and authenticates directly to the device without uploading a document. Actual delivery downloads the uploaded PDF again and verifies its SHA-256. Clipboard delivery follows the layout preferences shared by File, Text and Web modes by default. In 快捷投递 → Ctrl+1 排版, enable 使用独立排版 to override them without changing the other modes. Settings persist when the App is closed.
+
+### Source checkout
 
 This is the one step that cannot be automated **for the shell-script workflow**: macOS
 does not let a program create a Shortcut or assign its key binding on your behalf, so you
@@ -244,9 +257,14 @@ account, no upload.
 Paste an article URL into the app, and it extracts the text, inlines the images, and
 renders it at your screen's true physical size — same pipeline as everything else here.
 
-**In the app:** switch to **公众号链接 / WeChat link** → paste an
+**In the app:** switch to **网页** → paste an
 `https://mp.weixin.qq.com/s/...` URL → **解析并预览** → save the PDF or send it to
-the device.
+the device. To read with an AI agent, choose **导出 Markdown（.md）…** directly
+without generating a PDF first. This saves a UTF-8 `.md` file with the article's
+title, available author/date/site metadata, source URL, and body structure.
+Images remain links to their original URLs, keeping the file small and readable;
+image contents are not transcribed. Changing the link extracts the new article,
+while changing PDF layout settings reuses the cached article for Markdown export.
 
 ### How it works, and why it's built this way
 

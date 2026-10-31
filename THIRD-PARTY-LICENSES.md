@@ -18,6 +18,8 @@
 | [typst](https://github.com/typst/typst) | 0.15.1 | Apache-2.0 | `Contents/Resources/bin/typst` |
 | [GNU MP (libgmp)](https://gmplib.org/) | 6.x | LGPL-3.0-or-later **或** GPL-2.0-or-later | `Contents/Resources/lib/libgmp.10.dylib` |
 
+直连工具另外打包 CPython 3.13（PSF License）、PyCryptodome 3.24.1（BSD / 公有领域，详见其许可）和 PyYAML 6.0.3（MIT）。PyInstaller 引导程序遵循其 GPL 引导程序例外；构建工具本身不作为应用功能发布。直连协议参考 [dpt-rp1-py](https://github.com/janten/dpt-rp1-py)（MIT），应用没有打包或调用该项目的代码。
+
 许可全文随 `.app` 一同分发，位于 `Contents/Resources/licenses/`。
 
 未打包、作为**可选**外部依赖的组件（仅 mobi/azw 转换需要）：

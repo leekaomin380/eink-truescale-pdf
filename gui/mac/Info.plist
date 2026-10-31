@@ -2,27 +2,34 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>Quaderno Converter</string>
-    <key>CFBundleDisplayName</key>
-    <string>电子书转换 · Quaderno</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.eink-truescale.gui</string>
-    <key>CFBundleVersion</key>
-    <string>2</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.1.0</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleExecutable</key>
-    <string>QuadernoConverter</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleIconName</key>
-    <string>AppIcon</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
+	<key>CFBundleName</key>
+	<string>Quaderno Converter</string>
+	<key>CFBundleDisplayName</key>
+	<string>电子书转换 · Quaderno</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.eink-truescale.gui</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.1.0</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleExecutable</key>
+	<string>QuadernoConverter</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>直接连接你的 QUADERNO 设备，用于文档投递及送达校验。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dp_fujitsu._tcp</string>
+		<string>_digitalpaper._tcp</string>
+	</array>
 </dict>
 </plist>

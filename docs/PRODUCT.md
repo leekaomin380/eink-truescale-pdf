@@ -32,7 +32,7 @@ eink-truescale-pdf 是一套面向长文档阅读的 macOS 本地转换工具。
 | 主要用户 | 已安装官方 QUADERNO PC App 的电子墨水阅读用户 | 需要把流式文档转换为标准尺寸 PDF 的普通 Mac 用户 |
 | 输入 | EPUB、HTML/HTM、FB2、Markdown、粘贴文本、网页链接 | EPUB、HTML/HTM、FB2、Markdown |
 | 输出 | QUADERNO 适配 PDF；可另存或发送到设备 | A4、A5、B5 PDF；由用户自行保存和传输 |
-| Quaderno 依赖 | 只有一键投递需要官方客户端；转换和另存不需要 | 无，不包含厂商投递功能 |
+| Quaderno 依赖 | 投递使用设备直连；已有配对迁移后不再需要官方客户端运行；转换和另存不需要设备 | 无，不包含厂商投递功能 |
 | 页面规格 | 以已测量的 QUADERNO A5 为主，保留设备参数能力 | A4、A5、B5，避免一次展示过多规格 |
 | 网络访问 | 仅在用户主动转换网页链接时获取网页及图片 | 不访问互联网 |
 | 分发 | GitHub Release，Developer ID 签名和 Apple 公证 | Mac App Store，App Sandbox |

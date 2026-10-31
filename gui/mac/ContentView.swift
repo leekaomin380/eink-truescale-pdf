@@ -5,6 +5,7 @@ enum InputMode: String, CaseIterable {
     case epub = "文件"
     case text = "文本"
     case wechat = "网页"
+    case shortcut = "快捷投递"
 }
 
 /// 按条件切换主/次按钮样式。
@@ -64,6 +65,7 @@ struct ContentView: View {
         case .epub:   return vm.sourceFileURL != nil
         case .text:   return !vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .wechat: return !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .shortcut: return false
         }
     }
 
@@ -78,6 +80,8 @@ struct ContentView: View {
             return t.isEmpty ? "粘贴文本" : t
         case .wechat:
             return vm.wechatURL.isEmpty ? "网页链接" : vm.wechatURL
+        case .shortcut:
+            return "快捷投递"
         }
     }
 
@@ -111,7 +115,12 @@ struct ContentView: View {
         HSplitView {
             sidebar
                 .frame(minWidth: 300, idealWidth: 360, maxWidth: 520)
-            previewArea
+            if inputMode == .shortcut {
+                ShortcutDeliveryView(embedded: true)
+                    .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                previewArea
+            }
         }
         .onChange(of: vm.currentPage) { _, _ in
             updatePreview()
@@ -124,6 +133,7 @@ struct ContentView: View {
         .onChange(of: vm.selectedLatinFont)   { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         .onChange(of: vm.bodySize)            { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         .onChange(of: vm.margin)              { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
+        .onChange(of: vm.printTime) { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         .onChange(of: vm.leading)             { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         .onChange(of: vm.selectedDeviceIndex) { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
         // 选中文件即视为「要看结果」，无需再点一次按钮。
@@ -141,32 +151,40 @@ struct ContentView: View {
     private var sidebar: some View {
         VStack(spacing: 0) {
             inputModePicker
-
             Divider()
 
-            if inputMode == .text {
-                textWorkspace
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if inputMode == .epub { epubSection }
-                        else { wechatSection }
-
-                        Divider()
-                        settingsSection
-                    }
-                    .padding(16)
+            if inputMode == .shortcut {
+                VStack(alignment: .leading, spacing: 16) {
+                    Label("剪贴板快捷投递", systemImage: "keyboard").font(.headline)
+                    Text("⌃1").font(.system(size: 30, weight: .medium, design: .rounded))
+                    Text("复制需要阅读的文字，按 Control + 1，即可投递到 Quaderno。")
+                        .foregroundStyle(.secondary)
+                    Divider()
+                    Text("在右侧调整快捷投递排版、连接设备或查看快捷键设置。")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Spacer()
                 }
+                .padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                if inputMode == .text {
+                    textWorkspace
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if inputMode == .epub { epubSection }
+                            else { wechatSection }
+                            Divider()
+                            settingsSection
+                        }
+                        .padding(16)
+                    }
+                }
+                Divider()
+                sidebarFooter
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(2)
             }
-
-            Divider()
-
-            sidebarFooter
-                // 底部操作区不能参与垂直压缩。文本编辑器和设置区内容较长时，
-                // SwiftUI 默认会压缩整个 VStack，导致第二行的「发送到 Quaderno」
-                // 与「另存 PDF」被推到窗口下方，实际存在却完全不可见。
-                .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(2)
         }
     }
 
@@ -185,10 +203,15 @@ struct ContentView: View {
             clearedPasteText = nil
             clearedWechatURL = nil
 
+            if newMode == .shortcut {
+                autoRenderTask?.cancel()
+                return
+            }
             vm.activeKind = switch newMode {
                 case .epub: .epub
                 case .text: .text
                 case .wechat: .wechat
+                case .shortcut: vm.activeKind
             }
 
             // 每个来源的草稿各自保留；切换时只移除与当前来源不再对应的预览。
@@ -607,12 +630,12 @@ struct ContentView: View {
             }
 
             Button(action: { vm.exportMarkdown() }) {
-                Label("导出 Markdown…", systemImage: "doc.text")
+                Label(inputMode == .wechat ? "导出 Markdown（.md）…" : "导出 Markdown…", systemImage: "doc.text")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .disabled(vm.isConverting || !hasInput)
-            .help("导出为 Markdown（含图片），供 AI 阅读")
+            .help(inputMode == .wechat ? "直接保存 .md，保留正文、原文地址与图片链接，供 AI 阅读" : "导出为 Markdown（含图片），供 AI 阅读")
         }
     }
 

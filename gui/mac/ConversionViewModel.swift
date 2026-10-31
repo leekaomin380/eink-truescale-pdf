@@ -105,8 +105,8 @@ class ConversionViewModel: ObservableObject {
     // EPUB / File mode
     @Published var sourceFileURL: URL?
 
-    /// 网页模式最近一次渲染落盘的中间 .md（图片已内联）—— 导出 Markdown 直接复用。
-    private(set) var lastWechatMarkdownURL: URL?
+    /// 网页正文按原文链接缓存，与 PDF 排版和图片内联独立。
+    private var cachedWebArticle: (url: String, title: String, markdown: String)?
     @Published var sourceFileName = ""
     @Published var pdfTitle = ""  // derived title for delivery filename
 
@@ -274,8 +274,10 @@ class ConversionViewModel: ObservableObject {
         // File I/O only — fast, safe on main thread
         loadConfig()
         loadDevices()
+        applySavedPreferences()
+        publishSharedLayout()
         hasQuaderno = FileManager.default.fileExists(
-            atPath: "/Applications/QUADERNO PC App.app")
+            atPath: repoURL.appendingPathComponent("direct/quaderno-direct").path)
 
         // Populate font lists with config defaults so pickers are immediately usable
         if !config.fonts.isEmpty { latinFonts = [config.fonts[0]] }
@@ -290,6 +292,7 @@ class ConversionViewModel: ObservableObject {
                 self.cjkFonts = fonts.cjk
                 self.latinFonts = fonts.latin
                 self.reconcileSavedFonts()
+                self.publishSharedLayout()
             }
         }
     }
@@ -346,6 +349,7 @@ class ConversionViewModel: ObservableObject {
         static let margin    = "pref.margin"
         static let leading   = "pref.leading"
         static let deviceIdx = "pref.deviceIndex"
+        static let printTime = "pref.printTime"
     }
 
     /// 用已保存的偏好覆盖出厂默认值。
@@ -356,6 +360,7 @@ class ConversionViewModel: ObservableObject {
     /// 导致中文字体下拉整个空掉）。故所有值取用前都要校验。
     private func applySavedPreferences() {
         let d = UserDefaults.standard
+        if d.object(forKey: PrefKey.printTime) != nil { printTime = d.bool(forKey: PrefKey.printTime) }
         // 字号/边距/行距：只接受仍在选项表里的值
         if let v = d.string(forKey: PrefKey.bodySize),
            Self.bodySizeChoices.contains(v) { bodySize = v }
@@ -391,6 +396,15 @@ class ConversionViewModel: ObservableObject {
         d.set(margin,            forKey: PrefKey.margin)
         d.set(leading,           forKey: PrefKey.leading)
         d.set(selectedDeviceIndex, forKey: PrefKey.deviceIdx)
+        d.set(printTime, forKey: PrefKey.printTime)
+        publishSharedLayout()
+    }
+
+    private func publishSharedLayout() {
+        let profile = ClipboardLayoutProfile(cjkFont: selectedCjkFont, latinFont: selectedLatinFont,
+            bodySize: bodySize, margin: margin, leading: leading, pageW: config.pageW, pageH: config.pageH,
+            docLang: docLang, printTime: printTime, deviceIndex: selectedDeviceIndex)
+        ClipboardLayoutStore.shared.updateShared(profile, cjk: cjkFonts, latin: latinFonts, devices: devices)
     }
 
     private func loadDevices() {
@@ -544,7 +558,7 @@ class ConversionViewModel: ObservableObject {
         renderMarkdown(finalText, title: title)
     }
 
-    func convertWechat() {
+    func convertWechat(markdownOnly: Bool = false) {
         let raw = wechatURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else {
             setStatus("请先粘贴链接", .err)
@@ -601,24 +615,18 @@ class ConversionViewModel: ObservableObject {
                             }
                             return
                         }
-                        DispatchQueue.main.async {
-                            self.setStatus("下载图片…", .run)
-                        }
                         let title = article.title
-                        let author = article.author
                         DispatchQueue.main.async {
                             if !title.isEmpty { self.pasteTitle = title }
                         }
-                        var md = article.markdown
-                        if !title.isEmpty && !md.hasPrefix("---") {
-                            let safeTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
-                            var frontmatter = "---\ntitle: \"\(safeTitle)\"\n"
-                            if let author = author, !author.isEmpty {
-                                frontmatter += "author: \"\(author.replacingOccurrences(of: "\"", with: "\\\""))\"\n"
-                            }
-                            frontmatter += "---\n\n"
-                            md = frontmatter + md
+                        let md = Self.webArticleMarkdown(article, sourceURL: raw)
+                        self.cachedWebArticle = (url: raw, title: title, markdown: md)
+                        if markdownOnly {
+                            self.isConverting = false
+                            self.saveWebMarkdown(markdown: md, title: title)
+                            return
                         }
+                        self.setStatus("下载图片…", .run)
                         ImageInliner.inline(markdown: md) { [weak self] finalMd in
                             DispatchQueue.main.async {
                                 self?.setStatus("渲染中…", .run)
@@ -663,7 +671,6 @@ class ConversionViewModel: ObservableObject {
             let outPdf = workDir.appendingPathComponent("wechat_\(slug).pdf")
 
             try? markdown.write(to: mdFile, atomically: true, encoding: .utf8)
-            DispatchQueue.main.async { self.lastWechatMarkdownURL = mdFile }
 
             let result = runShell([
                 repoURL.appendingPathComponent("book.sh").path,
@@ -728,12 +735,6 @@ class ConversionViewModel: ObservableObject {
         }
         setStatus("正在发送到 Quaderno…", .run)
 
-        let app = "/Applications/QUADERNO PC App.app"
-        guard FileManager.default.fileExists(atPath: app) else {
-            setStatus("未找到 QUADERNO 客户端", .err)
-            return
-        }
-
         // Deliver a copy to protect the original (invariant I2)
         // Use title as filename — QUADERNO client displays file name in its list
         let title = pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -745,7 +746,7 @@ class ConversionViewModel: ObservableObject {
             copyName = pdfURL.lastPathComponent
         }
         let copyURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("p2q_deliver")
+            .appendingPathComponent("p2q_deliver_" + UUID().uuidString)
             .appendingPathComponent(copyName)
         try? FileManager.default.createDirectory(
             at: copyURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -759,13 +760,15 @@ class ConversionViewModel: ObservableObject {
             return
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-gj", "-na", app, "--args", "--print", copyURL.path]
-        try? process.run()
-        process.waitUntilExit()
-
-        setStatus("已交客户端，稍后同步到设备", .ok)
+        Task { @MainActor in
+            let result = await DirectDelivery.run(["upload", "--file", copyURL.path])
+            if result.success {
+                try? FileManager.default.removeItem(at: copyURL)
+                setStatus(result.message, .ok)
+            } else {
+                setStatus(result.message + "（本地投递副本已保留）", .err)
+            }
+        }
     }
 
     func savePDF() {
@@ -798,30 +801,22 @@ class ConversionViewModel: ObservableObject {
     }
 
 
-    /// 导出为 Markdown，供 AI 阅读 / 二次编辑。
-    ///
-    /// 三种输入统一收敛为「一份源 + 一次 pandoc」：
-    /// - 文件模式：源文件本身（EPUB/FB2/HTML/Markdown）
-    /// - 文本模式：粘贴的文本（有标题则补 YAML frontmatter）
-    /// - 网页模式：渲染时落盘的中间 .md（图片已内联为 data: URI）
-    ///
-    /// pandoc 在导出目录内以 `--extract-media=media` 运行，故图片落在 media/ 且
-    /// .md 里是相对路径 —— 用绝对路径的话，解压到别处后链接全部失效。
-    /// data: URI 同样会被抽出为文件，避免 AI 读到数 MB 的 base64。
-    /// `-s` 保留 frontmatter（否则标题丢失）；`--wrap=none` 不做硬折行。
-    ///
-    /// 无图片时直接存 .md；有图片时打包 .zip（.md + media/）。
+    /// 网页直接导出 UTF-8 .md，保留原始图片链接；文件/文本仍由 pandoc 转换。
     func exportMarkdown() {
         let kind = activeKind
-        // 网页模式的中间 .md 是渲染副产物；链接改了但没重新解析时，它属于上一篇。
-        if kind == .wechat && isStale {
-            ensureFresh { self.exportMarkdown() }
+        guard !isConverting else { return }
+        if kind == .wechat {
+            let raw = wechatURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let article = cachedWebArticle, article.url == raw {
+                saveWebMarkdown(markdown: article.markdown, title: article.title)
+            } else {
+                convertWechat(markdownOnly: true)
+            }
             return
         }
         let src = sourceFileURL
         let text = pasteText.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let wechatMd = lastWechatMarkdownURL
 
         // 输入、源格式、默认文件名
         var inputURL: URL?
@@ -849,12 +844,7 @@ class ConversionViewModel: ObservableObject {
             inputText = content
             baseName = title.isEmpty ? "document" : title
         case .wechat:
-            guard let md = wechatMd,
-                  FileManager.default.fileExists(atPath: md.path) else {
-                setStatus("请先完成网页解析后再导出", .err); return
-            }
-            inputURL = md
-            baseName = title.isEmpty ? "article" : title
+            return // 网页导出在上方独立处理。
         }
         baseName = baseName.replacingOccurrences(
             of: #"[/\\:*?"<>|]"#, with: "_", options: .regularExpression)
@@ -922,6 +912,40 @@ class ConversionViewModel: ObservableObject {
                         self.setStatus("保存失败：\(error.localizedDescription)", .err)
                     }
                 }
+            }
+        }
+    }
+
+    /// JSON 字符串也是合法 YAML 双引号标量，能安全保留引号、反斜线和换行。
+    static func webArticleMarkdown(_ article: ExtractedArticle, sourceURL: String) -> String {
+        func quoted(_ value: String) -> String {
+            let data = try! JSONEncoder().encode(value)
+            return String(decoding: data, as: UTF8.self)
+        }
+        var fields = ["title: \(quoted(article.title))", "source: \(quoted(sourceURL))"]
+        for (key, value) in [("author", article.author), ("date", article.date), ("site", article.site)] {
+            if let value = value, !value.isEmpty { fields.append("\(key): \(quoted(value))") }
+        }
+        return "---\n" + fields.joined(separator: "\n") + "\n---\n\n" + article.markdown + "\n"
+    }
+
+    private func saveWebMarkdown(markdown: String, title: String) {
+        let safeName = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"[/\\:*?"<>|\x00-\x1F]"#, with: "_", options: .regularExpression)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = (safeName.isEmpty ? "article" : String(safeName.prefix(60))) + ".md"
+        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        panel.begin { [weak self] response in
+            guard let self = self else { return }
+            guard response == .OK, let destination = panel.url else {
+                self.setStatus("已取消 Markdown 导出", .info)
+                return
+            }
+            do {
+                try markdown.write(to: destination, atomically: true, encoding: .utf8)
+                self.setStatus("已保存到 \(destination.lastPathComponent)", .ok)
+            } catch {
+                self.setStatus("保存失败：\(error.localizedDescription)", .err)
             }
         }
     }

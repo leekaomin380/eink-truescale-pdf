@@ -13,3 +13,8 @@ dist/
 # agy（Antigravity CLI 委托）在 worktree 里落的运行日志，非产出
 agy.stdout
 agy.stderr
+
+# Direct transport build products
+.build/
+direct/runtime-dist/
+__pycache__/

@@ -1,0 +1,184 @@
+import SwiftUI
+import AppKit
+import CoreText
+
+struct ClipboardLayoutProfile: Codable, Equatable {
+    var cjkFont = "Songti SC"
+    var latinFont = "Times New Roman"
+    var bodySize = "10.5pt"
+    var margin = "14mm"
+    var leading = "0.85em"
+    var pageW = "157.1mm"
+    var pageH = "209.5mm"
+    var docLang = "zh"
+    var printTime = true
+    var deviceIndex = 0
+    var fontFiles: [String] = []
+
+    func withFontFiles() -> Self {
+        var result = self
+        var paths = Set<String>()
+        for name in [latinFont, cjkFont] {
+            let font = CTFontCreateWithName(name as CFString, 12, nil)
+            let variants: [CTFontSymbolicTraits] = [[], .traitBold, .traitItalic, [.traitBold, .traitItalic]]
+            for traits in variants {
+                let variant = CTFontCreateCopyWithSymbolicTraits(font, 12, nil, traits, traits) ?? font
+                if let url = CTFontCopyAttribute(variant, kCTFontURLAttribute) as? URL {
+                    paths.insert(url.path)
+                }
+            }
+        }
+        result.fontFiles = paths.sorted()
+        return result
+    }
+}
+
+final class ClipboardLayoutStore: ObservableObject {
+    static let shared = ClipboardLayoutStore()
+    @Published private(set) var useShared = true
+    @Published private(set) var sharedProfile = ClipboardLayoutProfile()
+    @Published var independent = ClipboardLayoutProfile()
+    @Published private(set) var errorMessage = ""
+    @Published private(set) var cjkFonts = ["Songti SC"]
+    @Published private(set) var latinFonts = ["Times New Roman"]
+    @Published private(set) var devices: [DeviceInfo] = []
+    private var hasIndependent = false
+    private let fileURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Quaderno Converter/clipboard-layout.json")
+
+    private struct Saved: Codable {
+        var version = 1
+        var useShared: Bool
+        var shared: ClipboardLayoutProfile
+        var independent: ClipboardLayoutProfile
+        var hasIndependent: Bool
+    }
+
+    private init() {
+        if let data = try? Data(contentsOf: fileURL), let saved = try? JSONDecoder().decode(Saved.self, from: data) {
+            useShared = saved.useShared
+            sharedProfile = saved.shared
+            independent = saved.independent
+            hasIndependent = saved.hasIndependent
+        }
+    }
+
+    var effective: ClipboardLayoutProfile { useShared ? sharedProfile : independent }
+
+    func updateShared(_ profile: ClipboardLayoutProfile, cjk: [String], latin: [String], devices: [DeviceInfo]) {
+        sharedProfile = profile
+        cjkFonts = Array(Set(cjk + [profile.cjkFont, independent.cjkFont])).sorted()
+        latinFonts = Array(Set(latin + [profile.latinFont, independent.latinFont])).sorted()
+        self.devices = devices
+        persist()
+    }
+
+    func setIndependent(_ enabled: Bool) {
+        if enabled && !hasIndependent {
+            independent = sharedProfile
+            hasIndependent = true
+        }
+        useShared = !enabled
+        persist()
+    }
+
+    func copyShared() {
+        independent = sharedProfile
+        hasIndependent = true
+        persist()
+    }
+
+    func selectIndependentDevice(_ index: Int) {
+        guard devices.indices.contains(index) else { return }
+        let device = devices[index]
+        independent.deviceIndex = index
+        independent.pageW = String(format: "%.1fmm", device.displayMm[0])
+        independent.pageH = String(format: "%.1fmm", device.displayMm[1])
+        persist()
+    }
+
+    func persist() {
+        do {
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let saved = Saved(useShared: useShared, shared: sharedProfile.withFontFiles(),
+                              independent: independent.withFontFiles(), hasIndependent: hasIndependent)
+            let data = try JSONEncoder().encode(saved)
+            try data.write(to: fileURL, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+            errorMessage = ""
+        } catch {
+            errorMessage = "快捷投递排版保存失败：\(error.localizedDescription)"
+        }
+    }
+}
+
+struct ClipboardLayoutSettings: View {
+    @ObservedObject private var store = ClipboardLayoutStore.shared
+
+    var body: some View {
+        GroupBox("Ctrl+1 排版") {
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle("使用独立排版", isOn: Binding(get: { !store.useShared }, set: { store.setIndependent($0) }))
+                Text(store.useShared
+                     ? "跟随「文件、文本、网页」的共用设置；在主窗口调整后，这里同步生效。"
+                     : "仅影响 Ctrl+1 剪贴板投递，其他三个输入页保持原设置。")
+                    .font(.callout).foregroundStyle(.secondary)
+                let profile = store.effective
+                Text("当前：\(profile.bodySize) · 边距 \(profile.margin) · \(profile.pageW) × \(profile.pageH)\n\(profile.cjkFont) / \(profile.latinFont)")
+                    .font(.caption).foregroundStyle(.secondary)
+
+                if !store.useShared {
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                        GridRow {
+                            Text("目标设备")
+                            Picker("目标设备", selection: Binding(get: { store.independent.deviceIndex }, set: { store.selectIndependentDevice($0) })) {
+                                ForEach(store.devices.indices, id: \.self) { index in
+                                    Text(store.devices[index].name).tag(index)
+                                }
+                            }.labelsHidden()
+                        }
+                        GridRow {
+                            Text("正文字号")
+                            Picker("正文字号", selection: $store.independent.bodySize) {
+                                ForEach(ConversionViewModel.bodySizeChoices, id: \.self) { Text($0).tag($0) }
+                            }.labelsHidden()
+                        }
+                        GridRow {
+                            Text("行距")
+                            Picker("行距", selection: $store.independent.leading) {
+                                ForEach(ConversionViewModel.leadingChoices, id: \.0) { Text($0.1).tag($0.0) }
+                            }.labelsHidden()
+                        }
+                        GridRow {
+                            Text("页边距")
+                            Picker("页边距", selection: $store.independent.margin) {
+                                ForEach(ConversionViewModel.marginChoices, id: \.self) { Text($0).tag($0) }
+                            }.labelsHidden()
+                        }
+                        GridRow {
+                            Text("中文字体")
+                            Picker("中文字体", selection: $store.independent.cjkFont) {
+                                ForEach(store.cjkFonts, id: \.self) { Text($0).tag($0) }
+                            }.labelsHidden()
+                        }
+                        GridRow {
+                            Text("西文字体")
+                            Picker("西文字体", selection: $store.independent.latinFont) {
+                                ForEach(store.latinFonts, id: \.self) { Text($0).tag($0) }
+                            }.labelsHidden()
+                        }
+                        GridRow {
+                            Text("页脚时间")
+                            Toggle("显示时间", isOn: $store.independent.printTime)
+                        }
+                    }
+                    Button("从共用设置重新复制") { store.copyShared() }
+                }
+                Text("设置自动保存。退出 App 后，Ctrl+1 仍使用这里最后保存的设置。")
+                    .font(.caption).foregroundStyle(.secondary)
+                if !store.errorMessage.isEmpty { Text(store.errorMessage).foregroundStyle(.red).font(.caption) }
+            }.padding(8)
+        }
+        .onChange(of: store.independent) { _, _ in store.persist() }
+    }
+}
