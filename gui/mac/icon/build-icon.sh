@@ -88,11 +88,15 @@ cp "$WORK/1024.png" "$OUT_PNG"
 # ---- macOS 26+：AppIcon.icon → Assets.car -----------------------------------
 rm -rf "$OUT_ICON"
 mkdir -p "$OUT_ICON/Assets"
-node "$HERE/icon.mjs" --layer     > "$OUT_ICON/Assets/device.svg"
-node "$HERE/icon.mjs" --glow-layer > "$OUT_ICON/Assets/glow.svg"
-# 投影烘焙成 PNG 图层：.icon 里的 SVG filter 不生效（见 icon.mjs 的 shadowLayerSvg）。
-node "$HERE/icon.mjs" --shadow-layer > "$WORK/shadow.svg"
-raster "$WORK/shadow.svg" 1024 "$OUT_ICON/Assets/shadow.png"
+# 图层清单来自 icon.mjs 的 LAYERS。阴影层要烘焙成 PNG：.icon 里的 SVG filter 不生效。
+node "$HERE/icon.mjs" --layers | while read -r name kind; do
+  if [[ "$kind" == png ]]; then
+    node "$HERE/icon.mjs" --layer "$name" > "$WORK/layer-$name.svg"
+    raster "$WORK/layer-$name.svg" 1024 "$OUT_ICON/Assets/$name.png"
+  else
+    node "$HERE/icon.mjs" --layer "$name" > "$OUT_ICON/Assets/$name.svg"
+  fi
+done
 node "$HERE/icon.mjs" --icon-json > "$OUT_ICON/icon.json"
 if ACTOOL="$(xcrun -f actool 2>/dev/null)"; then
   mkdir -p "$WORK/car"

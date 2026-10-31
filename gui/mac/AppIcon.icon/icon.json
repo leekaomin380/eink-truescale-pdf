@@ -1,16 +1,26 @@
 {
   "fill": {
     "linear-gradient": [
-      "srgb:0.13725,0.50588,0.47843,1.00000",
-      "srgb:0.08235,0.36863,0.35294,1.00000"
+      "srgb:0.16471,0.58039,0.53333,1.00000",
+      "srgb:0.06275,0.24706,0.29804,1.00000"
     ]
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "device.svg",
-          "name": "notebook",
+          "image-name": "band.svg",
+          "name": "band",
+          "glass": false
+        },
+        {
+          "image-name": "bandshadow.png",
+          "name": "bandshadow",
+          "glass": false
+        },
+        {
+          "image-name": "page.svg",
+          "name": "page",
           "glass": false
         },
         {
@@ -19,8 +29,8 @@
           "glass": false
         },
         {
-          "image-name": "glow.svg",
-          "name": "glow",
+          "image-name": "ground.svg",
+          "name": "ground",
           "glass": false
         }
       ],
