@@ -74,12 +74,12 @@ MESSAGES = {
     '回读已通过，但设备目录未确认新文件。': (
         "Read-back passed, but the new file was not confirmed in the device's folder.",
         '読み戻しは成功しましたが、端末のフォルダーで新しいファイルを確認できませんでした。'),
-    '已保存至 Received：{name}（回读通过，已请求设备打开）': (
-        'Saved to Received: {name} (verified; asked the device to open it)',
-        'Received に保存しました：{name}（照合済み、端末に表示を要求しました）'),
-    '已保存至 Received：{name}（回读通过，设备未接受打开请求，请从 Received 打开）': (
-        'Saved to Received: {name} (verified; the device did not accept the open request — open it from Received)',
-        'Received に保存しました：{name}（照合済み。端末が表示要求を受け付けなかったため、Received から開いてください）'),
+    '已保存至 {folder}：{name}（回读通过，已请求设备打开）': (
+        'Saved to {folder}: {name} (verified; asked the device to open it)',
+        '{folder} に保存しました：{name}（照合済み、端末に表示を要求しました）'),
+    '已保存至 {folder}：{name}（回读通过，设备未接受打开请求，请从 {folder} 打开）': (
+        'Saved to {folder}: {name} (verified; the device did not accept the open request — open it from {folder})',
+        '{folder} に保存しました：{name}（照合済み。端末が表示要求を受け付けなかったため、{folder} から開いてください）'),
     '尚未配置直连。请在 App 的「设置 → 设备」中迁移现有配对。': (
         'Direct connection is not set up yet. Import the existing pairing in the app under Settings → Device.',
         '直接接続がまだ設定されていません。App の「設定 → 端末」で既存のペアリングを移行してください。'),
@@ -496,13 +496,14 @@ class Device:
                      json_body={'parent_folder_id': entry_id(folder_id)})
         return {'ok': True, 'message': tr('已移动：{name}', name=name)}
 
-    def upload(self, source):
+    def upload(self, source, destination='Document/Received'):
         if not self.cookie:
             self.authenticate()
-        destination = 'Document/Received'
         parent = self.resolve(destination)
         if not parent or parent.get('entry_type', 'folder') != 'folder':
-            raise DirectError(tr('设备 Received 文件夹不存在，未上传文件。'))
+            if destination == 'Document/Received':
+                raise DirectError(tr('设备 Received 文件夹不存在，未上传文件。'))
+            raise DirectError(tr('设备上找不到这个文件夹：{path}', path=destination))
         remote = destination + '/' + source.name
         if self.resolve(remote):
             remote = destination + '/' + source.stem[:100] + '_' + uuid.uuid4().hex[:8] + '.pdf'
@@ -528,9 +529,10 @@ class Device:
         if not info or info['entry_id'] != document_id:
             raise DirectError(tr('回读已通过，但设备目录未确认新文件。'))
         name = remote.rsplit('/', 1)[-1]
-        message = tr('已保存至 Received：{name}（回读通过，已请求设备打开）' if display_requested else
-                     '已保存至 Received：{name}（回读通过，设备未接受打开请求，请从 Received 打开）', name=name)
-        record_delivery(name, display_requested)
+        message = tr('已保存至 {folder}：{name}（回读通过，已请求设备打开）' if display_requested else
+                     '已保存至 {folder}：{name}（回读通过，设备未接受打开请求，请从 {folder} 打开）',
+                     name=name, folder=destination.rsplit('/', 1)[-1])
+        record_delivery(name, display_requested, document_id=document_id, remote=remote)
         return {'ok': True, 'message': message, 'path': remote, 'sha256': expected,
                 'display_requested': display_requested}
 
@@ -539,11 +541,22 @@ class Device:
 HISTORY_LIMIT = 50
 
 
-def record_delivery(name, display_requested, via='direct'):
+def record_delivery(name, display_requested, via='direct', document_id=None, remote=None):
     """Append a verified delivery for the App's「最近投递」. Never fails the delivery itself."""
-    # QUADERNO_SOURCE: clipboard (Ctrl+1) / finder (right-click) / app; set by the caller.
-    entry = {'time': datetime.now().astimezone().isoformat(timespec='seconds'), 'name': name,
-             'source': os.environ.get('QUADERNO_SOURCE', 'app'), 'opened': display_requested, 'via': via}
+    append_history({'status': 'ok', 'name': name, 'opened': display_requested, 'via': via,
+                    'document_id': document_id, 'remote': remote})
+
+
+def record_failure(name, message, kept=None):
+    """A failed delivery, with the local PDF kept for retry (shown with 重试 / 在 Finder 中显示)."""
+    append_history({'status': 'failed', 'name': name, 'message': message,
+                    'kept': kept if kept and Path(kept).exists() else None})
+
+
+def append_history(entry):
+    # QUADERNO_SOURCE: clipboard (Ctrl+1) / finder (right-click) / app / files (Device Files) / retry.
+    entry = {'time': datetime.now().astimezone().isoformat(timespec='seconds'),
+             'source': os.environ.get('QUADERNO_SOURCE', 'app'), **entry}
     path = ROOT / 'history.jsonl'
     try:
         lines = path.read_text().splitlines() if path.exists() else []
@@ -876,6 +889,7 @@ def render_and_upload(args):
                 else:
                     result = device.upload(output)
             except Exception as error:
+                record_failure(output.name, str(error), kept=str(output))
                 raise DirectError(tr('{error}；PDF 已保留：{path}', error=error, path=output)) from error
     output.unlink(missing_ok=True)
     result['layout_source'] = mode
@@ -908,6 +922,7 @@ def main():
     parser.add_argument('--kind', choices=['document', 'folder'], default='document')
     parser.add_argument('--name', default='', help='display name (messages) or new folder name')
     parser.add_argument('--to', help='download: absolute local path; move: destination folder id')
+    parser.add_argument('--folder', help='upload: device folder path (default Document/Received)')
     parser.add_argument('--title', help='file name for render-upload; default derives one from the text')
     args = parser.parse_args()
     if args.action == 'text':
@@ -944,12 +959,19 @@ def main():
                 source = Path(args.file)
                 if not source.is_file() or source.suffix.lower() != '.pdf':
                     raise DirectError(tr('请选择已有的 PDF 文件。'))
+                folder = args.folder or 'Document/Received'
                 try:
-                    device = connect_device()
-                except DeviceUnreachable as error:
-                    result = hand_off_or_raise(source, error)
-                else:
-                    result = device.upload(source)
+                    try:
+                        device = connect_device()
+                    except DeviceUnreachable as error:
+                        if folder != 'Document/Received':
+                            raise  # the official app's queue can only deliver to Received
+                        result = hand_off_or_raise(source, error)
+                    else:
+                        result = device.upload(source, folder)
+                except Exception as error:
+                    record_failure(source.name, str(error), kept=str(source))
+                    raise
         print(json.dumps(result, ensure_ascii=False))
     except Exception as error:
         if isinstance(error, (OSError, subprocess.TimeoutExpired)):

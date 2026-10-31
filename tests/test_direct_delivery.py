@@ -351,11 +351,11 @@ class MessageLanguageTests(unittest.TestCase):
             return direct.tr(text, **values)
 
     def test_app_language_selects_translation(self):
-        text = '已保存至 Received：{name}（回读通过，已请求设备打开）'
-        self.assertEqual(self.message_in('en', text, name='a.pdf'),
+        text = '已保存至 {folder}：{name}（回读通过，已请求设备打开）'
+        self.assertEqual(self.message_in('en', text, name='a.pdf', folder='Received'),
                          'Saved to Received: a.pdf (verified; asked the device to open it)')
-        self.assertTrue(self.message_in('ja', text, name='a.pdf').startswith('Received に保存しました：a.pdf'))
-        self.assertTrue(self.message_in('zh-Hans', text, name='a.pdf').startswith('已保存至 Received：a.pdf'))
+        self.assertTrue(self.message_in('ja', text, name='a.pdf', folder='Received').startswith('Received に保存しました：a.pdf'))
+        self.assertTrue(self.message_in('zh-Hans', text, name='a.pdf', folder='Received').startswith('已保存至 Received：a.pdf'))
 
     def test_unsupported_language_falls_back_to_english(self):
         self.assertEqual(self.message_in('de-DE', '未选择文件'), 'No files selected')
@@ -527,3 +527,52 @@ class FileManagementTests(unittest.TestCase):
             with self.assertRaises(direct.DirectError):
                 action()
         self.assertEqual(calls, [])
+
+
+class HistoryDetailTests(unittest.TestCase):
+    def entries(self, root):
+        import json
+        path = root / 'history.jsonl'
+        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    def test_failed_render_upload_is_recorded_with_kept_pdf(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temp, patch.object(direct, 'ROOT', Path(temp) / 'Direct'):
+            input_file = Path(temp) / 'input.md'; input_file.write_text('# 失败记录\n正文')
+            args = SimpleNamespace(directory=temp, input=str(input_file), pandoc='pandoc', typst='typst',
+                format='markdown', template='template', font=[], page_width='157mm', page_height='209mm',
+                margin='14mm', size='10pt', leading='0.85em', font_directory=None, title='失败记录')
+            class Broken:
+                def upload(self, source): raise direct.DirectError('回读校验不一致')
+            def render(command, **kw):
+                Path(command[command.index('-o') + 1]).write_bytes(b'%PDF')
+                return SimpleNamespace(returncode=0, stderr=b'')
+            with patch.object(direct, 'connect_device', return_value=Broken()), \
+                 patch.object(direct.subprocess, 'run', side_effect=render):
+                with self.assertRaises(direct.DirectError):
+                    direct.render_and_upload(args)
+            [entry] = self.entries(Path(temp) / 'Direct')
+            self.assertEqual((entry['status'], entry['name'], entry['message']), ('failed', '失败记录.pdf', '回读校验不一致'))
+            self.assertTrue(Path(entry['kept']).exists())
+
+    def test_upload_into_chosen_folder_records_document_id(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(direct, 'ROOT', Path(temp) / 'Direct'):
+            source = Path(temp) / 'a.pdf'; source.write_bytes(b'%PDF-a')
+            key = direct.RSA.generate(1024).export_key()
+            device = direct.Device({'address': 'Android.local'}, key, 'c'); device.cookie = 'x'
+            resolved = []
+            def resolve(path):
+                resolved.append(path)
+                if path == 'Document/Reading': return {'entry_id': 'f9', 'entry_type': 'folder'}
+                if path == 'Document/Reading/a.pdf' and len(resolved) > 2: return {'entry_id': 'new'}
+                return None
+            device.resolve = resolve
+            def request(method, endpoint, **kw):
+                if endpoint == '/documents2':
+                    self.assertEqual(kw['json_body']['parent_folder_id'], 'f9')
+                    return direct.Response(201, {}, b'{"document_id":"new"}')
+                return direct.Response(200, {}, source.read_bytes())
+            device.request = request
+            device.upload(source, 'Document/Reading')
+            [entry] = self.entries(Path(temp) / 'Direct')
+            self.assertEqual((entry['status'], entry['document_id'], entry['remote']), ('ok', 'new', 'Document/Reading/a.pdf'))

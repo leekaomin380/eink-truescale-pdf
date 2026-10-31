@@ -9,7 +9,7 @@ enum DirectDelivery {
         let details: String
     }
 
-    static func run(_ arguments: [String]) async -> Result {
+    static func run(_ arguments: [String], environment extra: [String: String] = [:]) async -> Result {
         await Task.detached(priority: .userInitiated) {
             guard let resources = Bundle.main.resourceURL else {
                 return Result(success: false, message: L("缺少直连工具，请重新安装 App"), details: "")
@@ -17,7 +17,7 @@ enum DirectDelivery {
             let process = Process()
             process.executableURL = resources.appendingPathComponent("direct/quaderno-direct")
             process.arguments = arguments
-            process.environment = helperEnvironment()
+            process.environment = helperEnvironment().merging(extra) { _, new in new }
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = pipe

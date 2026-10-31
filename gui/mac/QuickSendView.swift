@@ -10,17 +10,35 @@ struct DeliveryRecord: Decodable, Identifiable {
     let time: String
     let name: String
     let source: String
-    let opened: Bool
+    /// ok（旧记录没有该字段）或 failed。
+    let status: String?
     /// direct：直连并回读校验；official：直连不可用时经 QUADERNO PC App 投递（无回读）。
     let via: String?
+    let documentID: String?
+    /// 设备上的完整路径，例如 Document/Received/a.pdf。
+    let remote: String?
+    /// 失败原因与保留在本地、可重试的 PDF。
+    let message: String?
+    let kept: String?
     var id: String { time + name }
 
+    enum CodingKeys: String, CodingKey {
+        case time, name, source, status, via, remote, message, kept
+        case documentID = "document_id"
+    }
+
+    var failed: Bool { status == "failed" }
     var date: Date? { ISO8601DateFormatter().date(from: time) }
+    var keptURL: URL? {
+        kept.map(URL.init(fileURLWithPath:)).flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+    }
 
     var sourceLabel: String {
         switch source {
         case "clipboard": "⌃1"
         case "finder": L("Finder 右键")
+        case "files": L("设备文件")
+        case "retry": L("重试")
         default: L("App 内投递")
         }
     }
@@ -106,8 +124,20 @@ final class QuickSendMonitor: ObservableObject {
     private func loadHistory() -> [DeliveryRecord] {
         guard let text = try? String(contentsOf: historyURL, encoding: .utf8) else { return [] }
         let decoder = JSONDecoder()
-        return text.split(separator: "\n").compactMap { try? decoder.decode(DeliveryRecord.self, from: Data($0.utf8)) }
-            .reversed().prefix(10).map { $0 }
+        var delivered = Set<String>()
+        var records: [DeliveryRecord] = []
+        // 从新到旧：同名文件之后已投递成功的失败记录不再显示（例如重试成功）。
+        for record in text.split(separator: "\n").reversed()
+            .compactMap({ try? decoder.decode(DeliveryRecord.self, from: Data($0.utf8)) }) {
+            if record.failed {
+                if delivered.contains(record.name) { continue }
+            } else {
+                delivered.insert(record.name)
+            }
+            records.append(record)
+            if records.count == 10 { break }
+        }
+        return records
     }
 }
 
@@ -718,6 +748,8 @@ struct RecentDeliveriesButton: View {
 
 struct RecentDeliveriesList: View {
     @ObservedObject private var monitor = QuickSendMonitor.shared
+    @State private var status = ""
+    @State private var working = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -727,15 +759,14 @@ struct RecentDeliveriesList: View {
             } else {
                 ForEach(Array(monitor.history.enumerated()), id: \.element.id) { index, record in
                     if index > 0 { Divider() }
-                    HStack(spacing: 12) {
-                        Image(systemName: record.via == "official" ? "arrow.triangle.branch" : "checkmark")
-                            .foregroundStyle(record.via == "official" ? Color.orange : Color.green).fontWeight(.semibold)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: record.name).lineLimit(1).truncationMode(.middle).help(record.name)
-                            Text(verbatim: detail(for: record)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                    }
+                    row(record)
+                }
+            }
+            if working || !status.isEmpty {
+                Divider()
+                HStack(spacing: 8) {
+                    if working { ProgressView().controlSize(.small) }
+                    Text(verbatim: status).font(.caption).foregroundStyle(.secondary).lineLimit(3)
                 }
             }
         }
@@ -743,10 +774,67 @@ struct RecentDeliveriesList: View {
         .onAppear { monitor.refresh() }
     }
 
+    private func row(_ record: DeliveryRecord) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: record.failed ? "xmark.octagon" : record.via == "official" ? "arrow.triangle.branch" : "checkmark")
+                .foregroundStyle(record.failed ? Color.red : record.via == "official" ? Color.orange : Color.green)
+                .fontWeight(.semibold)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: record.name).lineLimit(1).truncationMode(.middle).help(record.name)
+                Text(verbatim: detail(for: record)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            if record.failed {
+                if let kept = record.keptURL {
+                    iconButton("arrow.clockwise", L("重试")) { retry(kept) }
+                    iconButton("magnifyingglass", L("在 Finder 中显示")) {
+                        NSWorkspace.shared.activateFileViewerSelecting([kept])
+                    }
+                }
+            } else {
+                if let id = record.documentID {
+                    iconButton("ipad", L("在设备上打开")) { openOnDevice(id, record.name) }
+                }
+                if let remote = record.remote {
+                    iconButton("folder", L("在设备文件中显示")) {
+                        DeviceFilesModel.shared.reveal(remote: remote, id: record.documentID, name: record.name)
+                    }
+                }
+            }
+        }
+    }
+
+    private func iconButton(_ symbol: String, _ help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Label(help, systemImage: symbol).labelStyle(.iconOnly) }
+            .buttonStyle(.borderless)
+            .help(help)
+            .disabled(working)
+    }
+
     private func detail(for record: DeliveryRecord) -> String {
         let when = record.date.map { RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()) } ?? record.time
-        let route = record.via == "official" ? L("经 QUADERNO PC App") : L("回读校验通过")
-        return [when, record.sourceLabel, route].joined(separator: " · ")
+        let outcome = record.failed ? (record.message ?? L("投递失败"))
+            : record.via == "official" ? L("经 QUADERNO PC App") : L("回读校验通过")
+        return [when, record.sourceLabel, outcome].joined(separator: " · ")
+    }
+
+    private func retry(_ file: URL) {
+        working = true
+        Task {
+            let result = await DirectDelivery.run(["upload", "--file", file.path], environment: ["QUADERNO_SOURCE": "retry"])
+            status = result.message
+            working = false
+            monitor.refresh()
+        }
+    }
+
+    private func openOnDevice(_ id: String, _ name: String) {
+        working = true
+        Task {
+            let result = await DirectDelivery.run(["open-doc", "--id", id, "--name", name])
+            status = result.message
+            working = false
+        }
     }
 }
 

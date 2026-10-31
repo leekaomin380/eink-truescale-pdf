@@ -1,7 +1,8 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
-// 「设备文件」页面：浏览设备上的文件夹与文档，在设备上打开、下载到 Mac、移动、删除、新建文件夹。
+// 「设备文件」页面：浏览设备上的文件夹与文档，在设备上打开、下载到 Mac、上传、移动、删除、新建文件夹。
 // 投递从不删除或覆盖文件；这里的删除与移动只在用户明确操作并确认后执行。
 
 struct DeviceEntry: Identifiable, Hashable {
@@ -13,6 +14,9 @@ struct DeviceEntry: Identifiable, Hashable {
     let modified: Date?
 
     var isFolder: Bool { type == "folder" }
+    /// Table 排序需要非可选值：缺失的大小和时间排在最前。
+    var sortSize: Int { size ?? -1 }
+    var sortDate: Date { modified ?? .distantPast }
 
     init?(_ json: [String: Any]) {
         guard let id = json["id"] as? String, let name = json["name"] as? String else { return nil }
@@ -38,6 +42,10 @@ final class DeviceFilesModel: ObservableObject {
     @Published private(set) var loaded = false
     @Published var message = ""
     @Published var messageIsError = false
+    /// 从「最近投递」跳转时要显示的文档：用名称筛选（大目录里无法滚动到指定行），并选中它。
+    @Published var pendingReveal: (id: String?, name: String)?
+    /// 跳转进行中：页面首次出现时不要再加载根目录，否则会与跳转的加载竞争并覆盖它（实测）。
+    private(set) var revealing = false
 
     var folders: [DeviceEntry] { entries.filter(\.isFolder) }
     var documents: [DeviceEntry] { entries.filter { !$0.isFolder } }
@@ -70,13 +78,34 @@ final class DeviceFilesModel: ObservableObject {
         await load(folderPath.split(separator: "/").dropLast().joined(separator: "/"))
     }
 
-    /// 执行一个改动设备的操作，成功后刷新当前文件夹。
+    /// 打开设备文件页面，进入文档所在文件夹并选中它。
+    func reveal(remote: String, id: String?, name: String) {
+        revealing = true
+        MainNavigation.shared.show(.files)
+        let folder = remote.split(separator: "/").dropLast().joined(separator: "/")
+        Task {
+            await load(folder)
+            revealing = false
+            pendingReveal = (id, name)
+        }
+    }
+
+    /// 依次执行改动设备的操作，全部结束后刷新一次；消息汇总成功与失败。
     @discardableResult
-    func perform(_ arguments: [String]) async -> Bool {
-        let result = await DirectDelivery.run(arguments)
-        report(result.message, error: !result.success)
-        if result.success { await load(keepMessage: true) }
-        return result.success
+    func perform(_ batches: [[String]], environment: [String: String] = [:]) async -> Bool {
+        var failures: [String] = []
+        var last = ""
+        for arguments in batches {
+            let result = await DirectDelivery.run(arguments, environment: environment)
+            if result.success { last = result.message } else { failures.append(result.message) }
+        }
+        if failures.isEmpty {
+            report(batches.count == 1 ? last : L("已完成 \(batches.count) 项"), error: false)
+        } else {
+            report(L("\(failures.count) 项失败：") + (failures.first ?? ""), error: true)
+        }
+        await load(keepMessage: true)
+        return failures.isEmpty
     }
 
     func report(_ text: String, error: Bool) {
@@ -171,7 +200,7 @@ struct DeviceFolderSidebar: View {
             TextField("名称", text: $newFolderName)
             Button("新建") {
                 let name = newFolderName
-                Task { await model.perform(["mkdir", "--id", model.folderID, "--name", name]) }
+                Task { await model.perform([["mkdir", "--id", model.folderID, "--name", name]]) }
             }
             Button("取消", role: .cancel) {}
         } message: {
@@ -181,13 +210,14 @@ struct DeviceFolderSidebar: View {
                             isPresented: Binding(get: { folderToDelete != nil }, set: { if !$0 { folderToDelete = nil } })) {
             Button("删除", role: .destructive) {
                 if let folder = folderToDelete {
-                    Task { await model.perform(["delete", "--id", folder.id, "--kind", "folder", "--name", folder.name]) }
+                    Task { await model.perform([["delete", "--id", folder.id, "--kind", "folder", "--name", folder.name]]) }
                 }
             }
         } message: {
-            Text("文件夹中的文档和手写批注会一起删除，无法恢复。")
+            // 实测：设备会连同其中的文档与子文件夹一起删除，不会因非空而拒绝。
+            Text("文件夹中的所有文档、子文件夹和手写批注会一起删除，无法恢复。")
         }
-        .task { if !model.loaded { await model.load() } }
+        .task { if !model.loaded && !model.revealing { await model.load() } }
     }
 }
 
@@ -195,56 +225,90 @@ struct DeviceFolderSidebar: View {
 
 struct DeviceDocumentsView: View {
     @ObservedObject private var model = DeviceFilesModel.shared
-    @State private var selection: DeviceEntry.ID?
-    @State private var documentToDelete: DeviceEntry?
-    @State private var documentToMove: DeviceEntry?
+    @State private var selection = Set<DeviceEntry.ID>()
+    @State private var query = ""
+    @State private var sortOrder = [KeyPathComparator(\DeviceEntry.name, comparator: .localizedStandard)]
+    @State private var confirmDelete = false
+    @State private var moving: [DeviceEntry] = []
+    @State private var dropTargeted = false
 
-    private var selected: DeviceEntry? { model.documents.first { $0.id == selection } }
+    private var rows: [DeviceEntry] {
+        let filtered = query.isEmpty ? model.documents
+            : model.documents.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        return filtered.sorted(using: sortOrder)
+    }
+
+    private var selected: [DeviceEntry] { model.documents.filter { selection.contains($0.id) } }
+    private var single: DeviceEntry? { selected.count == 1 ? selected.first : nil }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Button("在设备上打开", systemImage: "ipad") { if let doc = selected { open(doc) } }
-                Button("下载…", systemImage: "arrow.down.circle") { if let doc = selected { download(doc) } }
-                Button("移动…", systemImage: "folder") { documentToMove = selected }
+                Button("在设备上打开", systemImage: "ipad") { if let doc = single { open(doc) } }
+                    .disabled(single == nil)
+                Button("下载…", systemImage: "arrow.down.circle") { if let doc = single { download(doc) } }
+                    .disabled(single == nil)
+                Button("移动…", systemImage: "folder") { moving = selected }
+                    .disabled(selected.isEmpty)
+                Button("删除…", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                    .disabled(selected.isEmpty)
                 Spacer()
-                Button("删除…", systemImage: "trash", role: .destructive) { documentToDelete = selected }
+                Button("上传 PDF…", systemImage: "square.and.arrow.up") { chooseAndUpload() }
+                    .disabled(!model.loaded)
+                TextField("搜索", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 180)
             }
-            .disabled(selected == nil)
             .padding(12)
             Divider()
 
-            Table(model.documents, selection: $selection) {
-                TableColumn("名称") { doc in
+            Table(rows, selection: $selection, sortOrder: $sortOrder) {
+                TableColumn("名称", value: \.name, comparator: .localizedStandard) { doc in
                     Label(doc.name, systemImage: "doc.richtext").lineLimit(1).truncationMode(.middle).help(doc.name)
                 }
                 .width(min: 140, ideal: 200)
-                TableColumn("大小") { doc in
+                TableColumn("大小", value: \.sortSize) { doc in
                     Text(doc.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "—")
                         .foregroundStyle(.secondary)
                 }
                 .width(min: 50, ideal: 64, max: 100)
-                TableColumn("修改时间") { doc in
+                TableColumn("修改时间", value: \.sortDate) { doc in
                     Text(doc.modified.map { $0.formatted(date: .numeric, time: .shortened) } ?? "—")
                         .foregroundStyle(.secondary)
                 }
                 .width(min: 100, ideal: 124, max: 180)
             }
             .contextMenu(forSelectionType: DeviceEntry.ID.self) { ids in
-                if let doc = model.documents.first(where: { ids.contains($0.id) }) {
+                let docs = model.documents.filter { ids.contains($0.id) }
+                if docs.count == 1, let doc = docs.first {
                     Button("在设备上打开") { open(doc) }
                     Button("下载…") { download(doc) }
-                    Button("移动…") { documentToMove = doc }
+                }
+                if !docs.isEmpty {
+                    Button("移动…") { moving = docs }
                     Divider()
-                    Button("删除…", role: .destructive) { documentToDelete = doc }
+                    Button("删除…", role: .destructive) {
+                        selection = Set(docs.map(\.id))
+                        confirmDelete = true
+                    }
                 }
             } primaryAction: { ids in
                 if let doc = model.documents.first(where: { ids.contains($0.id) }) { open(doc) }
             }
             .overlay {
-                if model.loaded && model.documents.isEmpty {
-                    Text("这个文件夹里没有文档").foregroundStyle(.secondary)
+                if model.loaded && rows.isEmpty {
+                    Text(query.isEmpty ? L("这个文件夹里没有文档。可以把 PDF 拖到这里上传。") : L("没有匹配的文档"))
+                        .foregroundStyle(.secondary)
                 }
+            }
+            .overlay {
+                if dropTargeted {
+                    RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 3).padding(4)
+                }
+            }
+            .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+                loadURLs(providers) { upload($0) }
+                return true
             }
 
             if !model.message.isEmpty {
@@ -259,18 +323,33 @@ struct DeviceDocumentsView: View {
                 .padding(10)
             }
         }
-        .confirmationDialog(documentToDelete.map { L("删除「\($0.name)」？") } ?? "",
-                            isPresented: Binding(get: { documentToDelete != nil }, set: { if !$0 { documentToDelete = nil } })) {
+        .confirmationDialog(deleteTitle, isPresented: $confirmDelete) {
             Button("删除", role: .destructive) {
-                if let doc = documentToDelete {
-                    selection = nil
-                    Task { await model.perform(["delete", "--id", doc.id, "--kind", "document", "--name", doc.name]) }
+                let docs = selected
+                selection = []
+                Task {
+                    await model.perform(docs.map { ["delete", "--id", $0.id, "--kind", "document", "--name", $0.name] })
                 }
             }
         } message: {
             Text("文档上的手写批注会一起删除，无法恢复。")
         }
-        .sheet(item: $documentToMove) { doc in MoveDocumentSheet(document: doc) }
+        .sheet(isPresented: Binding(get: { !moving.isEmpty }, set: { if !$0 { moving = [] } })) {
+            MoveDocumentSheet(documents: moving)
+        }
+        .onChange(of: model.pendingReveal?.name) { _, _ in applyPendingReveal() }
+        .onAppear { applyPendingReveal() }
+    }
+
+    private var deleteTitle: String {
+        selected.count == 1 ? L("删除「\(selected[0].name)」？") : L("删除选中的 \(selected.count) 个文档？")
+    }
+
+    private func applyPendingReveal() {
+        guard let reveal = model.pendingReveal else { return }
+        query = reveal.name
+        selection = reveal.id.map { [$0] } ?? []
+        model.pendingReveal = nil
     }
 
     private func open(_ doc: DeviceEntry) {
@@ -290,12 +369,49 @@ struct DeviceDocumentsView: View {
             model.report(result.message, error: !result.success)
         }
     }
+
+    private func chooseAndUpload() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        upload(panel.urls)
+    }
+
+    /// 上传到当前文件夹（只接受 PDF；Markdown 等需要排版的文件请用 Finder 右键投递）。
+    private func upload(_ urls: [URL]) {
+        let pdfs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
+        guard !pdfs.isEmpty else {
+            model.report(L("这里只能上传 PDF。Markdown 和 TXT 请用 Finder 右键投递。"), error: true)
+            return
+        }
+        let folder = model.folderPath
+        Task {
+            await model.perform(pdfs.map { ["upload", "--file", $0.path, "--folder", folder] },
+                                environment: ["QUADERNO_SOURCE": "files"])
+        }
+    }
+
+    private func loadURLs(_ providers: [NSItemProvider], completion: @escaping ([URL]) -> Void) {
+        var urls: [URL] = []
+        let group = DispatchGroup()
+        for provider in providers {
+            group.enter()
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                DispatchQueue.main.async {
+                    if let url { urls.append(url) }
+                    group.leave()
+                }
+            }
+        }
+        group.notify(queue: .main) { completion(urls) }
+    }
 }
 
 // MARK: - 移动：选择目标文件夹
 
 struct MoveDocumentSheet: View {
-    let document: DeviceEntry
+    let documents: [DeviceEntry]
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var model = DeviceFilesModel.shared
     @State private var path = DeviceFilesModel.root
@@ -304,9 +420,13 @@ struct MoveDocumentSheet: View {
     @State private var loading = false
     @State private var failure = ""
 
+    private var title: String {
+        documents.count == 1 ? L("移动「\(documents[0].name)」") : L("移动 \(documents.count) 个文档")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("移动「\(document.name)」").font(.headline).lineLimit(1)
+            Text(verbatim: title).font(.headline).lineLimit(1)
             HStack {
                 Button("上一级", systemImage: "arrow.turn.left.up") {
                     browse(path.split(separator: "/").dropLast().joined(separator: "/"))
@@ -328,8 +448,9 @@ struct MoveDocumentSheet: View {
                 Spacer()
                 Button("移到这里") {
                     let target = folderID
+                    let docs = documents
                     dismiss()
-                    Task { await model.perform(["move", "--id", document.id, "--to", target, "--name", document.name]) }
+                    Task { await model.perform(docs.map { ["move", "--id", $0.id, "--to", target, "--name", $0.name] }) }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(folderID.isEmpty || path == model.folderPath)

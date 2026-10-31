@@ -20,6 +20,22 @@
         }
       }
     },
+    "%lld 项失败：": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld failed: "
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 件失敗："
+          }
+        }
+      }
+    },
     "/ %lld 页": {
       "localizations": {
         "en": {
@@ -548,6 +564,22 @@
         }
       }
     },
+    "上传 PDF…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload PDF…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF をアップロード…"
+          }
+        }
+      }
+    },
     "下载…": {
       "localizations": {
         "en": {
@@ -980,6 +1012,22 @@
         }
       }
     },
+    "删除选中的 %lld 个文档？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the %lld selected documents?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択した %lld 件の文書を削除しますか？"
+          }
+        }
+      }
+    },
     "刷新": {
       "localizations": {
         "en": {
@@ -1172,6 +1220,22 @@
         }
       }
     },
+    "在 Finder 中显示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Finder"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder で表示"
+          }
+        }
+      }
+    },
     "在 Finder 中显示许可全文": {
       "localizations": {
         "en": {
@@ -1232,6 +1296,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "端末で開く"
+          }
+        }
+      }
+    },
+    "在设备文件中显示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Device Files"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末のファイルで表示"
           }
         }
       }
@@ -1556,6 +1636,22 @@
         }
       }
     },
+    "已完成 %lld 项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done: %lld items"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 件完了しました"
+          }
+        }
+      }
+    },
     "已连接 · USB": {
       "localizations": {
         "en": {
@@ -1860,6 +1956,22 @@
         }
       }
     },
+    "投递失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delivery failed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信に失敗しました"
+          }
+        }
+      }
+    },
     "投递脚本缺失，请重新安装完整 App。": {
       "localizations": {
         "en": {
@@ -2004,6 +2116,22 @@
         }
       }
     },
+    "搜索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "検索"
+          }
+        }
+      }
+    },
     "撤销": {
       "localizations": {
         "en": {
@@ -2052,18 +2180,18 @@
         }
       }
     },
-    "文件夹中的文档和手写批注会一起删除，无法恢复。": {
+    "文件夹中的所有文档、子文件夹和手写批注会一起删除，无法恢复。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The documents in it and their handwritten notes are deleted too. This cannot be undone."
+            "value": "All documents, subfolders and handwritten notes in it are deleted too. This cannot be undone."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "中の文書と手書きの書き込みも一緒に削除され、元に戻せません。"
+            "value": "中のすべての文書・サブフォルダー・手書きの書き込みも一緒に削除され、元に戻せません。"
           }
         }
       }
@@ -2532,6 +2660,22 @@
         }
       }
     },
+    "没有匹配的文档": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching documents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一致する文書はありません"
+          }
+        }
+      }
+    },
     "没有子文件夹": {
       "localizations": {
         "en": {
@@ -2928,6 +3072,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "ここに移動"
+          }
+        }
+      }
+    },
+    "移动 %lld 个文档": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move %lld documents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 件の文書を移動"
           }
         }
       }
@@ -3764,18 +3924,18 @@
         }
       }
     },
-    "这个文件夹里没有文档": {
+    "这个文件夹里没有文档。可以把 PDF 拖到这里上传。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No documents in this folder"
+            "value": "No documents in this folder. Drop PDFs here to upload."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このフォルダーに文書はありません"
+            "value": "このフォルダーに文書はありません。PDF をここにドロップするとアップロードできます。"
           }
         }
       }
@@ -3792,6 +3952,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "これらのコンポーネントは独立したプログラムとして App に同梱され、App から起動して呼び出します。それぞれのライセンスは本プロジェクトの MIT ライセンスの影響を受けません。pandoc は動的ライブラリの読み込みパスの書き換えと再署名のみを行い、ソースコードは変更していません。"
+          }
+        }
+      }
+    },
+    "这里只能上传 PDF。Markdown 和 TXT 请用 Finder 右键投递。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only PDFs can be uploaded here. Send Markdown and TXT from Finder."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここにアップロードできるのは PDF のみです。Markdown と TXT は Finder から送信してください。"
           }
         }
       }
@@ -3904,6 +4080,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "App の再起動後に反映されます"
+          }
+        }
+      }
+    },
+    "重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再試行"
           }
         }
       }

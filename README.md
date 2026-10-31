@@ -43,9 +43,9 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 | **WeChat articles (微信公众号)** | Paste a link into the app — [jump](#reading-wechat-articles-微信公众号-on-a-quaderno) |
 | Pasted text | Type or paste into the app |
 
-**Device Files** (toolbar) manages what is already on the device: browse folders, open a document
-on the device, download it (with your handwritten notes) to the Mac, create folders, move and
-delete.
+**Device Files** (toolbar) manages what is already on the device: browse, search and sort folders,
+open a document on the device, download it (with your handwritten notes) to the Mac, upload PDFs
+into any folder (or drop them on the list), create folders, move and delete — several at once.
 
 Delivered files land in `Document/Received/` on the device and are opened on screen.
 Delivery never overwrites or deletes existing files. Deleting and moving happen only in
@@ -212,7 +212,8 @@ Your current window never loses focus. Nothing opens on your Mac. Nothing flashe
 
 The file name comes from the content: a YAML `title`, else the first Markdown heading, else
 the first sentence, plus a timestamp. **Recent Deliveries** in the toolbar lists the latest deliveries from every entry point —
-⌃1, Finder, the app itself and the fallback.
+⌃1, Finder, the app itself and the fallback — including failures, which keep their PDF for
+**Retry** or **Show in Finder**. Delivered items can be opened on the device or shown in Device Files.
 
 ### What the notifications mean
 
