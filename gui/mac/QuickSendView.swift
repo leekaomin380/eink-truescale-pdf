@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import IOKit
 
-// 「快捷投递」页：左栏是设置（设备 → 排版 → 投递入口），右栏是用法与最近投递。
+// 「快捷投递」页（左栏连接状态与排版，右栏用法与最近投递）与主窗口内的「设置」页。
 
 /// 一条已通过回读校验的投递，由直连工具写入 Direct/history.jsonl。
 struct DeliveryRecord: Decodable, Identifiable {
@@ -99,9 +99,72 @@ enum QuadernoUSB {
     }
 }
 
-// MARK: - 左栏：设置
+// MARK: - 主窗口页面切换
 
-struct QuickSendSettings: View {
+/// 主窗口当前显示的页面：nil 为输入页（文件 / 文本 / 网页 / 快捷投递）。
+enum MainPage { case settings, about }
+
+/// 菜单命令与工具栏共用的页面状态。
+@MainActor
+final class MainNavigation: ObservableObject {
+    static let shared = MainNavigation()
+    @Published var page: MainPage?
+
+    func show(_ target: MainPage) {
+        page = target
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+// MARK: - 快捷投递页左栏：连接状态 + 排版
+
+struct QuickSendSidebar: View {
+    @ObservedObject private var monitor = QuickSendMonitor.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack(spacing: 10) {
+                Circle().fill(monitor.usbModel == nil ? Color.red : Color.green).frame(width: 8, height: 8)
+                if let model = monitor.usbModel {
+                    Text(verbatim: QuadernoUSB.displayName(for: model) + " · USB").font(.callout)
+                } else {
+                    Text("USB 未连接").font(.callout)
+                }
+                Spacer()
+                Button("设备设置…") { MainNavigation.shared.show(.settings) }.buttonStyle(.link)
+            }
+            SettingsSection("排版") { ClipboardLayoutSettings() }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .onAppear { monitor.start() }
+        .onDisappear { monitor.stop() }
+    }
+}
+
+/// 分组标题 + 圆角容器，设置页与快捷投递页共用。
+struct SettingsSection<Content: View>: View {
+    let title: LocalizedStringKey
+    let content: Content
+
+    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 0) { content }
+                .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
+        }
+    }
+}
+
+// MARK: - 设置页：设备、投递入口、常见问题
+
+struct AppSettingsView: View {
     @ObservedObject private var monitor = QuickSendMonitor.shared
     @State private var address = "Android.local"
     @State private var connecting = false
@@ -110,33 +173,25 @@ struct QuickSendSettings: View {
     @State private var checkPassed: Bool?
     @State private var checkOutput = ""
     @State private var showSetup = false
-    @State private var showFAQ = false
 
     private var scriptURL: URL? { Bundle.main.url(forResource: "deliver", withExtension: "sh") }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            section("设备") { deviceGroup }
-            section("排版") { ClipboardLayoutSettings() }
-            section("投递入口") { entriesGroup }
-            Button("常见问题") { showFAQ = true }
-                .buttonStyle(.link)
-                .popover(isPresented: $showFAQ, arrowEdge: .bottom) { faq }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("设置").font(.largeTitle.weight(.semibold))
+                SettingsSection("语言") { LanguageSettings() }
+                SettingsSection("设备") { deviceGroup }
+                SettingsSection("投递入口") { entriesGroup }
+                SettingsSection("常见问题") { faq }
+            }
+            .padding(32)
+            .frame(maxWidth: 640, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
         .sheet(isPresented: $showSetup) { HotkeySetupSheet(scriptURL: scriptURL) }
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
-    }
-
-    private func section<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.subheadline.weight(.semibold))
-            VStack(alignment: .leading, spacing: 0) { content() }
-                .background(.background, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
-        }
     }
 
     private var deviceGroup: some View {
@@ -218,7 +273,6 @@ struct QuickSendSettings: View {
 
     private var faq: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("常见问题").font(.headline)
             Text("提示「no such file or directory」？").fontWeight(.medium)
             Text("通常是快捷指令仍引用已经移动的源码目录。重新复制本页命令并替换旧命令即可。命令使用 App 内置脚本，归档源码不会影响它；移动或重命名 App 后，需要重新复制命令。")
             Text("Ctrl+1 自动取内容自带标题、Markdown 标题或第一句正文作为文件名，并附加时间。App 主窗口仍使用手动标题。设备已有同名文件时另存新文件，避免覆盖手写批注。")
@@ -226,9 +280,8 @@ struct QuickSendSettings: View {
             Text("由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「发送到 QUADERNO」。")
         }
         .font(.callout)
-        .padding(16)
-        .frame(width: 380)
-        .fixedSize(horizontal: false, vertical: true)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func importPairing() {
@@ -397,6 +450,55 @@ struct HotkeySetupSheet: View {
                 Text(title).fontWeight(.semibold)
                 content()
             }
+        }
+    }
+}
+
+// MARK: - 界面语言
+
+/// App 自身的界面语言（AppLanguage），重新启动后生效；直连工具与 Ctrl+1 读取同一偏好。
+struct LanguageSettings: View {
+    private static let choices: [(code: String, name: String)] = [
+        ("zh-Hans", "简体中文"), ("en", "English"), ("ja", "日本語"),
+    ]
+    private let launchLanguage = AppLanguage.chosen ?? ""
+    @State private var language = AppLanguage.chosen ?? ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("界面语言")
+                Spacer()
+                Picker("界面语言", selection: $language) {
+                    Text("跟随系统").tag("")
+                    ForEach(Self.choices, id: \.code) { Text(verbatim: $0.name).tag($0.code) }
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            if language != launchLanguage {
+                HStack {
+                    Text("重新启动 App 后生效").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("立即重新启动") { relaunch() }
+                }
+            }
+        }
+        .padding(12)
+        .onChange(of: language) { _, value in
+            if value.isEmpty {
+                UserDefaults.standard.removeObject(forKey: AppLanguage.key)
+            } else {
+                UserDefaults.standard.set(value, forKey: AppLanguage.key)
+            }
+        }
+    }
+
+    private func relaunch() {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, _ in
+            DispatchQueue.main.async { NSApp.terminate(nil) }
         }
     }
 }

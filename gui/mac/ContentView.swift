@@ -34,6 +34,7 @@ private struct PrimaryStyled: ViewModifier {
 struct ContentView: View {
     @Environment(\.undoManager) private var undoManager
     @StateObject private var vm = ConversionViewModel()
+    @ObservedObject private var navigation = MainNavigation.shared
     @State private var inputMode: InputMode = .epub
     @State private var isDragOver = false
     @State private var previewImage: NSImage?
@@ -81,6 +82,11 @@ struct ContentView: View {
     /// 标题栏显示当前文档，而非固定的应用名 —— macOS 惯例，
     /// 也让同时开多个窗口时能一眼分辨。
     private var windowTitle: String {
+        switch navigation.page {
+        case .settings: return L("设置")
+        case .about: return L("关于 Quaderno Converter")
+        case nil: break
+        }
         switch inputMode {
         case .epub:
             return vm.sourceFileName.isEmpty ? L("电子书转换") : vm.sourceFileName
@@ -121,16 +127,27 @@ struct ContentView: View {
     }
 
     var body: some View {
-        HSplitView {
-            sidebar
-                .frame(minWidth: 300, idealWidth: 360, maxWidth: 520)
-            if inputMode == .shortcut {
-                QuickSendOverview()
-                    .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                previewArea
+        Group {
+            switch navigation.page {
+            case .settings:
+                AppSettingsView()
+            case .about:
+                AboutView()
+            case nil:
+                HSplitView {
+                    sidebar
+                        .frame(minWidth: 300, idealWidth: 360, maxWidth: 520)
+                    if inputMode == .shortcut {
+                        QuickSendOverview()
+                            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        previewArea
+                    }
+                }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .toolbar { pageToolbar }
         .onChange(of: vm.currentPage) { _, _ in
             updatePreview()
         }
@@ -155,6 +172,33 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Toolbar: 设置 / 关于
+
+    @ToolbarContentBuilder
+    private var pageToolbar: some ToolbarContent {
+        if navigation.page != nil {
+            ToolbarItem(placement: .navigation) {
+                Button("返回", systemImage: "chevron.left") { navigation.page = nil }
+                    .help(L("返回输入页"))
+            }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            // Buttons, not Toggles: a toolbar Toggle writes its binding while the toolbar is built.
+            Button { togglePage(.settings) } label: {
+                Label("设置", systemImage: navigation.page == .settings ? "gearshape.fill" : "gearshape")
+            }
+            .help(L("设置"))
+            Button { togglePage(.about) } label: {
+                Label("关于", systemImage: navigation.page == .about ? "info.circle.fill" : "info.circle")
+            }
+            .help(L("关于 Quaderno Converter"))
+        }
+    }
+
+    private func togglePage(_ page: MainPage) {
+        navigation.page = navigation.page == page ? nil : page
+    }
+
     // MARK: - Sidebar
 
     private var sidebar: some View {
@@ -163,7 +207,7 @@ struct ContentView: View {
             Divider()
 
             if inputMode == .shortcut {
-                ScrollView { QuickSendSettings() }
+                ScrollView { QuickSendSidebar() }
             } else {
                 if inputMode == .text {
                     textWorkspace

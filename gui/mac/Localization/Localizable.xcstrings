@@ -676,6 +676,22 @@
         }
       }
     },
+    "关于": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "情報"
+          }
+        }
+      }
+    },
     "关于 Quaderno Converter": {
       "localizations": {
         "en": {
@@ -1328,22 +1344,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "クイック送信のレイアウトを保存できませんでした：%@"
-          }
-        }
-      }
-    },
-    "快捷投递设置…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quick Send Settings…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "クイック送信の設定…"
           }
         }
       }
@@ -2260,6 +2260,22 @@
         }
       }
     },
+    "界面语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App language"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表示言語"
+          }
+        }
+      }
+    },
     "目标设备": {
       "localizations": {
         "en": {
@@ -2320,6 +2336,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "直接送信に失敗しました。端末の接続を確認してください。"
+          }
+        }
+      }
+    },
+    "立即重新启动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Now"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今すぐ再起動"
           }
         }
       }
@@ -2660,6 +2692,22 @@
         }
       }
     },
+    "设备设置…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device Settings…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末の設定…"
+          }
+        }
+      }
+    },
     "设备通信协议参考（MIT）。未打包或调用其代码。": {
       "localizations": {
         "en": {
@@ -2676,6 +2724,22 @@
         }
       }
     },
+    "设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
+          }
+        }
+      }
+    },
     "设置 ⌃1 快捷键": {
       "localizations": {
         "en": {
@@ -2688,6 +2752,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "⌃1 ショートカットの設定"
+          }
+        }
+      }
+    },
+    "设置…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定…"
           }
         }
       }
@@ -2752,6 +2832,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "このページの本文はスクリプトで読み込まれるため取得できません。ブラウザで本文をコピーし、「テキストを貼り付け」を使ってください。"
+          }
+        }
+      }
+    },
+    "语言": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "言語"
           }
         }
       }
@@ -2852,6 +2948,22 @@
         }
       }
     },
+    "跟随系统": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same as system"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムに合わせる"
+          }
+        }
+      }
+    },
     "输入来源": {
       "localizations": {
         "en": {
@@ -2896,6 +3008,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "既存のペアリングを移行…"
+          }
+        }
+      }
+    },
+    "返回": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "戻る"
+          }
+        }
+      }
+    },
+    "返回输入页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to input"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "入力画面に戻る"
           }
         }
       }
@@ -2992,6 +3136,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "多くの場合、ショートカットが移動済みのソースフォルダーを参照したままになっています。このページのコマンドをコピーし直して置き換えてください。コマンドは App 内蔵のスクリプトを使うため、ソースのアーカイブは影響しません。App を移動・名前変更した場合はコマンドをコピーし直してください。"
+          }
+        }
+      }
+    },
+    "重新启动 App 后生效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Takes effect after restarting the app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App の再起動後に反映されます"
           }
         }
       }

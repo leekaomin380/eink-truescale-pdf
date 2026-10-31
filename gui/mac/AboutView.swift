@@ -1,12 +1,6 @@
 import SwiftUI
 import AppKit
 
-struct AboutMenu: View {
-    @Environment(\.openWindow) private var openWindow
-    var body: some View {
-        Button("关于 Quaderno Converter") { openWindow(id: "about") }
-    }
-}
 
 /// 「关于」窗口：项目、作者、许可，以及随 App 分发的第三方组件。
 /// 组件清单须与仓库根目录 THIRD-PARTY-LICENSES.md 保持一致。
@@ -102,8 +96,11 @@ struct AboutView: View {
 
                 Text("FUJITSU 与 QUADERNO 是其各自权利人的商标。本项目是独立的开源项目，与富士通没有关联，也未获得其认可或赞助。设备直连只读取目录并新增文档，不删除或覆盖设备上的文件。")
                     .font(.caption).foregroundStyle(.secondary)
-            }.padding(24)
-        }.frame(width: 560, height: 640)
+            }
+            .padding(32)
+            .frame(maxWidth: 640, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
     }
 
     private var licensesURL: URL? {

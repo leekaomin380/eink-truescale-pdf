@@ -367,6 +367,19 @@ class MessageLanguageTests(unittest.TestCase):
             for translated in translations:
                 self.assertEqual(fields(translated), fields(source), source)
 
+    def test_hotkey_follows_language_chosen_in_app(self):
+        from types import SimpleNamespace
+        def defaults(command, **kwargs):
+            if command[2].endswith('Library/Preferences/' + direct.APP_BUNDLE_ID) and command[3] == 'AppLanguage':
+                return SimpleNamespace(returncode=0, stdout='ja\n')
+            return SimpleNamespace(returncode=0, stdout='(\n    "zh-Hans-CN"\n)\n')
+        direct.language.cache_clear()
+        with patch.dict(os.environ, {}, clear=False), patch.object(direct.subprocess, 'run', side_effect=defaults):
+            os.environ.pop('QUADERNO_LANG', None)
+            self.assertEqual(direct.language(), 'ja')
+        os.environ['QUADERNO_LANG'] = 'zh-Hans'
+        direct.language.cache_clear()
+
 
 class HistoryTests(unittest.TestCase):
     def test_history_keeps_latest_entries_with_source(self):
@@ -378,3 +391,4 @@ class HistoryTests(unittest.TestCase):
             entries = [json.loads(line) for line in (Path(temp) / 'Direct/history.jsonl').read_text().splitlines()]
             self.assertEqual([entry['name'] for entry in entries], ['2.pdf', '3.pdf', '4.pdf'])
             self.assertEqual({entry['source'] for entry in entries}, {'finder'})
+

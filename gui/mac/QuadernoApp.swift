@@ -8,21 +8,17 @@ struct QuadernoApp: App {
         WindowGroup {
             ContentView()
                 .frame(minWidth: 900, minHeight: 600)
+                .environment(\.locale, AppLanguage.locale)
         }
         .commands {
             CommandGroup(replacing: .appInfo) {
-                AboutMenu()
-                ShortcutDeliveryMenu()
+                Button(L("关于 Quaderno Converter")) { MainNavigation.shared.show(.about) }
+            }
+            CommandGroup(replacing: .appSettings) {
+                Button(L("设置…")) { MainNavigation.shared.show(.settings) }
+                    .keyboardShortcut(",", modifiers: .command)
             }
         }
-        Window("快捷投递", id: "shortcut-delivery") {
-            ShortcutDeliveryView()
-        }
-        .windowResizability(.contentSize)
-        Window("关于 Quaderno Converter", id: "about") {
-            AboutView()
-        }
-        .windowResizability(.contentSize)
     }
 }
 

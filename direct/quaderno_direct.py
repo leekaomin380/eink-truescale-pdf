@@ -31,6 +31,7 @@ from Crypto.Signature import pkcs1_15
 import yaml
 
 ROOT = Path.home() / 'Library/Application Support/Quaderno Converter/Direct'
+APP_BUNDLE_ID = 'com.eink-truescale.gui'
 
 # User-facing messages: zh-Hans source text -> (English, 日本語). Same languages as the App.
 MESSAGES = {
@@ -142,14 +143,20 @@ MESSAGES = {
 def language():
     """'zh', 'ja' or 'en'. The App passes its own UI language; otherwise follow macOS."""
     preferred = os.environ.get('QUADERNO_LANG', '')
-    if not preferred:
+    # Ctrl+1 runs outside the App: use the language chosen in the App's settings, else macOS's.
+    # The App's preferences by file path: `defaults read <bundle id>` would resolve to a sandbox
+    # container of the same bundle id (the App Store edition) instead of this App's own file.
+    app_preferences = str(Path.home() / 'Library/Preferences' / APP_BUNDLE_ID)
+    for domain, key in ([] if preferred else [(app_preferences, 'AppLanguage'), ('-g', 'AppleLanguages')]):
         try:
-            output = subprocess.run(['/usr/bin/defaults', 'read', '-g', 'AppleLanguages'],
-                                    capture_output=True, text=True, timeout=3).stdout
-            match = re.search(r'"?([A-Za-z]{2,3})[-_A-Za-z]*"?', output.replace('(', ' '))
-            preferred = match.group(1) if match else ''
+            output = subprocess.run(['/usr/bin/defaults', 'read', domain, key],
+                                    capture_output=True, text=True, timeout=3)
         except (OSError, subprocess.TimeoutExpired):
-            preferred = ''
+            continue
+        match = re.search(r'([A-Za-z]{2,3})[-_A-Za-z]*', output.stdout.replace('(', ' '))
+        if output.returncode == 0 and match:
+            preferred = match.group(1)
+            break
     preferred = preferred.lower()
     return 'zh' if preferred.startswith('zh') else 'ja' if preferred.startswith('ja') else 'en'
 
