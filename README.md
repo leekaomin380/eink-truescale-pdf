@@ -1,27 +1,21 @@
 # eink-truescale-pdf
 
-> 当前 macOS App 已改用设备直连，Ctrl+1 剪贴板投递自动命名。配置、验收与限制见 [直连投递](docs/DIRECT-DELIVERY.md)。下方未更新的官方客户端说明描述旧版投递路径。
-
-Current project handoff documents:
-
-- [Product overview](docs/PRODUCT.md) — current product scope, two-edition strategy, users, architecture and quality bar.
-- [Project progress](docs/PROGRESS.md) — verified release status, completed work, blockers and next actions as of 2026-08-07.
-
-**Copy text → press a hotkey → it appears on your e-ink device.** No GUI, no windows, nothing steals your focus.
+**Copy text → press a hotkey → it appears on your e-ink device.** No windows, nothing steals your focus.
 
 The core finding here: most "PDF looks blurry on e-ink" complaints trace back to the
 device silently rescaling a page sized for paper (A4/Letter) down to its actual screen —
 losing sharpness in the process. Render at the screen's true physical size instead, and
-227 ppi looks as clean as commercial e-readers. The delivery integration below targets
-Fujitsu QUADERNO specifically (the reverse-engineered protocol is device-specific), but
-the calibration method and typography findings apply to any e-ink device — see
-[E-Ink Display Metrics](docs/quaderno-display-metrics.md).
+227 ppi looks as clean as commercial e-readers. Delivery targets Fujitsu QUADERNO
+specifically, but the calibration method and typography findings apply to any e-ink
+device — see [E-Ink Display Metrics](docs/quaderno-display-metrics.md).
 
-Turns whatever Markdown is on your clipboard into a properly typeset PDF and delivers it
-straight into your Fujitsu QUADERNO's sync queue — entirely in the background.
+Quaderno Converter turns whatever Markdown is on your clipboard into a properly typeset PDF
+and sends it **directly to the device over USB or the local network** — no official client
+in the loop. Every delivery is read back from the device and checked by SHA-256 before it
+counts as delivered.
 
 ```
-Copy Markdown  ──►  ⌃⌥⌘P  ──►  it's on your e-ink screen
+Copy Markdown  ──►  ⌃1  ──►  it's open on your e-ink screen
 ```
 
 Built for people who read long-form text on e-ink and are tired of this dance:
@@ -32,19 +26,24 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 > against the screen, and find out whether it displays PDFs at true 1:1. No installation
 > needed to use it.
 
-**Four ways to get content onto the device**, all rendering at the screen's true
-physical size:
+**Ways to get content onto the device**, all rendering at the screen's true physical size:
 
 | Source | How |
 |---|---|
-| Clipboard Markdown | Global hotkey — [jump](#bind-the-hotkey) |
-| EPUB / MOBI ebooks | `book.sh` or the app — [jump](#converting-ebooks) |
+| Clipboard Markdown | Global hotkey ⌃1 — [jump](#bind-the-hotkey) |
+| Files in Finder | Right-click a PDF, Markdown or TXT file → **Send to QUADERNO** — [jump](#send-from-finder) |
+| EPUB / FB2 / HTML / MOBI ebooks | The app, or `book.sh` — [jump](#converting-ebooks) |
 | **WeChat articles (微信公众号)** | Paste a link into the app — [jump](#reading-wechat-articles-微信公众号-on-a-quaderno) |
 | Pasted text | Type or paste into the app |
+
+Delivered files land in `Document/Received/` on the device and are opened on screen.
+Existing files are never overwritten or deleted.
 
 The WeChat support exists because QUADERNO is a Japanese device with no path for Chinese
 social-platform content, and 微信公众号 is where much of Chinese long-form writing lives.
 Extraction runs locally on your Mac — no server, no account.
+
+The app is available in **简体中文, English and 日本語** (Settings → Language).
 
 ---
 
@@ -56,17 +55,19 @@ that you find out in 30 seconds than after twenty minutes of setup.
 To use **everything**, including one-key delivery to the device:
 
 - [ ] **Apple Silicon Mac** (M1 or newer), running macOS 14 or later
-- [ ] **A Fujitsu QUADERNO device** — A5 (FMVDP51) or A4 (FMVDP41)
-- [ ] **QUADERNO PC App** installed in `/Applications`, with your device paired and
-      showing *Connected*
+- [ ] **A Fujitsu QUADERNO device** — A5 (FMVDP51) or A4 (FMVDP41), connected by USB or on
+      the same local network
+- [ ] **An existing pairing on this Mac.** Direct delivery reuses the pairing that the
+      official **QUADERNO PC App** created, imported once (Settings → Device → Connection
+      Settings → Import Existing Pairing). After that the official app is not needed.
+      Pairing a new device from scratch with its PIN is [not implemented yet](#contributing).
 
-The downloadable desktop app is self-contained: **Homebrew, pandoc, typst, Xcode and a
-manually configured command path are not required.** Homebrew is needed only when using
-the source/command-line workflow described below.
+If the direct connection is unavailable and the official QUADERNO PC App happens to be
+running, the PDF is handed to it instead, so delivery still works at a minimum level —
+see [When direct delivery fails](#when-direct-delivery-fails).
 
-**Without a QUADERNO**, only the delivery step is unavailable — the delivery protocol was
-reverse-engineered from that specific client. Everything upstream of it still works, and
-you can save the PDF and transfer it however you normally would:
+**Without a QUADERNO**, only the delivery step is unavailable. Everything upstream of it
+still works, and you can save the PDF and transfer it however you normally would:
 
 - Converting EPUBs and **WeChat articles** into clean, correctly-sized PDFs
 - [The calibration method](docs/quaderno-display-metrics.md) — works on any e-ink device
@@ -82,16 +83,20 @@ you can save the PDF and transfer it however you normally would:
 
 ### Desktop app (recommended)
 
-1. Download `Quaderno-Converter-1.1.0-macOS-arm64.zip` from the
-   [latest GitHub Release](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest).
-2. Open the ZIP and drag **Quaderno Converter.app** into `/Applications`.
-3. Install the official **QUADERNO PC App** into `/Applications`, pair the device, and
-   confirm that it shows *Connected*.
-4. Open Quaderno Converter. No command path or Shortcut configuration is needed.
+> **Release 1.1.0 predates direct delivery**, Finder sending and the multilingual UI: it still
+> delivers through the official client. Until the next release is published, build the app
+> from source to get them — see [The desktop app](#the-desktop-app).
 
-The release is signed with Developer ID and notarized by Apple. It supports Apple Silicon
-only. EPUB, FB2, HTML, Markdown, pasted text and web links work without additional tools;
-MOBI/AZW conversion remains optional and requires Calibre.
+1. Download the latest `Quaderno-Converter-*-macOS-arm64.zip` from
+   [GitHub Releases](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest).
+2. Open the ZIP and drag **Quaderno Converter.app** into `/Applications`.
+3. Connect the QUADERNO by USB and wake it.
+4. Open Quaderno Converter → **Settings** (⚙︎ in the toolbar, or ⌘,) → **Device** →
+   **Connection Settings** → **Import Existing Pairing**, then press **Check**.
+
+Releases are signed with Developer ID and notarized by Apple. Apple Silicon only. EPUB, FB2,
+HTML, Markdown, pasted text and web links work without additional tools; MOBI/AZW
+conversion remains optional and requires Calibre.
 
 ### Source / command-line workflow
 
@@ -99,30 +104,39 @@ MOBI/AZW conversion remains optional and requires Calibre.
 brew install pandoc typst
 git clone https://github.com/leekaomin380/eink-truescale-pdf.git
 cd eink-truescale-pdf
-chmod +x deliver.sh
-./deliver.sh --check     # verify every link in the chain
+zsh direct/build-helper.sh   # builds the bundled direct-connection tool (needs uv)
+./deliver.sh --check         # render a test PDF and authenticate to the device; uploads nothing
 ```
 
-`--check` matters more than it looks. This tool has five independent moving parts and
-**most of them fail silently** when broken. Run it first; run it again any time something
-seems off.
+`--check` matters more than it looks: rendering, pairing and the device connection are
+independent moving parts. Run it first; run it again any time something seems off.
 
 There is deliberately **no `curl | sh` installer**. The script reads your clipboard and
-calls system APIs — you should be able to read it before you run it.
-It's short, and every non-obvious line is commented.
+talks to your device — you should be able to read it before you run it.
 
 ---
 
 ## Bind the hotkey
 
-### Desktop app: 快捷投递
+### Desktop app
 
-Open **快捷投递** from the fourth source tab beside 文件 / 文本 / 网页, or **Quaderno Converter → 快捷投递设置…**.
-The page provides a copyable command, Shortcuts setup instructions (suggested key:
-Control + 1), a local self-check, and troubleshooting. The command uses `deliver.sh`
-inside the installed app, with bundled pandoc and typst, so moving the source checkout
-does not break it. If the app itself is moved or renamed, copy the command again.
-Self-check renders a PDF and authenticates directly to the device without uploading a document. Actual delivery downloads the uploaded PDF again and verifies its SHA-256. Clipboard delivery follows the layout preferences shared by File, Text and Web modes by default. In 快捷投递 → Ctrl+1 排版, enable 使用独立排版 to override them without changing the other modes. Settings persist when the App is closed.
+Open **Settings → Ways to Send → Clipboard hotkey → Setup Guide…**. It walks through the one
+step macOS will not let an app do for you — creating a Shortcut and binding ⌃1 — with a
+**Copy Command** button. The command runs `deliver.sh` inside the installed app, with bundled
+pandoc and typst, so moving the source checkout does not break it. If the app itself is
+moved or renamed, copy the command again.
+
+Clipboard delivery follows the layout shared by the File, Text and Web tabs by default. On
+the **Quick Send** tab, turn off **Follow main window layout** to give ⌃1 and Finder sending
+their own layout. Settings persist when the app is closed.
+
+### Send from Finder
+
+Right-click one or more PDF, Markdown or TXT files in Finder and choose **Send to QUADERNO**
+at the bottom of the menu. PDFs are uploaded as they are; Markdown and TXT are typeset with
+the Quick Send layout and keep their file names. This is a native macOS service provided by
+the app — there is nothing to install. If the item is missing, enable it in
+**System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders**.
 
 ### Source checkout
 
@@ -167,7 +181,7 @@ rather not, the desktop app covers the same ground without one.
 
 5. Name it something like **Send to Quaderno**
 6. Click **ⓘ** (Details) → **Add Keyboard Shortcut** → press your combination.
-   `⌃⌥⌘P` is a good choice — almost nothing else uses it.
+   `⌃1` is suggested; `⌃⌥⌘P` is a safe alternative if ⌃1 is taken.
 7. Close the window. Shortcuts saves automatically.
 
 The first time you trigger it, macOS may ask for permission. Allow it once.
@@ -178,23 +192,32 @@ The first time you trigger it, macOS may ask for permission. Allow it once.
 
 1. Copy some Markdown
 2. Press your hotkey
-3. A notification confirms delivery; the document appears on your device shortly after
+3. A notification confirms delivery, and the document opens on the device
 
-Your current window never loses focus. Nothing opens. Nothing flashes.
+Your current window never loses focus. Nothing opens on your Mac. Nothing flashes.
+
+The file name comes from the content: a YAML `title`, else the first Markdown heading, else
+the first sentence, plus a timestamp. The **Quick Send** tab lists the most recent deliveries.
 
 ### What the notifications mean
 
 | Notification | Meaning |
 |---|---|
-| ✅ Delivered · N chars | The client accepted the upload |
-| ❌ Clipboard is empty | Nothing to send |
-| ❌ Render failed: … | Markdown could not be typeset (reason included) |
-| ❌ Device offline or cancelled | The client could not reach your device |
-| ⚠️ Handed off but unconfirmed | Sent, but delivery could not be verified — check the device connection |
+| Saved to Received: *name* (verified; asked the device to open it) | Uploaded, read back and SHA-256-checked |
+| Clipboard is empty — cancelled | Nothing to send |
+| Rendering failed: … | Markdown could not be typeset (reason included) |
+| No QUADERNO found on USB — the device has disconnected | Unplug and reconnect the cable ([why](docs/usb-disconnect-investigation.md)) |
+| Sent through QUADERNO PC App: *name* | Direct connection unavailable; the official app delivered it, without read-back |
+| …The PDF was kept: *path* | Delivery failed; the rendered PDF is kept so nothing is lost |
 
-The failure notifications exist for a specific reason: **the QUADERNO client fails silently.**
-If your device is offline it writes a line to a log file and tells you nothing. This script
-watches that log so that a failed send cannot masquerade as a successful one.
+### When direct delivery fails
+
+If the direct connection fails **before anything is uploaded** (device not connected,
+authentication failed, not paired yet) and the official QUADERNO PC App is running, the PDF is
+handed to the official app's print queue instead. A failure **after** the upload started — for
+example a read-back mismatch — is never retried this way, so the same file is not delivered
+twice. The official app is never launched on your behalf; if it is installed but closed, the
+error message says so.
 
 ---
 
@@ -338,8 +361,9 @@ That means you can simply look at a printed size menu and pick:
 
 ```bash
 typst compile font-menu.typ menu.pdf
-open -gj -na "/Applications/QUADERNO PC App.app" --args --print "$PWD/menu.pdf"
 ```
+
+Then right-click `menu.pdf` in Finder → **Send to QUADERNO** (or transfer it any other way).
 
 Sizes 8–14pt, each with its characters-per-line count. Whatever looks right on your screen
 *is* what you'll get. Put that number in `BODY_SIZE`.
@@ -368,8 +392,9 @@ and transfer it to your device however you normally would. Or build it yourself:
 
 ```bash
 typst compile calibrate.typ calibration.pdf
-open -gj -na "/Applications/QUADERNO PC App.app" --args --print "$PWD/calibration.pdf"
 ```
+
+and send it with Finder → **Send to QUADERNO**.
 
 Hold a real ruler against the screen and measure the line marked **100 mm**.
 
@@ -397,9 +422,8 @@ without guessing.
 | Exit code | Cause | What to do |
 |---|---|---|
 | `1` | Clipboard empty | Copy something first |
-| `2` | Render failed | Read `/tmp/quaderno_render_<PID>.log` — it has pandoc's actual error |
-| `4` | Device offline or upload cancelled | Open the client, confirm it says *Connected* |
-| `10` | Missing dependency | Run `./deliver.sh --check` |
+| `4` | Rendering or delivery failed | The message includes the reason; run `./deliver.sh --check` |
+| `10` | Missing dependency or direct-connection tool | Run `./deliver.sh --check`, or reinstall the app |
 
 ### Known pitfalls (all already handled — documented so you recognise them)
 
@@ -413,6 +437,10 @@ modify it, these are the traps:
 - **Text containing `@` crashes the render.** Pandoc's Markdown reader treats `@something`
   as a citation; with no bibliography, typst aborts. The script disables that extension —
   along with `$…$` math, which would otherwise eat shell variables like `$PATH` in your text.
+- **The device stays plugged in but drops off USB.** Observed on the FMVDP51: the kernel
+  logs `hardware connection lost` and the device does not come back until the cable is
+  replugged. The tool detects this in milliseconds instead of timing out — see the
+  [investigation](docs/usb-disconnect-investigation.md).
 - **Text looks small or blurry.** Almost always a page-size mismatch causing the device to
   downscale. See [Verifying 1:1 display](#verifying-11-display).
 
@@ -421,27 +449,38 @@ modify it, these are the traps:
 ## How it works
 
 ```
-pbpaste ──► [empty check] ──► pandoc ──► typst ──► PDF in /tmp
-                                                      │
-                                    open -gj -na QUADERNO --args --print
-                                                      │
-                        client uploads to device, then deletes the source file
-                                                      │
-                              [watch log + watch file] ──► notification
+pbpaste ──► [empty check] ──► pandoc ──► typst ──► PDF
+                                  ║ (in parallel)
+                     authenticate to the device over HTTPS (USB / LAN)
+                                  ║
+             upload to Document/Received/ ──► ask the device to open it
+                                  ║
+       read the file back, compare SHA-256, confirm it in the folder ──► notification
 ```
 
 A few notes on why it's built this way:
 
-- **The delivery protocol** (`open -na … --args --print`) was recovered by unpacking
-  `/Library/PDF Services/Print to QUADERNO.workflow`. It's the client's own headless entry
-  point, which lets us skip the macOS print subsystem entirely.
-- **`-n` is mandatory.** macOS won't pass `--args` to an already-running application. This
-  was tested; without `-n` nothing is delivered.
-- **`-g -j`** keep the app backgrounded and hidden so your focus is never stolen.
-- **Success is inferred** from the client consuming (deleting) the source file with no new
-  errors in its log. The client provides no success signal of its own.
-- **`/tmp` is mandatory** for rendering — pandoc tries to create temp directories in the
-  read-only root otherwise, and crashes on Markdown containing images.
+- **The device speaks an HTTPS API.** The protocol follows the community reference
+  [dpt-rp1-py](https://github.com/janten/dpt-rp1-py); no code from it is bundled. The tool only
+  authenticates, lists folders, creates documents, uploads, reads back and asks the device to
+  open a file — it never deletes, overwrites or syncs.
+- **The device's identity is pinned.** On first import the certificate chain is verified,
+  then the public key is pinned; every later request must present the same key, and a changed
+  key is refused rather than accepted.
+- **Success means read back.** The uploaded file is downloaded again and compared by SHA-256,
+  and its entry is confirmed in the folder listing, before the notification says delivered.
+- **Rendering and authentication run in parallel**, and the authenticated address is cached,
+  so a short clipboard note takes about 1.75 s end to end (measured; long or image-heavy text
+  takes longer).
+- **One transfer at a time.** The app, ⌃1 and Finder share a lock, so their device sessions
+  never interleave.
+- **`/tmp` is the working directory** for rendering — pandoc tries to create temp directories
+  in the read-only root otherwise, and crashes on Markdown containing images.
+
+The older delivery path through the official client (`open -gj -na "QUADERNO PC App" --args
+--print`, recovered from `/Library/PDF Services/Print to QUADERNO.workflow`) is kept only as
+the [fallback](#when-direct-delivery-fails). Details and acceptance notes:
+[Direct delivery](docs/DIRECT-DELIVERY.md) (中文).
 
 ---
 
@@ -450,8 +489,7 @@ A few notes on why it's built this way:
 A native macOS app, if you'd rather not use the terminal.
 
 **The bundle is self-contained: pandoc and typst ship inside it**, so once built it runs
-on a Mac with no Homebrew and no command-line tools at all — install the QUADERNO client
-and it converts and sends, nothing else to set up. That costs about 306 MB (pandoc alone
+on a Mac with no Homebrew and no command-line tools at all. That costs about 306 MB (pandoc alone
 is 263 MB and cannot be stripped further); making "just works" actually true was judged
 worth the size.
 
@@ -466,6 +504,7 @@ To build:
 
 ```bash
 brew install pandoc typst      # only needed on the build machine
+zsh direct/build-helper.sh     # direct-connection tool with its own Python runtime (needs uv)
 ./gui/build-app.sh             # builds gui/Quaderno Converter.app
 ```
 
@@ -474,10 +513,15 @@ Then double-click it in Finder. (To keep it around, drag it to `/Applications`.)
 The GUI does **not** need a Shortcut or an absolute script path. The manual hotkey setup
 above applies only to the separate command-line clipboard workflow.
 
-Three input modes: **ebook conversion**, **pasted Markdown**, and
-**WeChat article links** ([details above](#reading-wechat-articles-微信公众号-on-a-quaderno)).
-Adjust fonts, size, margins and leading, preview any page, then save the PDF or send it
-straight to the device.
+Input tabs: **File** (ebook conversion), **Text** (pasted Markdown), **Web**
+(WeChat article links, [details above](#reading-wechat-articles-微信公众号-on-a-quaderno)) and
+**Quick Send** (connection status, ⌃1 layout, recent deliveries). Adjust fonts, size, margins
+and leading, preview any page, then save the PDF or send it straight to the device.
+**Settings** and **About** open in the same window from the toolbar.
+
+UI strings live in a String Catalog (`gui/mac/Localization/Localizable.xcstrings`). After
+changing UI text, run `gui/l10n-sync.sh` to extract new strings, then fill in English and
+Japanese.
 
 Pure native SwiftUI (PDFKit for preview) — no Python server, no browser engine.
 It shells out to the same `book.sh` / `deliver.sh` used by the CLI, so behavior
@@ -513,7 +557,8 @@ Send us:
 
 Open a pull request, or just email it. Contributors are credited.
 
-Code contributions are welcome too, especially A4 support and English error messages.
+Code contributions are welcome too, especially A4 support and **pairing a new device by
+PIN** — today direct delivery reuses a pairing created by the official app.
 
 ---
 
@@ -533,7 +578,9 @@ the CLI scripts use whichever is on your `PATH`. pandoc is GPL-2.0-or-later and 
 LGPL-3/GPL-2 — distributing those binaries carries obligations, which are documented and
 discharged in **[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md)** (component versions,
 the exact binary modifications made, and where to get corresponding source). typst is
-Apache-2.0. License texts ship inside the app under `Contents/Resources/licenses/`.
+Apache-2.0. The direct-connection tool bundles CPython, PyCryptodome and PyYAML. License texts
+ship inside the app under `Contents/Resources/licenses/`, and the app's **About** page lists
+every bundled component. The device protocol follows [dpt-rp1-py](https://github.com/janten/dpt-rp1-py) (MIT).
 
 Not affiliated with or endorsed by Fujitsu. QUADERNO is their trademark.
 
@@ -549,6 +596,9 @@ required. We would rather it spread than be credited.
 | Document | |
 |---|---|
 | [E-Ink Display Metrics](docs/quaderno-display-metrics.md) | How to derive and verify any e-ink device's physical display size |
+| [Direct delivery (中文)](docs/DIRECT-DELIVERY.md) | Direct connection, Finder sending, fallback: design and acceptance notes |
+| [USB disconnect investigation](docs/usb-disconnect-investigation.md) | Evidence for the FMVDP51 dropping off USB while plugged in |
+| [Product overview](docs/PRODUCT.md) | Product scope, two-edition strategy, architecture |
 | [Development log (中文)](docs/development-log-zh.md) | The full investigation, every dead end and fix |
 | [`calibrate.typ`](calibrate.typ) | 1:1 calibration page source |
 | [`font-menu.typ`](font-menu.typ) | Font size menu source |
