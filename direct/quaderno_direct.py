@@ -50,6 +50,33 @@ class ConnectionFailure(DirectError):
         super().__init__(message)
 
 
+class UsbDisconnected(DirectError):
+    def __init__(self):
+        super().__init__('USB 上未检测到 QUADERNO，设备已断开。请重新插拔 USB 线后重试。')
+
+
+FUJITSU_USB_VENDOR = 0x04c5
+
+
+def quaderno_in_ioreg(output):
+    # One block per enumerated USB device; FMVDP51 (A5) and FMVDP41 (A4) share the prefix.
+    for block in output.split('+-o ')[1:]:
+        if (f'"idVendor" = {FUJITSU_USB_VENDOR}' in block and
+                '"USB Product Name" = "FMVDP' in block):
+            return True
+    return False
+
+
+def quaderno_on_usb():
+    """True / False when the USB bus could be read; None when it could not."""
+    try:
+        result = subprocess.run(['/usr/sbin/ioreg', '-r', '-c', 'IOUSBHostDevice', '-d', '1'],
+                                capture_output=True, text=True, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return quaderno_in_ioreg(result.stdout) if result.returncode == 0 else None
+
+
 def dns_sd_output(arguments, duration=0.8):
     """Bounded read of macOS mDNS, including interface-scoped IPv6 records."""
     process = subprocess.Popen(['/usr/bin/dns-sd'] + arguments, stdout=subprocess.PIPE,
@@ -78,14 +105,19 @@ def dns_sd_output(arguments, duration=0.8):
     return b''.join(output).decode(errors='replace')
 
 
-def parse_endpoints(address_output, service_output):
-    # Prefer the interface actually advertising Fujitsu Digital Paper, not a generic
-    # Android hostname on the Wi-Fi LAN. Every candidate still has to pass TLS pinning.
+def advertising_interfaces(service_output):
     interfaces = set()
     for line in service_output.splitlines():
         fields = line.split()
         if len(fields) >= 6 and fields[1] == 'Add' and '_dp_fujitsu._tcp.' in fields:
             interfaces.add(fields[3])
+    return interfaces
+
+
+def parse_endpoints(address_output, service_output):
+    # Prefer the interface actually advertising Fujitsu Digital Paper, not a generic
+    # Android hostname on the Wi-Fi LAN. Every candidate still has to pass TLS pinning.
+    interfaces = advertising_interfaces(service_output)
     candidates = []
     for line in address_output.splitlines():
         fields = line.split()
@@ -116,7 +148,13 @@ def discover_endpoints(address):
     with ThreadPoolExecutor(max_workers=2) as executor:
         addresses = executor.submit(dns_sd_output, ['-G', 'v4v6', host])
         services = executor.submit(dns_sd_output, ['-B', '_dp_fujitsu._tcp', 'local.'])
-        found = parse_endpoints(addresses.result(), services.result())
+        service_output = services.result()
+        found = parse_endpoints(addresses.result(), service_output)
+    # The device can drop off the USB bus while still plugged in; it then stays gone
+    # until replugged. Fail at once instead of timing out against a same-named LAN host.
+    # A Wi-Fi connection still advertises the service, so it is never blocked here.
+    if not advertising_interfaces(service_output) and quaderno_on_usb() is False:
+        raise UsbDisconnected()
     return found or [address]
 
 

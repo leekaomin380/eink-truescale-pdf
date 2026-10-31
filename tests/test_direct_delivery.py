@@ -163,6 +163,33 @@ class DiscoveryTests(unittest.TestCase):
 """
         self.assertEqual(direct.parse_endpoints(output, ''), [])
 
+    def test_usb_dropout_fails_fast_without_probing_lan_namesake(self):
+        lan = "10:00:00 Add 40000003 11 Android.local. 192.168.31.40 120"
+        browse_header = "Browsing for _dp_fujitsu._tcp.local.\n"
+        def dns_sd(arguments, duration=0.8):
+            return lan if arguments[0] == '-G' else browse_header
+        with patch.object(direct, 'dns_sd_output', side_effect=dns_sd), \
+             patch.object(direct, 'quaderno_on_usb', return_value=False):
+            with self.assertRaises(direct.UsbDisconnected):
+                direct.discover_endpoints('Android.local')
+
+    def test_wifi_advertisement_or_unreadable_bus_is_not_blocked(self):
+        lan = "10:00:00 Add 40000003 11 Android.local. 192.168.31.40 120"
+        services = "10:00:00 Add 2 11 local. _dp_fujitsu._tcp. Digital Paper FMVDP51"
+        for service_output, on_usb in ((services, False), ('', None)):
+            def dns_sd(arguments, duration=0.8):
+                return lan if arguments[0] == '-G' else service_output
+            with patch.object(direct, 'dns_sd_output', side_effect=dns_sd), \
+                 patch.object(direct, 'quaderno_on_usb', return_value=on_usb):
+                self.assertEqual(direct.discover_endpoints('Android.local'), ['192.168.31.40'])
+
+    def test_ioreg_detection_requires_fujitsu_vendor_and_model(self):
+        quaderno = '+-o FMVDP51@00100000  <class IOUSBHostDevice>\n  {\n    "USB Product Name" = "FMVDP51"\n    "idVendor" = 1221\n  }\n'
+        other = '+-o Keyboard@00200000  <class IOUSBHostDevice>\n  {\n    "USB Product Name" = "FMVDP-like"\n    "idVendor" = 1452\n  }\n'
+        self.assertTrue(direct.quaderno_in_ioreg(other + quaderno))
+        self.assertFalse(direct.quaderno_in_ioreg(other))
+        self.assertFalse(direct.quaderno_in_ioreg(''))
+
 
 class TransactionTests(unittest.TestCase):
     def test_concurrent_transactions_are_blocked_then_released(self):
