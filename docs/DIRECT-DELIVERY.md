@@ -95,3 +95,11 @@ App 通过 `Info.plist` 的 `NSServices` 提供原生服务「发送到 QUADERNO
 
 实机验证：直连人为禁用时，Finder 入口投递一个 16848 字节的 PDF，1.8 秒内被官方 App 接收；
 随后经直连在设备 `Document/Received/` 查到同名文件，大小一致。
+
+## 设备文件管理（2026-10-31）
+
+App 新增「设备文件」标签页：按文件夹浏览、在设备上打开、下载到 Mac（含手写批注）、新建文件夹、移动文档、删除文档或文件夹。
+
+- 投递流程不变：仍只读取目录和新增文档，不删除、不覆盖。
+- 删除、移动、新建文件夹只在用户于该标签页中明确操作时执行；删除前每次确认，并提示手写批注会一起删除且无法恢复。
+- 接口参照 dpt-rp1-py：`GET /folders/{id}/entries2`、`GET /documents/{id}/file`、`DELETE /documents/{id}` 与 `/folders/{id}`、`POST /folders2`、`PUT /documents/{id}`（`parent_folder_id`）。条目 ID 进入 URL 前校验字符集。

@@ -20,6 +20,22 @@
         }
       }
     },
+    "%lld 项失败：": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld failed: "
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 件失敗："
+          }
+        }
+      }
+    },
     "/ %lld 页": {
       "localizations": {
         "en": {
@@ -116,7 +132,7 @@
         }
       }
     },
-    "App 内发送": {
+    "App 内投递": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -196,18 +212,18 @@
         }
       }
     },
-    "FUJITSU 与 QUADERNO 是其各自权利人的商标。本项目是独立的开源项目，与富士通没有关联，也未获得其认可或赞助。设备直连只读取目录并新增文档，不删除或覆盖设备上的文件。": {
+    "FUJITSU 与 QUADERNO 是其各自权利人的商标。本项目是独立的开源项目，与富士通没有关联，也未获得其认可或赞助。投递只读取目录并新增文档，从不删除或覆盖设备上的文件；删除、移动只在「设备文件」中由你确认后执行。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "FUJITSU and QUADERNO are trademarks of their respective owners. This is an independent open-source project, not affiliated with, endorsed or sponsored by Fujitsu. Direct connection only reads folders and adds documents; it never deletes or overwrites files on the device."
+            "value": "FUJITSU and QUADERNO are trademarks of their respective owners. This is an independent open-source project, not affiliated with, endorsed or sponsored by Fujitsu. Delivery only reads folders and adds documents and never deletes or overwrites files on the device; deleting and moving happen only in Device Files, after you confirm."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "FUJITSU および QUADERNO は、それぞれの権利者の商標です。本プロジェクトは独立したオープンソースプロジェクトであり、富士通とは関係がなく、富士通による承認や支援も受けていません。直接接続ではフォルダーの読み取りと文書の追加のみを行い、端末上のファイルを削除・上書きすることはありません。"
+            "value": "FUJITSU および QUADERNO は、それぞれの権利者の商標です。本プロジェクトは独立したオープンソースプロジェクトであり、富士通とは関係がなく、富士通による承認や支援も受けていません。送信ではフォルダーの読み取りと文書の追加のみを行い、端末上のファイルを削除・上書きすることはありません。削除と移動は「端末のファイル」で利用者が確認したときにのみ行います。"
           }
         }
       }
@@ -224,6 +240,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Finder の右クリック"
+          }
+        }
+      }
+    },
+    "Finder 右键投递无需设置，已经可以使用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending from Finder needs no setup and already works."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder からの送信は設定不要で、すでに使えます。"
           }
         }
       }
@@ -340,18 +372,18 @@
         }
       }
     },
-    "USB 未连接": {
+    "USB 已连接，但设备网络未就绪。请唤醒设备；仍不行请拔插 USB 线。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Not connected by USB"
+            "value": "Connected by USB, but the device's network is not ready. Wake the device; if that doesn't help, replug the USB cable."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "USB 未接続"
+            "value": "USB は接続されていますが、端末のネットワークが準備できていません。端末をスリープ解除し、それでもだめなら USB ケーブルを挿し直してください。"
           }
         }
       }
@@ -384,6 +416,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "macOS では App がグローバルショートカットを代わりに割り当てられないため、「ショートカット」で一度だけ設定します。1 分ほどで終わります。"
+          }
+        }
+      }
+    },
+    "macOS 不提供查询服务开关的接口。菜单中没有这一项时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中打开「投递到 QUADERNO」。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS offers no way to check whether a service is switched on. If the menu item is missing, turn on “Send to QUADERNO” in System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS にはサービスの有効・無効を確認する方法がありません。メニューに表示されない場合は「システム設定 → キーボード → キーボードショートカット → サービス → ファイルとフォルダ」で「QUADERNO へ送信」をオンにしてください。"
           }
         }
       }
@@ -436,6 +484,22 @@
         }
       }
     },
+    "⌃1 与 Finder 投递的排版": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layout for ⌃1 and Finder Sending"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃1 と Finder 送信のレイアウト"
+          }
+        }
+      }
+    },
     "⚠ 未实测": {
       "localizations": {
         "en": {
@@ -468,6 +532,70 @@
         }
       }
     },
+    "三步完成设置。完成后，投递不再需要打开 QUADERNO PC App。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Three steps to set up. After that, sending no longer needs QUADERNO PC App open."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3 ステップで設定します。設定後は QUADERNO PC App を開かずに送信できます。"
+          }
+        }
+      }
+    },
+    "上一级": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上の階層へ"
+          }
+        }
+      }
+    },
+    "上传 PDF…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload PDF…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF をアップロード…"
+          }
+        }
+      }
+    },
+    "下载…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード…"
+          }
+        }
+      }
+    },
     "下载图片…": {
       "localizations": {
         "en": {
@@ -480,6 +608,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "画像をダウンロード中…"
+          }
+        }
+      }
+    },
+    "与 Finder 右键投递共用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared with sending from Finder."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder からの送信と共通です。"
           }
         }
       }
@@ -532,22 +676,6 @@
         }
       }
     },
-    "仅影响 ⌃1 与 Finder 右键投递": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Applies only to ⌃1 and Finder sends"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌃1 と Finder からの送信にのみ適用"
-          }
-        }
-      }
-    },
     "从共用设置重新复制": {
       "localizations": {
         "en": {
@@ -560,6 +688,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "共通設定から再コピー"
+          }
+        }
+      }
+    },
+    "以后再说": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "後で"
           }
         }
       }
@@ -608,6 +752,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "保存に失敗しました：%@"
+          }
+        }
+      }
+    },
+    "修改时间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modified"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新日時"
           }
         }
       }
@@ -692,18 +852,18 @@
         }
       }
     },
-    "关于 Quaderno Converter": {
+    "关于 TrueScale for QUADERNO": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "About Quaderno Converter"
+            "value": "About TrueScale for QUADERNO"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quaderno Converter について"
+            "value": "TrueScale for QUADERNO について"
           }
         }
       }
@@ -772,6 +932,118 @@
         }
       }
     },
+    "删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除"
+          }
+        }
+      }
+    },
+    "删除…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除…"
+          }
+        }
+      }
+    },
+    "删除「%@」？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete “%@”?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」を削除しますか？"
+          }
+        }
+      }
+    },
+    "删除文件夹…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Folder…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダーを削除…"
+          }
+        }
+      }
+    },
+    "删除文件夹「%@」？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the folder “%@”?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダー「%@」を削除しますか？"
+          }
+        }
+      }
+    },
+    "删除选中的 %lld 个文档？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the %lld selected documents?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択した %lld 件の文書を削除しますか？"
+          }
+        }
+      }
+    },
+    "刷新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再読み込み"
+          }
+        }
+      }
+    },
     "剪贴板快捷键": {
       "localizations": {
         "en": {
@@ -820,18 +1092,18 @@
         }
       }
     },
-    "发送到 Quaderno": {
+    "取消": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Send to Quaderno"
+            "value": "Cancel"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quaderno へ送信"
+            "value": "キャンセル"
           }
         }
       }
@@ -848,6 +1120,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "PDF を別名で保存…"
+          }
+        }
+      }
+    },
+    "只用于 ⌃1 与 Finder 右键投递": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used only for ⌃1 and Finder sending"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃1 と Finder からの送信にのみ使用"
           }
         }
       }
@@ -900,6 +1188,22 @@
         }
       }
     },
+    "名称": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前"
+          }
+        }
+      }
+    },
     "回读校验通过": {
       "localizations": {
         "en": {
@@ -916,6 +1220,22 @@
         }
       }
     },
+    "在 Finder 中显示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Finder"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finder で表示"
+          }
+        }
+      }
+    },
     "在 Finder 中显示许可全文": {
       "localizations": {
         "en": {
@@ -928,6 +1248,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "ライセンス全文を Finder で表示"
+          }
+        }
+      }
+    },
+    "在「%@」中新建。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creates it in “%@”."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」に作成します。"
           }
         }
       }
@@ -960,6 +1296,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "端末で開く"
+          }
+        }
+      }
+    },
+    "在设备文件中显示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Device Files"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末のファイルで表示"
+          }
+        }
+      }
+    },
+    "在设置中修改…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change in Settings…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定で変更…"
           }
         }
       }
@@ -1012,6 +1380,22 @@
         }
       }
     },
+    "大小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイズ"
+          }
+        }
+      }
+    },
     "存入 Received，校验后自动打开": {
       "localizations": {
         "en": {
@@ -1056,6 +1440,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "完了"
+          }
+        }
+      }
+    },
+    "导入现有配对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import the existing pairing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既存のペアリングを移行"
+          }
+        }
+      }
+    },
+    "导入配对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Pairing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングを移行"
           }
         }
       }
@@ -1204,22 +1620,6 @@
         }
       }
     },
-    "已启用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有効"
-          }
-        }
-      }
-    },
     "已复制命令": {
       "localizations": {
         "en": {
@@ -1236,18 +1636,50 @@
         }
       }
     },
-    "已连接": {
+    "已完成 %lld 项": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connected"
+            "value": "Done: %lld items"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "接続済み"
+            "value": "%lld 件完了しました"
+          }
+        }
+      }
+    },
+    "已连接 · USB": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected · USB"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続済み · USB"
+          }
+        }
+      }
+    },
+    "已连接 · 网络": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected · Network"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続済み · ネットワーク"
           }
         }
       }
@@ -1284,6 +1716,22 @@
         }
       }
     },
+    "开始使用 TrueScale for QUADERNO": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get Started with TrueScale for QUADERNO"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TrueScale for QUADERNO を始める"
+          }
+        }
+      }
+    },
     "引导程序": {
       "localizations": {
         "en": {
@@ -1316,34 +1764,50 @@
         }
       }
     },
-    "快捷投递": {
+    "快捷键": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quick Send"
+            "value": "Hotkey"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クイック送信"
+            "value": "ショートカット"
           }
         }
       }
     },
-    "快捷投递排版保存失败：%@": {
+    "快捷键投递": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Could not save the quick-send layout: %@"
+            "value": "Hotkey Send"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クイック送信のレイアウトを保存できませんでした：%@"
+            "value": "ショートカット送信"
+          }
+        }
+      }
+    },
+    "快捷键投递排版保存失败：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save the hotkey-send layout: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカット送信のレイアウトを保存できませんでした：%@"
           }
         }
       }
@@ -1476,6 +1940,54 @@
         }
       }
     },
+    "投递到 QUADERNO": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send to QUADERNO"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QUADERNO へ送信"
+          }
+        }
+      }
+    },
+    "投递失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delivery failed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信に失敗しました"
+          }
+        }
+      }
+    },
+    "投递脚本缺失，请重新安装完整 App。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The delivery script is missing. Please reinstall the complete app."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信スクリプトがありません。App を入れ直してください。"
+          }
+        }
+      }
+    },
     "抽取失败：%@": {
       "localizations": {
         "en": {
@@ -1604,6 +2116,22 @@
         }
       }
     },
+    "搜索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "検索"
+          }
+        }
+      }
+    },
     "撤销": {
       "localizations": {
         "en": {
@@ -1652,6 +2180,22 @@
         }
       }
     },
+    "文件夹中的所有文档、子文件夹和手写批注会一起删除，无法恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All documents, subfolders and handwritten notes in it are deleted too. This cannot be undone."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中のすべての文書・サブフォルダー・手書きの書き込みも一緒に削除され、元に戻せません。"
+          }
+        }
+      }
+    },
     "文本": {
       "localizations": {
         "en": {
@@ -1664,6 +2208,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "テキスト"
+          }
+        }
+      }
+    },
+    "文档上的手写批注会一起删除，无法恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its handwritten notes are deleted too. This cannot be undone."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手書きの書き込みも一緒に削除され、元に戻せません。"
           }
         }
       }
@@ -1684,6 +2244,22 @@
         }
       }
     },
+    "新建": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作成"
+          }
+        }
+      }
+    },
     "新建快捷指令，粘贴命令": {
       "localizations": {
         "en": {
@@ -1696,6 +2272,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "ショートカットを作成してコマンドを貼り付け"
+          }
+        }
+      }
+    },
+    "新建文件夹": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Folder"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新規フォルダー"
+          }
+        }
+      }
+    },
+    "新建文件夹…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Folder…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新規フォルダー…"
           }
         }
       }
@@ -1716,7 +2324,7 @@
         }
       }
     },
-    "无可发送的内容": {
+    "无可投递的内容": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -1876,6 +2484,22 @@
         }
       }
     },
+    "未连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未接続"
+          }
+        }
+      }
+    },
     "本机检查通过": {
       "localizations": {
         "en": {
@@ -1940,22 +2564,6 @@
         }
       }
     },
-    "正在发送到 Quaderno…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sending to Quaderno…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quaderno へ送信中…"
-          }
-        }
-      }
-    },
     "正在导出 Markdown…": {
       "localizations": {
         "en": {
@@ -1968,6 +2576,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "Markdown を書き出し中…"
+          }
+        }
+      }
+    },
+    "正在投递到 QUADERNO…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending to QUADERNO…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QUADERNO へ送信中…"
+          }
+        }
+      }
+    },
+    "正在自检…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チェック中…"
           }
         }
       }
@@ -2016,6 +2656,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "本文を消去しました"
+          }
+        }
+      }
+    },
+    "没有匹配的文档": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching documents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一致する文書はありません"
+          }
+        }
+      }
+    },
+    "没有子文件夹": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No subfolders"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サブフォルダーはありません"
           }
         }
       }
@@ -2096,6 +2768,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Web リンクを消去します（取り消し可能）"
+          }
+        }
+      }
+    },
+    "渲染一份测试 PDF 并连接设备，不上传文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renders a test PDF and connects to the device without uploading anything."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テスト PDF をレンダリングして端末に接続します。ファイルはアップロードしません。"
           }
         }
       }
@@ -2212,6 +2900,22 @@
         }
       }
     },
+    "用 USB 线连接 QUADERNO 并唤醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect QUADERNO by USB and wake it"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB ケーブルで QUADERNO を接続してスリープ解除"
+          }
+        }
+      }
+    },
     "由 macOS「快捷指令」提供": {
       "localizations": {
         "en": {
@@ -2228,7 +2932,23 @@
         }
       }
     },
-    "由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「发送到 QUADERNO」。": {
+    "由本 App 提供": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provided by this app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この App が提供"
+          }
+        }
+      }
+    },
+    "由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「投递到 QUADERNO」。": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2308,7 +3028,7 @@
         }
       }
     },
-    "直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复发送。": {
+    "直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复投递。": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2336,6 +3056,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "直接送信に失敗しました。端末の接続を確認してください。"
+          }
+        }
+      }
+    },
+    "移到这里": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Here"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここに移動"
+          }
+        }
+      }
+    },
+    "移动 %lld 个文档": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move %lld documents"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 件の文書を移動"
+          }
+        }
+      }
+    },
+    "移动…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動…"
+          }
+        }
+      }
+    },
+    "移动「%@」": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move “%@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」を移動"
           }
         }
       }
@@ -2676,6 +3460,22 @@
         }
       }
     },
+    "设备文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device Files"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末のファイル"
+          }
+        }
+      }
+    },
     "设备直连工具的运行时": {
       "localizations": {
         "en": {
@@ -2704,22 +3504,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "端末認証の署名"
-          }
-        }
-      }
-    },
-    "设备设置…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Device Settings…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "端末の設定…"
           }
         }
       }
@@ -2772,6 +3556,22 @@
         }
       }
     },
+    "设置 ⌃1 快捷键（可选）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up the ⌃1 hotkey (optional)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃1 ショートカットの設定（任意）"
+          }
+        }
+      }
+    },
     "设置…": {
       "localizations": {
         "en": {
@@ -2816,6 +3616,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "設定後、テキストをコピーして ⌃1 を押して試してください"
+          }
+        }
+      }
+    },
+    "设置快捷键…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Up Hotkey…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカットを設定…"
           }
         }
       }
@@ -2916,18 +3732,18 @@
         }
       }
     },
-    "请插好 USB 线并唤醒设备；使用 Wi-Fi 时运行自检确认": {
+    "请用 USB 连接并唤醒设备；使用 Wi-Fi 时确认设备与 Mac 在同一网络。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Plug in the USB cable and wake the device; on Wi-Fi, run Check to confirm"
+            "value": "Connect the device by USB and wake it; on Wi-Fi, make sure it is on the same network as the Mac."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "USB ケーブルを接続して端末をスリープ解除してください。Wi-Fi の場合はチェックで確認します"
+            "value": "USB で接続して端末をスリープ解除してください。Wi-Fi の場合は Mac と同じネットワークにあるか確認してください。"
           }
         }
       }
@@ -2944,6 +3760,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "http(s) で始まるリンクを貼り付けてください"
+          }
+        }
+      }
+    },
+    "读取 QUADERNO PC App 在这台 Mac 上建立的配对，只需一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reads the pairing QUADERNO PC App created on this Mac. Needed only once."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この Mac で QUADERNO PC App が作成したペアリングを読み込みます。一度だけ必要です。"
           }
         }
       }
@@ -3028,6 +3860,22 @@
         }
       }
     },
+    "运行自检": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run the check"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セルフチェックを実行"
+          }
+        }
+      }
+    },
     "返回": {
       "localizations": {
         "en": {
@@ -3060,18 +3908,34 @@
         }
       }
     },
-    "还没有投递记录。复制一段文字，按 ⌃1 试试。": {
+    "还没有投递记录。投递的文件会显示在这里。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nothing sent yet. Copy some text and press ⌃1."
+            "value": "Nothing sent yet. Sent files will appear here."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "まだ送信履歴がありません。テキストをコピーして ⌃1 を押してみてください。"
+            "value": "まだ送信履歴がありません。送信したファイルがここに表示されます。"
+          }
+        }
+      }
+    },
+    "这个文件夹里没有文档。可以把 PDF 拖到这里上传。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No documents in this folder. Drop PDFs here to upload."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダーに文書はありません。PDF をここにドロップするとアップロードできます。"
           }
         }
       }
@@ -3088,6 +3952,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "これらのコンポーネントは独立したプログラムとして App に同梱され、App から起動して呼び出します。それぞれのライセンスは本プロジェクトの MIT ライセンスの影響を受けません。pandoc は動的ライブラリの読み込みパスの書き換えと再署名のみを行い、ソースコードは変更していません。"
+          }
+        }
+      }
+    },
+    "这里只能上传 PDF。Markdown 和 TXT 请用 Finder 右键投递。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only PDFs can be uploaded here. Send Markdown and TXT from Finder."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここにアップロードできるのは PDF のみです。Markdown と TXT は Finder から送信してください。"
           }
         }
       }
@@ -3120,6 +4000,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "接続中…"
+          }
+        }
+      }
+    },
+    "连接后这里会自动变为已连接。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This turns to connected automatically once it is plugged in."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続すると自動的に接続済みになります。"
+          }
+        }
+      }
+    },
+    "连接设备并唤醒后点刷新。使用 Wi-Fi 时也可以直接刷新。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect and wake the device, then refresh. On Wi-Fi you can refresh directly."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末を接続してスリープ解除し、再読み込みしてください。Wi-Fi の場合はそのまま再読み込みできます。"
           }
         }
       }
@@ -3172,6 +4084,22 @@
         }
       }
     },
+    "重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再試行"
+          }
+        }
+      }
+    },
     "链接已清空": {
       "localizations": {
         "en": {
@@ -3216,6 +4144,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "App に同梱しているコンポーネント"
+          }
+        }
+      }
+    },
+    "需要先安装 QUADERNO PC App，并与设备配对一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First install QUADERNO PC App and pair it with the device once."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先に QUADERNO PC App をインストールし、端末と一度ペアリングしてください。"
           }
         }
       }

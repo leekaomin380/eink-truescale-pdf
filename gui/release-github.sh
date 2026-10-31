@@ -14,10 +14,10 @@ set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 REPO="${SCRIPT_DIR:A:h}"
 VERSION="${1:-}"
-APP_NAME="Quaderno Converter"
+APP_NAME="TrueScale for QUADERNO"
 APP_DIR="$SCRIPT_DIR/$APP_NAME.app"
 DIST_DIR="$REPO/dist"
-ARCHIVE="$DIST_DIR/Quaderno-Converter-${VERSION}-macOS-arm64.zip"
+ARCHIVE="$DIST_DIR/TrueScale-for-QUADERNO-${VERSION}-macOS-arm64.zip"
 CHECKSUM="$ARCHIVE.sha256"
 PREPARE_SIGN_IDENTITY="${PREPARE_SIGN_IDENTITY:-}"
 TEAM_ID="${TEAM_ID:-}"
@@ -63,8 +63,7 @@ mkdir -p "$DIST_DIR"
 print ">>> 构建 Hardened Runtime 预签名 App"
 SIGN_IDENTITY="$PREPARE_SIGN_IDENTITY" "$SCRIPT_DIR/build-app.sh"
 
-# Xcode 的 developer-id 导出可以使用已登录 Account Holder 的云管理证书，
-# 因而不必在构建机上长期保存 Developer ID 私钥。导出会保留预签名中的
+# Xcode 的 developer-id 导出使用云管理证书，不必在构建机上长期保存 Developer ID 私钥。导出会保留预签名中的
 # Hardened Runtime 标志，并把主程序、pandoc、typst 与 libgmp 全部重签。
 WORK_DIR=$(mktemp -d /tmp/quaderno-release.XXXXXX)
 ARCHIVE_DIR="$WORK_DIR/$APP_NAME.xcarchive"
@@ -93,22 +92,35 @@ plutil -insert method -string developer-id "$EXPORT_OPTIONS"
 plutil -insert signingStyle -string automatic "$EXPORT_OPTIONS"
 plutil -insert teamID -string "$TEAM_ID" "$EXPORT_OPTIONS"
 
+# 默认使用 Xcode「设置 → 账户」中已登录的 Account Holder / 有云签名权限的账号。
+# EXPORT_WITH_API_KEY=1 改用 API 密钥认证；实测团队 Admin 密钥默认没有
+# 云管理分发证书的访问权限（Cloud signing permission error），需另行授权。
+EXPORT_AUTH=()
+if [[ "${EXPORT_WITH_API_KEY:-0}" == 1 ]]; then
+  EXPORT_AUTH=(-authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID"
+               -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+fi
+
 print ">>> Xcode 云端 Developer ID 签名"
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE_DIR" \
   -exportPath "$EXPORT_DIR" \
   -exportOptionsPlist "$EXPORT_OPTIONS" \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates \
+  "${EXPORT_AUTH[@]}"
 
 rm -R -- "$APP_DIR"
 ditto "$EXPORT_DIR/$APP_NAME.app" "$APP_DIR"
 
 print ">>> 验证 Developer ID 与 Hardened Runtime"
+# 直连工具（PyInstaller 运行时）的每个 Mach-O 也必须换成 Developer ID，否则公证会拒绝。
+DIRECT_MACHO=("${(@f)$(find "$APP_DIR/Contents/Resources/direct" -type f -exec sh -c 'file -b "$1" | grep -q Mach-O && echo "$1"' _ {} \;)}")
 for f in \
   "$APP_DIR" \
   "$APP_DIR/Contents/Resources/bin/pandoc" \
   "$APP_DIR/Contents/Resources/bin/typst" \
-  "$APP_DIR/Contents/Resources/lib/libgmp.10.dylib"; do
+  "$APP_DIR/Contents/Resources/lib/libgmp.10.dylib" \
+  "${DIRECT_MACHO[@]}"; do
   signature=$(codesign -dv --verbose=4 "$f" 2>&1)
   print -r -- "$signature" | grep -Fq 'Authority=Developer ID Application:' \
     || { print -u2 "不是 Developer ID Application 签名：$f"; exit 1; }

@@ -1,4 +1,11 @@
-# eink-truescale-pdf
+# TrueScale for QUADERNO
+
+> **[⬇ Download TrueScale for QUADERNO](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest)** —
+> Apple Silicon Mac, macOS 14 or later. Unzip, drag to Applications, open — a setup guide
+> takes it from there. ([Details](#install))
+
+The macOS app in this repository (`eink-truescale-pdf`) is **TrueScale for QUADERNO**: an
+independent, open-source tool for Fujitsu QUADERNO, not affiliated with Fujitsu.
 
 **Copy text → press a hotkey → it appears on your e-ink device.** No windows, nothing steals your focus.
 
@@ -9,7 +16,7 @@ losing sharpness in the process. Render at the screen's true physical size inste
 specifically, but the calibration method and typography findings apply to any e-ink
 device — see [E-Ink Display Metrics](docs/quaderno-display-metrics.md).
 
-Quaderno Converter turns whatever Markdown is on your clipboard into a properly typeset PDF
+TrueScale for QUADERNO turns whatever Markdown is on your clipboard into a properly typeset PDF
 and sends it **directly to the device over USB or the local network** — no official client
 in the loop. Every delivery is read back from the device and checked by SHA-256 before it
 counts as delivered.
@@ -36,8 +43,13 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 | **WeChat articles (微信公众号)** | Paste a link into the app — [jump](#reading-wechat-articles-微信公众号-on-a-quaderno) |
 | Pasted text | Type or paste into the app |
 
+**Device Files** (toolbar) manages what is already on the device: browse, search and sort folders,
+open a document on the device, download it (with your handwritten notes) to the Mac, upload PDFs
+into any folder (or drop them on the list), create folders, move and delete — several at once.
+
 Delivered files land in `Document/Received/` on the device and are opened on screen.
-Existing files are never overwritten or deleted.
+Delivery never overwrites or deletes existing files. Deleting and moving happen only in
+**Device Files**, when you choose to and confirm.
 
 The WeChat support exists because QUADERNO is a Japanese device with no path for Chinese
 social-platform content, and 微信公众号 is where much of Chinese long-form writing lives.
@@ -81,30 +93,32 @@ still works, and you can save the PDF and transfer it however you normally would
 
 ## Install
 
-### Desktop app (recommended)
+### Desktop app (recommended) — no Homebrew, no Terminal
 
-> **Release 1.1.0 predates direct delivery**, Finder sending and the multilingual UI: it still
-> delivers through the official client. Until the next release is published, build the app
-> from source to get them — see [The desktop app](#the-desktop-app).
+1. **[Download the latest release](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest)**
+   (`TrueScale-for-QUADERNO-*-macOS-arm64.zip`).
+2. Open the ZIP and drag **TrueScale for QUADERNO.app** into **Applications**, then open it.
+   It is signed with Developer ID and notarized by Apple, so it opens like any other app.
+3. **The setup guide opens by itself** and has three steps, each with its own button:
+   1. Connect the QUADERNO by USB and wake it — the guide notices when it appears.
+   2. **Import Pairing** — reuses the pairing QUADERNO PC App created on this Mac. Once only.
+   3. **Check** — renders a test PDF and authenticates to the device, uploading nothing.
 
-1. Download the latest `Quaderno-Converter-*-macOS-arm64.zip` from
-   [GitHub Releases](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest).
-2. Open the ZIP and drag **Quaderno Converter.app** into `/Applications`.
-3. Connect the QUADERNO by USB and wake it.
-4. Open Quaderno Converter → **Settings** (⚙︎ in the toolbar, or ⌘,) → **Device** →
-   **Connection Settings** → **Import Existing Pairing**, then press **Check**.
+That's it. Right-click a PDF, Markdown or TXT file in Finder → **Send to QUADERNO** works
+immediately. The ⌃1 clipboard hotkey is an optional fourth step in the same guide, because
+macOS only lets you bind it yourself in the Shortcuts app (about a minute).
 
-Releases are signed with Developer ID and notarized by Apple. Apple Silicon only. EPUB, FB2,
-HTML, Markdown, pasted text and web links work without additional tools; MOBI/AZW
-conversion remains optional and requires Calibre.
+The guide can be reopened at any time from **Settings → Setup Guide…** (⚙︎ in the toolbar,
+or ⌘,). Apple Silicon only. EPUB, FB2, HTML, Markdown, pasted text and web links work
+without additional tools; MOBI/AZW conversion remains optional and requires Calibre.
 
 ### Source / command-line workflow
 
 ```bash
-brew install pandoc typst
+brew install pandoc typst uv
 git clone https://github.com/leekaomin380/eink-truescale-pdf.git
 cd eink-truescale-pdf
-zsh direct/build-helper.sh   # builds the bundled direct-connection tool (needs uv)
+zsh direct/build-helper.sh   # the bundled direct-connection tool, with its own Python runtime
 ./deliver.sh --check         # render a test PDF and authenticate to the device; uploads nothing
 ```
 
@@ -120,21 +134,21 @@ talks to your device — you should be able to read it before you run it.
 
 ### Desktop app
 
-Open **Settings → Ways to Send → Clipboard hotkey → Setup Guide…**. It walks through the one
-step macOS will not let an app do for you — creating a Shortcut and binding ⌃1 — with a
-**Copy Command** button. The command runs `deliver.sh` inside the installed app, with bundled
-pandoc and typst, so moving the source checkout does not break it. If the app itself is
-moved or renamed, copy the command again.
+Open **Settings → Ways to Send → Clipboard hotkey → Set Up Hotkey…** (also step 4 of the
+setup guide). It walks through the one step macOS will not let an app do for you —
+creating a Shortcut and binding ⌃1 — with a **Copy Command** button. The command runs
+`deliver.sh` inside the installed app, with bundled pandoc and typst, so moving the source
+checkout does not break it. If the app itself is moved or renamed, copy the command again.
 
 Clipboard delivery follows the layout shared by the File, Text and Web tabs by default. On
-the **Quick Send** tab, turn off **Follow main window layout** to give ⌃1 and Finder sending
+the **Hotkey Send** tab, turn off **Follow main window layout** to give ⌃1 and Finder sending
 their own layout. Settings persist when the app is closed.
 
 ### Send from Finder
 
 Right-click one or more PDF, Markdown or TXT files in Finder and choose **Send to QUADERNO**
 at the bottom of the menu. PDFs are uploaded as they are; Markdown and TXT are typeset with
-the Quick Send layout and keep their file names. This is a native macOS service provided by
+the Hotkey Send layout and keep their file names. This is a native macOS service provided by
 the app — there is nothing to install. If the item is missing, enable it in
 **System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders**.
 
@@ -197,7 +211,9 @@ The first time you trigger it, macOS may ask for permission. Allow it once.
 Your current window never loses focus. Nothing opens on your Mac. Nothing flashes.
 
 The file name comes from the content: a YAML `title`, else the first Markdown heading, else
-the first sentence, plus a timestamp. The **Quick Send** tab lists the most recent deliveries.
+the first sentence, plus a timestamp. **Recent Deliveries** in the toolbar lists the latest deliveries from every entry point —
+⌃1, Finder, the app itself and the fallback — including failures, which keep their PDF for
+**Retry** or **Show in Finder**. Delivered items can be opened on the device or shown in Device Files.
 
 ### What the notifications mean
 
@@ -461,9 +477,11 @@ pbpaste ──► [empty check] ──► pandoc ──► typst ──► PDF
 A few notes on why it's built this way:
 
 - **The device speaks an HTTPS API.** The protocol follows the community reference
-  [dpt-rp1-py](https://github.com/janten/dpt-rp1-py); no code from it is bundled. The tool only
+  [dpt-rp1-py](https://github.com/janten/dpt-rp1-py); no code from it is bundled. Delivery only
   authenticates, lists folders, creates documents, uploads, reads back and asks the device to
-  open a file — it never deletes, overwrites or syncs.
+  open a file — it never deletes, overwrites or syncs. **Device Files** adds browsing,
+  downloading, new folders, moving and deleting, each only as an explicit action; deleting
+  always asks first, because handwritten notes go with the document.
 - **The device's identity is pinned.** On first import the certificate chain is verified,
   then the public key is pinned; every later request must present the same key, and a changed
   key is refused rather than accepted.
@@ -503,9 +521,9 @@ and the build packs your machine's own architecture.
 To build:
 
 ```bash
-brew install pandoc typst      # only needed on the build machine
+brew install pandoc typst uv   # only needed on the build machine
 zsh direct/build-helper.sh     # direct-connection tool with its own Python runtime (needs uv)
-./gui/build-app.sh             # builds gui/Quaderno Converter.app
+./gui/build-app.sh             # builds gui/TrueScale for QUADERNO.app
 ```
 
 Then double-click it in Finder. (To keep it around, drag it to `/Applications`.)
@@ -515,9 +533,10 @@ above applies only to the separate command-line clipboard workflow.
 
 Input tabs: **File** (ebook conversion), **Text** (pasted Markdown), **Web**
 (WeChat article links, [details above](#reading-wechat-articles-微信公众号-on-a-quaderno)) and
-**Quick Send** (connection status, ⌃1 layout, recent deliveries). Adjust fonts, size, margins
+**Hotkey Send** (⌃1 layout and how-to). Adjust fonts, size, margins
 and leading, preview any page, then save the PDF or send it straight to the device.
-**Settings** and **About** open in the same window from the toolbar.
+The toolbar shows the USB connection and **Recent Deliveries** everywhere, and opens
+**Device Files**, **Settings** and **About** in the same window.
 
 UI strings live in a String Catalog (`gui/mac/Localization/Localizable.xcstrings`). After
 changing UI text, run `gui/l10n-sync.sh` to extract new strings, then fill in English and
@@ -599,6 +618,7 @@ required. We would rather it spread than be credited.
 | [Direct delivery (中文)](docs/DIRECT-DELIVERY.md) | Direct connection, Finder sending, fallback: design and acceptance notes |
 | [USB disconnect investigation](docs/usb-disconnect-investigation.md) | Evidence for the FMVDP51 dropping off USB while plugged in |
 | [Product overview](docs/PRODUCT.md) | Product scope, two-edition strategy, architecture |
+| [Change checklist (中文)](docs/CHECKLIST.md) | What to check before committing device, UI or wording changes |
 | [Development log (中文)](docs/development-log-zh.md) | The full investigation, every dead end and fix |
 | [`calibrate.typ`](calibrate.typ) | 1:1 calibration page source |
 | [`font-menu.typ`](font-menu.typ) | Font size menu source |

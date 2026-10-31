@@ -16,7 +16,7 @@ struct QuadernoApp: App {
         }
         .commands {
             CommandGroup(replacing: .appInfo) {
-                Button(L("关于 Quaderno Converter")) { MainNavigation.shared.show(.about) }
+                Button(L("关于 TrueScale for QUADERNO")) { MainNavigation.shared.show(.about) }
             }
             CommandGroup(replacing: .appSettings) {
                 Button(L("设置…")) { MainNavigation.shared.show(.settings) }
@@ -39,7 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Finder 右键「发送到 QUADERNO」（Info.plist NSServices）。PDF 原样上传，Markdown / TXT 按 Ctrl+1 排版渲染。
+/// Finder 右键「投递到 QUADERNO」（Info.plist NSServices）。PDF 原样上传，Markdown / TXT 按 Ctrl+1 排版渲染。
 final class FinderSendService: NSObject {
     @objc func sendToQuaderno(_ pasteboard: NSPasteboard, userData: String?,
                               error: AutoreleasingUnsafeMutablePointer<NSString?>) {

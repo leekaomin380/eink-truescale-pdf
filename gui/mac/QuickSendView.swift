@@ -1,37 +1,79 @@
 import SwiftUI
 import AppKit
 import IOKit
+import Network
 
-// 「快捷投递」页（左栏连接状态与排版，右栏用法与最近投递）与主窗口内的「设置」页。
+// 「快捷键投递」页（左栏排版，右栏用法）、全局的连接状态与最近投递，以及主窗口内的「设置」页。
 
 /// 一条已通过回读校验的投递，由直连工具写入 Direct/history.jsonl。
 struct DeliveryRecord: Decodable, Identifiable {
     let time: String
     let name: String
     let source: String
-    let opened: Bool
+    /// ok（旧记录没有该字段）或 failed。
+    let status: String?
     /// direct：直连并回读校验；official：直连不可用时经 QUADERNO PC App 投递（无回读）。
     let via: String?
+    let documentID: String?
+    /// 设备上的完整路径，例如 Document/Received/a.pdf。
+    let remote: String?
+    /// 失败原因与保留在本地、可重试的 PDF。
+    let message: String?
+    let kept: String?
     var id: String { time + name }
 
+    enum CodingKeys: String, CodingKey {
+        case time, name, source, status, via, remote, message, kept
+        case documentID = "document_id"
+    }
+
+    var failed: Bool { status == "failed" }
     var date: Date? { ISO8601DateFormatter().date(from: time) }
+    var keptURL: URL? {
+        kept.map(URL.init(fileURLWithPath:)).flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+    }
 
     var sourceLabel: String {
         switch source {
         case "clipboard": "⌃1"
         case "finder": L("Finder 右键")
-        default: L("App 内发送")
+        case "files": L("设备文件")
+        case "retry": L("重试")
+        default: L("App 内投递")
         }
     }
 }
 
-/// USB 连接状态与最近投递。只在快捷投递页可见时轮询；两项都是本地读取，不访问设备。
+/// USB 连接状态与最近投递。App 运行时每 3 秒轮询；两项都是本地读取，不访问设备。
 @MainActor
 final class QuickSendMonitor: ObservableObject {
     static let shared = QuickSendMonitor()
     @Published private(set) var usbModel: String?
+    /// 正在发布 _dp_fujitsu._tcp 的设备型号（USB 或 Wi-Fi）。只有设备网络可用时才会出现。
+    @Published private(set) var advertisedModel: String?
     @Published private(set) var history: [DeliveryRecord] = []
     private var timer: Timer?
+    private var browser: NWBrowser?
+
+    /// 只看 USB 总线会把「插着线但网络未就绪」误报为已连接（实测：休眠后链路 inactive）。
+    enum Link: Equatable {
+        case ready(model: String, usb: Bool)
+        case usbNotReady(model: String)
+        case disconnected
+    }
+
+    var link: Link {
+        if let model = advertisedModel ?? usbModel, advertisedModel != nil {
+            return .ready(model: model, usb: usbModel != nil)
+        }
+        if let model = usbModel { return .usbNotReady(model: model) }
+        return .disconnected
+    }
+
+    var isReady: Bool {
+        if case .ready = link { return true }
+        return false
+    }
     private var viewers = 0
 
     private let historyURL = FileManager.default.homeDirectoryForCurrentUser
@@ -40,6 +82,7 @@ final class QuickSendMonitor: ObservableObject {
     func start() {
         viewers += 1
         refresh()
+        startBrowsing()
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
             Task { @MainActor in QuickSendMonitor.shared.refresh() }
@@ -61,11 +104,40 @@ final class QuickSendMonitor: ObservableObject {
         if records.map(\.id) != history.map(\.id) { history = records }
     }
 
+    /// 事件驱动，无需轮询；首次使用时 macOS 会请求「本地网络」权限。
+    private func startBrowsing() {
+        guard browser == nil else { return }
+        let browser = NWBrowser(for: .bonjour(type: "_dp_fujitsu._tcp", domain: "local."), using: .tcp)
+        browser.browseResultsChangedHandler = { results, _ in
+            let names: [String] = results.compactMap {
+                if case let .service(name, _, _, _) = $0.endpoint { return name }
+                return nil
+            }
+            // 实例名形如「Digital Paper FMVDP51」，取最后的型号。
+            let model = names.first.map { $0.split(separator: " ").last.map(String.init) ?? $0 }
+            Task { @MainActor in QuickSendMonitor.shared.advertisedModel = model }
+        }
+        browser.start(queue: .main)
+        self.browser = browser
+    }
+
     private func loadHistory() -> [DeliveryRecord] {
         guard let text = try? String(contentsOf: historyURL, encoding: .utf8) else { return [] }
         let decoder = JSONDecoder()
-        return text.split(separator: "\n").compactMap { try? decoder.decode(DeliveryRecord.self, from: Data($0.utf8)) }
-            .reversed().prefix(5).map { $0 }
+        var delivered = Set<String>()
+        var records: [DeliveryRecord] = []
+        // 从新到旧：同名文件之后已投递成功的失败记录不再显示（例如重试成功）。
+        for record in text.split(separator: "\n").reversed()
+            .compactMap({ try? decoder.decode(DeliveryRecord.self, from: Data($0.utf8)) }) {
+            if record.failed {
+                if delivered.contains(record.name) { continue }
+            } else {
+                delivered.insert(record.name)
+            }
+            records.append(record)
+            if records.count == 10 { break }
+        }
+        return records
     }
 }
 
@@ -103,14 +175,15 @@ enum QuadernoUSB {
 
 // MARK: - 主窗口页面切换
 
-/// 主窗口当前显示的页面：nil 为输入页（文件 / 文本 / 网页 / 快捷投递）。
-enum MainPage { case settings, about }
+/// 主窗口当前显示的页面：nil 为输入页（文件 / 文本 / 网页 / 快捷键投递）。
+enum MainPage { case settings, about, files }
 
 /// 菜单命令与工具栏共用的页面状态。
 @MainActor
 final class MainNavigation: ObservableObject {
     static let shared = MainNavigation()
     @Published var page: MainPage?
+    @Published var showSetupGuide = false
 
     func show(_ target: MainPage) {
         page = target
@@ -118,24 +191,42 @@ final class MainNavigation: ObservableObject {
     }
 }
 
-// MARK: - 快捷投递页左栏：连接状态 + 排版
+// MARK: - 快捷键投递页左栏：排版
 
 struct QuickSendSidebar: View {
     @ObservedObject private var monitor = QuickSendMonitor.shared
 
+    @State private var showSetup = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            HStack(spacing: 10) {
-                Circle().fill(monitor.usbModel == nil ? Color.red : Color.green).frame(width: 8, height: 8)
-                if let model = monitor.usbModel {
-                    Text(verbatim: QuadernoUSB.displayName(for: model) + " · USB").font(.callout)
-                } else {
-                    Text("USB 未连接").font(.callout)
+            SettingsSection("快捷键") {
+                HStack(spacing: 12) {
+                    Text(verbatim: "⌃1").font(.caption.weight(.semibold)).frame(width: 34, height: 22)
+                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.tertiary))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("剪贴板快捷键")
+                        Text("由 macOS「快捷指令」提供").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("设置快捷键…") { showSetup = true }.buttonStyle(.link)
                 }
-                Spacer()
-                Button("设备设置…") { MainNavigation.shared.show(.settings) }.buttonStyle(.link)
+                .padding(12)
             }
-            SettingsSection("排版") { ClipboardLayoutSettings() }
+            SettingsSection("排版") {
+                VStack(alignment: .leading, spacing: 10) {
+                    LayoutChips()
+                    HStack {
+                        Text("与 Finder 右键投递共用。").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("在设置中修改…") { MainNavigation.shared.show(.settings) }.buttonStyle(.link)
+                    }
+                }
+                .padding(12)
+            }
+        }
+        .sheet(isPresented: $showSetup) {
+            HotkeySetupSheet(scriptURL: Bundle.main.url(forResource: "deliver", withExtension: "sh"))
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -144,7 +235,7 @@ struct QuickSendSidebar: View {
     }
 }
 
-/// 分组标题 + 圆角容器，设置页与快捷投递页共用。
+/// 分组标题 + 圆角容器，设置页与快捷键投递页共用。
 struct SettingsSection<Content: View>: View {
     let title: LocalizedStringKey
     let content: Content
@@ -181,10 +272,15 @@ struct AppSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("设置").font(.largeTitle.weight(.semibold))
+                HStack(alignment: .firstTextBaseline) {
+                    Text("设置").font(.largeTitle.weight(.semibold))
+                    Spacer()
+                    Button("设置向导…") { MainNavigation.shared.showSetupGuide = true }
+                }
                 SettingsSection("语言") { LanguageSettings() }
                 SettingsSection("设备") { deviceGroup }
                 SettingsSection("投递入口") { entriesGroup }
+                SettingsSection("⌃1 与 Finder 投递的排版") { ClipboardLayoutSettings() }
                 SettingsSection("常见问题") { faq }
             }
             .padding(32)
@@ -199,17 +295,11 @@ struct AppSettingsView: View {
     private var deviceGroup: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                Circle().fill(monitor.usbModel == nil ? Color.red : Color.green).frame(width: 10, height: 10)
+                let status = LinkStatus(monitor.link)
+                Circle().fill(status.color).frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 2) {
-                    if let model = monitor.usbModel {
-                        Text("已连接").fontWeight(.semibold)
-                        Text(verbatim: QuadernoUSB.displayName(for: model) + " · USB")
-                            .font(.caption).foregroundStyle(.secondary)
-                    } else {
-                        Text("USB 未连接").fontWeight(.semibold)
-                        Text("请插好 USB 线并唤醒设备；使用 Wi-Fi 时运行自检确认")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                    Text(verbatim: status.title).fontWeight(.semibold)
+                    Text(verbatim: status.detail).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if checking { ProgressView().controlSize(.small) }
@@ -256,7 +346,7 @@ struct AppSettingsView: View {
                     Text("由 macOS「快捷指令」提供").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("设置向导…") { showSetup = true }.buttonStyle(.link).disabled(scriptURL == nil)
+                Button("设置快捷键…") { showSetup = true }.buttonStyle(.link).disabled(scriptURL == nil)
             }
             .padding(12)
             Divider().padding(.leading, 12)
@@ -267,7 +357,8 @@ struct AppSettingsView: View {
                     Text("PDF、Markdown、TXT · 无需设置").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("已启用").foregroundStyle(.green)
+                Text("由本 App 提供").foregroundStyle(.secondary)
+                    .help(L("macOS 不提供查询服务开关的接口。菜单中没有这一项时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中打开「投递到 QUADERNO」。"))
             }
             .padding(12)
         }
@@ -278,8 +369,8 @@ struct AppSettingsView: View {
             Text("提示「no such file or directory」？").fontWeight(.medium)
             Text("通常是快捷指令仍引用已经移动的源码目录。重新复制本页命令并替换旧命令即可。命令使用 App 内置脚本，归档源码不会影响它；移动或重命名 App 后，需要重新复制命令。")
             Text("Ctrl+1 自动取内容自带标题、Markdown 标题或第一句正文作为文件名，并附加时间。App 主窗口仍使用手动标题。设备已有同名文件时另存新文件，避免覆盖手写批注。")
-            Text("直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复发送。")
-            Text("由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「发送到 QUADERNO」。")
+            Text("直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复投递。")
+            Text("由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「投递到 QUADERNO」。")
         }
         .font(.callout)
         .padding(12)
@@ -296,29 +387,12 @@ struct AppSettingsView: View {
     }
 
     private func runCheck() {
-        guard let scriptURL else { return }
         checking = true
         checkPassed = nil
         Task {
-            let result = await Task.detached(priority: .userInitiated) { () -> (Bool, String) in
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-                process.arguments = [scriptURL.path, "--check"]
-                process.environment = helperEnvironment()
-                let pipe = Pipe()
-                process.standardOutput = pipe
-                process.standardError = pipe
-                do {
-                    try process.run()
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    process.waitUntilExit()
-                    return (process.terminationStatus == 0, String(decoding: data, as: UTF8.self))
-                } catch {
-                    return (false, error.localizedDescription)
-                }
-            }.value
-            checkPassed = result.0
-            checkOutput = result.1
+            let result = await SelfCheck.run()
+            checkPassed = result.passed
+            checkOutput = result.output
             checking = false
             monitor.refresh()
         }
@@ -331,19 +405,27 @@ struct QuickSendOverview: View {
     @ObservedObject private var monitor = QuickSendMonitor.shared
 
     var body: some View {
-        VStack(spacing: 36) {
-            HStack(alignment: .top, spacing: 18) {
-                step(icon: Image(systemName: "doc.on.doc"), title: "复制文字", detail: "任何应用中的 Markdown 或纯文本")
-                arrow
-                step(icon: Text(verbatim: "⌃1").font(.system(size: 22, weight: .semibold)), title: "按 ⌃1", detail: "自动命名，排版成 PDF")
-                arrow
-                step(icon: Image(systemName: "ipad"), title: "在设备上打开", detail: "存入 Received，校验后自动打开")
+        ScrollView {
+            VStack(spacing: 36) {
+                // 窄窗口时三步改为竖排，避免横排超出右栏被两侧裁切。
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 18) { steps(arrow: arrow) }
+                    VStack(spacing: 18) { steps(arrow: EmptyView()) }
+                }
             }
-            recent
+            .padding(32)
+            .frame(maxWidth: .infinity)
         }
-        .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .underPageBackgroundColor))
+    }
+
+    @ViewBuilder private func steps<Arrow: View>(arrow: Arrow) -> some View {
+        step(icon: Image(systemName: "doc.on.doc"), title: "复制文字", detail: "任何应用中的 Markdown 或纯文本")
+        arrow
+        step(icon: Text(verbatim: "⌃1").font(.system(size: 22, weight: .semibold)), title: "按 ⌃1", detail: "自动命名，排版成 PDF")
+        arrow
+        step(icon: Image(systemName: "ipad"), title: "在设备上打开", detail: "存入 Received，校验后自动打开")
     }
 
     private var arrow: some View {
@@ -359,38 +441,6 @@ struct QuickSendOverview: View {
             Text(detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(width: 150)
-    }
-
-    private var recent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("最近投递").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            if monitor.history.isEmpty {
-                Text("还没有投递记录。复制一段文字，按 ⌃1 试试。").foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(monitor.history.enumerated()), id: \.element.id) { index, record in
-                    if index > 0 { Divider() }
-                    HStack(spacing: 12) {
-                        Image(systemName: record.via == "official" ? "arrow.triangle.branch" : "checkmark")
-                            .foregroundStyle(record.via == "official" ? Color.orange : Color.green).fontWeight(.semibold)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: record.name).lineLimit(1).truncationMode(.middle)
-                            Text(verbatim: detail(for: record)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 18).padding(.vertical, 16)
-        .frame(maxWidth: 520, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
-    }
-
-    private func detail(for record: DeliveryRecord) -> String {
-        let when = record.date.map { RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()) } ?? record.time
-        let route = record.via == "official" ? L("经 QUADERNO PC App") : L("回读校验通过")
-        return [when, record.sourceLabel, route].joined(separator: " · ")
     }
 }
 
@@ -503,6 +553,311 @@ struct LanguageSettings: View {
         configuration.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, _ in
             DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+    }
+}
+
+// MARK: - 自检与配对状态（设置页与设置向导共用）
+
+enum SelfCheck {
+    /// deliver.sh --check：渲染测试 PDF、认证并读取目录，不上传文件。
+    static func run() async -> (passed: Bool, output: String) {
+        guard let script = Bundle.main.url(forResource: "deliver", withExtension: "sh") else {
+            return (false, L("投递脚本缺失，请重新安装完整 App。"))
+        }
+        return await Task.detached(priority: .userInitiated) { () -> (Bool, String) in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = [script.path, "--check"]
+            process.environment = helperEnvironment()
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            do {
+                try process.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                return (process.terminationStatus == 0, String(decoding: data, as: UTF8.self))
+            } catch {
+                return (false, error.localizedDescription)
+            }
+        }.value
+    }
+}
+
+enum Pairing {
+    /// 直连工具保存配对的位置（目录名沿用旧 App 名，避免迁移凭据）。
+    static var isPaired: Bool {
+        FileManager.default.fileExists(atPath: FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Quaderno Converter/Direct/connection.json").path)
+    }
+    static var officialAppInstalled: Bool {
+        FileManager.default.fileExists(atPath: "/Applications/QUADERNO PC App.app")
+    }
+    static let guideDismissedKey = "setupGuideDismissed"
+}
+
+// MARK: - 首次使用的设置向导
+
+struct SetupGuideSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var monitor = QuickSendMonitor.shared
+    @State private var paired = Pairing.isPaired
+    @State private var importing = false
+    @State private var importMessage = ""
+    @State private var checking = false
+    @State private var checkPassed: Bool?
+    @State private var checkOutput = ""
+    @State private var showHotkey = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("开始使用 TrueScale for QUADERNO").font(.title2.weight(.semibold))
+                Text("三步完成设置。完成后，投递不再需要打开 QUADERNO PC App。").foregroundStyle(.secondary)
+            }
+            step(1, done: monitor.usbModel != nil, "用 USB 线连接 QUADERNO 并唤醒") {
+                if let model = monitor.usbModel {
+                    Text(verbatim: QuadernoUSB.displayName(for: model) + " · USB").foregroundStyle(.secondary)
+                } else {
+                    Text("连接后这里会自动变为已连接。").foregroundStyle(.secondary)
+                }
+            }
+            step(2, done: paired, "导入现有配对") {
+                Text(Pairing.officialAppInstalled
+                     ? L("读取 QUADERNO PC App 在这台 Mac 上建立的配对，只需一次。")
+                     : L("需要先安装 QUADERNO PC App，并与设备配对一次。"))
+                    .foregroundStyle(.secondary)
+                if !paired {
+                    HStack {
+                        Button(importing ? L("连接中…") : L("导入配对")) { importPairing() }
+                            .disabled(importing || !Pairing.officialAppInstalled)
+                        if importing { ProgressView().controlSize(.small) }
+                    }
+                }
+                if !importMessage.isEmpty { Text(importMessage).font(.callout) }
+            }
+            step(3, done: checkPassed == true, "运行自检") {
+                Text("渲染一份测试 PDF 并连接设备，不上传文件。").foregroundStyle(.secondary)
+                HStack {
+                    Button(checking ? L("正在自检…") : L("自检")) { runCheck() }.disabled(checking || !paired)
+                    if checking { ProgressView().controlSize(.small) }
+                }
+                if checkPassed == false {
+                    DisclosureGroup("自检详情") {
+                        Text(checkOutput).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }.font(.caption)
+                }
+            }
+            step(4, done: false, optional: true, "设置 ⌃1 快捷键（可选）") {
+                Text("Finder 右键投递无需设置，已经可以使用。").foregroundStyle(.secondary)
+                Button("设置快捷键…") { showHotkey = true }
+            }
+            Divider()
+            HStack {
+                Button("以后再说") { close() }
+                Spacer()
+                Button("完成") { close() }.keyboardShortcut(.defaultAction).disabled(!paired)
+            }
+        }
+        .padding(28)
+        .frame(width: 540)
+        .sheet(isPresented: $showHotkey) {
+            HotkeySetupSheet(scriptURL: Bundle.main.url(forResource: "deliver", withExtension: "sh"))
+        }
+        .onAppear { monitor.start() }
+        .onDisappear { monitor.stop() }
+    }
+
+    private func step<Content: View>(_ number: Int, done: Bool, optional: Bool = false, _ title: LocalizedStringKey,
+                                     @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                Circle().fill(done ? Color.green : Color.accentColor.opacity(optional ? 0.08 : 0.12))
+                if done {
+                    Image(systemName: "checkmark").font(.caption.weight(.bold)).foregroundStyle(.white)
+                } else {
+                    Text(verbatim: "\(number)").font(.callout.weight(.semibold)).foregroundStyle(.tint)
+                }
+            }
+            .frame(width: 24, height: 24)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).fontWeight(.semibold)
+                content()
+            }
+        }
+    }
+
+    private func importPairing() {
+        importing = true
+        Task {
+            let result = await DirectDelivery.run(["import-pairing", "--address", "Android.local"])
+            importMessage = result.message
+            paired = Pairing.isPaired
+            importing = false
+        }
+    }
+
+    private func runCheck() {
+        checking = true
+        checkPassed = nil
+        Task {
+            let result = await SelfCheck.run()
+            checkPassed = result.passed
+            checkOutput = result.output
+            checking = false
+        }
+    }
+
+    private func close() {
+        UserDefaults.standard.set(true, forKey: Pairing.guideDismissedKey)
+        dismiss()
+    }
+}
+
+/// 窗口工具栏中的全局 USB 连接状态；点击打开设置页。
+struct USBStatusBadge: View {
+    @ObservedObject private var monitor = QuickSendMonitor.shared
+
+    var body: some View {
+        Button { MainNavigation.shared.show(.settings) } label: {
+            let status = LinkStatus(monitor.link)
+            HStack(spacing: 6) {
+                Circle().fill(status.color).frame(width: 8, height: 8)
+                Text(verbatim: status.title)
+            }
+            .font(.callout)
+        }
+        .help(LinkStatus(monitor.link).detail)
+        .onAppear { monitor.start() }
+    }
+}
+
+// MARK: - 最近投递（全局：⌃1、Finder 右键、App 内发送、降级投递都会记录）
+
+struct RecentDeliveriesButton: View {
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing.toggle() } label: { Label("最近投递", systemImage: "clock.arrow.circlepath") }
+            .help(L("最近投递"))
+            .popover(isPresented: $showing, arrowEdge: .bottom) { RecentDeliveriesList().frame(width: 400) }
+    }
+}
+
+struct RecentDeliveriesList: View {
+    @ObservedObject private var monitor = QuickSendMonitor.shared
+    @State private var status = ""
+    @State private var working = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("最近投递").font(.headline)
+            if monitor.history.isEmpty {
+                Text("还没有投递记录。投递的文件会显示在这里。").foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(monitor.history.enumerated()), id: \.element.id) { index, record in
+                    if index > 0 { Divider() }
+                    row(record)
+                }
+            }
+            if working || !status.isEmpty {
+                Divider()
+                HStack(spacing: 8) {
+                    if working { ProgressView().controlSize(.small) }
+                    Text(verbatim: status).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                }
+            }
+        }
+        .padding(16)
+        .onAppear { monitor.refresh() }
+    }
+
+    private func row(_ record: DeliveryRecord) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: record.failed ? "xmark.octagon" : record.via == "official" ? "arrow.triangle.branch" : "checkmark")
+                .foregroundStyle(record.failed ? Color.red : record.via == "official" ? Color.orange : Color.green)
+                .fontWeight(.semibold)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: record.name).lineLimit(1).truncationMode(.middle).help(record.name)
+                Text(verbatim: detail(for: record)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            if record.failed {
+                if let kept = record.keptURL {
+                    iconButton("arrow.clockwise", L("重试")) { retry(kept) }
+                    iconButton("magnifyingglass", L("在 Finder 中显示")) {
+                        NSWorkspace.shared.activateFileViewerSelecting([kept])
+                    }
+                }
+            } else {
+                if let id = record.documentID {
+                    iconButton("ipad", L("在设备上打开")) { openOnDevice(id, record.name) }
+                }
+                if let remote = record.remote {
+                    iconButton("folder", L("在设备文件中显示")) {
+                        DeviceFilesModel.shared.reveal(remote: remote, id: record.documentID, name: record.name)
+                    }
+                }
+            }
+        }
+    }
+
+    private func iconButton(_ symbol: String, _ help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Label(help, systemImage: symbol).labelStyle(.iconOnly) }
+            .buttonStyle(.borderless)
+            .help(help)
+            .disabled(working)
+    }
+
+    private func detail(for record: DeliveryRecord) -> String {
+        let when = record.date.map { RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()) } ?? record.time
+        let outcome = record.failed ? (record.message ?? L("投递失败"))
+            : record.via == "official" ? L("经 QUADERNO PC App") : L("回读校验通过")
+        return [when, record.sourceLabel, outcome].joined(separator: " · ")
+    }
+
+    private func retry(_ file: URL) {
+        working = true
+        Task {
+            let result = await DirectDelivery.run(["upload", "--file", file.path], environment: ["QUADERNO_SOURCE": "retry"])
+            status = result.message
+            working = false
+            monitor.refresh()
+        }
+    }
+
+    private func openOnDevice(_ id: String, _ name: String) {
+        working = true
+        Task {
+            let result = await DirectDelivery.run(["open-doc", "--id", id, "--name", name])
+            status = result.message
+            working = false
+        }
+    }
+}
+
+/// 三态连接状态的颜色与文案（工具栏与设置页共用）。
+struct LinkStatus {
+    let color: Color
+    let title: String
+    let detail: String
+
+    init(_ link: QuickSendMonitor.Link) {
+        switch link {
+        case let .ready(model, usb):
+            color = .green
+            title = QuadernoUSB.displayName(for: model)
+            detail = usb ? L("已连接 · USB") : L("已连接 · 网络")
+        case let .usbNotReady(model):
+            color = .yellow
+            title = QuadernoUSB.displayName(for: model)
+            detail = L("USB 已连接，但设备网络未就绪。请唤醒设备；仍不行请拔插 USB 线。")
+        case .disconnected:
+            color = .red
+            title = L("未连接")
+            detail = L("请用 USB 连接并唤醒设备；使用 Wi-Fi 时确认设备与 Mac 在同一网络。")
         }
     }
 }

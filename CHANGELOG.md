@@ -5,7 +5,24 @@ version tags have been cut yet — everything below is `Unreleased`, seeded
 retrospectively from the project's git history to give newcomers a map without
 requiring them to read every commit.
 
-## [Unreleased]
+## [1.2.0] — 2026-10-31
+
+Renamed **Quaderno Converter → TrueScale for QUADERNO** (bundle ID
+`io.github.leekaomin380.quaderno-converter`). Settings are migrated on first launch;
+re-copy the ⌃1 Shortcut command once, because the app's path changed.
+
+### Added
+- Direct delivery to the device over USB / local network (HTTPS API, pinned key),
+  saved to `Document/Received/`, opened on the device, read back and SHA-256-checked.
+  No official client needed after a one-time pairing import.
+- Fallback to QUADERNO PC App when the direct connection fails before upload and the
+  official app is running.
+- Finder right-click **Send to QUADERNO** (native macOS service) for PDF, Markdown, TXT.
+- 简体中文 / English / 日本語 UI and messages, with a language setting.
+- First-run setup guide (connect → import pairing → check → optional ⌃1).
+- Settings and About pages in the main window; About lists bundled components and licences.
+- Recent deliveries on the Quick Send tab; instant detection of a USB dropout.
+
 
 ### Added
 - `deliver.sh` — clipboard Markdown → 1:1-scaled PDF → QUADERNO, via a global

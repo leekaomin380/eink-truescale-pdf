@@ -368,7 +368,7 @@ grep -q '"9pt", "10pt"' "$CV" \
 # ---------------------------------------------------------------------------
 sec "自包含 · .app 在没有 Homebrew 的机器上必须能渲染"
 # 只有构建过 .app 时才检查（CI 或纯脚本用户不必先构建）
-APP_RES="$DIR/gui/Quaderno Converter.app/Contents/Resources"
+APP_RES="$DIR/gui/TrueScale for QUADERNO.app/Contents/Resources"
 if [[ -d "$APP_RES/bin" ]]; then
   # ① 引擎确实在 bundle 内
   [[ -x "$APP_RES/bin/pandoc" && -x "$APP_RES/bin/typst" ]] \
@@ -395,7 +395,7 @@ if [[ -d "$APP_RES/bin" ]]; then
     && ok ".app 已盖封印（存在 _CodeSignature/CodeResources）" \
     || no "bundle 无封印 —— 下载后 macOS 报「已损坏」，无法打开"
 
-  if codesign --verify --deep --strict "$DIR/gui/Quaderno Converter.app" 2>/dev/null; then
+  if codesign --verify --deep --strict "$DIR/gui/TrueScale for QUADERNO.app" 2>/dev/null; then
     ok "codesign 校验通过（签名与内容一致）"
   else
     no "codesign 校验失败 —— 签名与 bundle 内容不一致，下载后不可用"

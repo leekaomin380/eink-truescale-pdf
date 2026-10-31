@@ -18,7 +18,7 @@ APPLESCRIPT
 }
 # Messages are zh-Hans source text, translated by the helper (QUADERNO_LANG or the macOS language).
 t() { [[ -x "$DIRECT_HELPER" ]] && "$DIRECT_HELPER" text "$@" 2>/dev/null || print -r -- "$1"; }
-fail() { print -ru2 -- "$1"; notify "$(t "Quaderno · 投递失败")" "$1"; exit "${2:-1}"; }
+fail() { print -ru2 -- "$1"; notify "$(t "TrueScale · 投递失败")" "$1"; exit "${2:-1}"; }
 
 [[ -x "$DIRECT_HELPER" ]] || fail "缺少直连工具，请重新安装完整 App" 10
 [[ -x "$(command -v pandoc)" ]] || fail "$(t "未找到 pandoc")" 10
@@ -53,7 +53,7 @@ if [[ "${(j:,:)FONTS}" == "Times New Roman,Songti SC" ]]; then
 fi
 
 if [[ "${1:-}" == "--check" || "${1:-}" == "-c" ]]; then
-  print -r -- "$(t "Quaderno · 本机渲染与设备直连自检")"
+  print -r -- "$(t "TrueScale · 本机渲染与设备直连自检")"
   print -r -- "pandoc $(pandoc --version | head -1)"
   print -r -- "typst $(typst --version)"
   if ! printf '# 直连自检\n\n中文 CJK、\$PATH 与 @mention。\n' | pandoc -f "$MD_FORMAT" \
@@ -86,7 +86,7 @@ result_message() {
   printf '%s' "$RESULT" | /usr/bin/plutil -extract message raw -o - - 2>/dev/null || print -r -- "$1"
 }
 
-# Finder 右键「发送到 QUADERNO」：PDF 原样上传；Markdown / 纯文本按 Ctrl+1 排版渲染，沿用文件名。
+# Finder 右键「投递到 QUADERNO」：PDF 原样上传；Markdown / 纯文本按 Ctrl+1 排版渲染，沿用文件名。
 if [[ "${1:-}" == "--files" ]]; then
   shift
   export QUADERNO_SOURCE=finder
@@ -108,12 +108,12 @@ if [[ "${1:-}" == "--files" ]]; then
     fi
   done
   if (( ${#FAILURES} )); then
-    fail "$(t "已发送 {sent} 个，失败 {failed} 个。{first}" "sent=$SENT" "failed=${#FAILURES}" "first=${FAILURES[1]}")" 4
+    fail "$(t "已投递 {sent} 个，失败 {failed} 个。{first}" "sent=$SENT" "failed=${#FAILURES}" "first=${FAILURES[1]}")" 4
   fi
   if (( SENT == 1 )); then
-    notify "$(t "Quaderno · 已保存至 Received")" "$(result_message "$(t "已发送 1 个文件")")"
+    notify "$(t "TrueScale · 已保存至 Received")" "$(result_message "$(t "已投递 1 个文件")")"
   else
-    notify "$(t "Quaderno · 已保存至 Received")" "$(t "已发送 {sent} 个文件" "sent=$SENT")"
+    notify "$(t "TrueScale · 已保存至 Received")" "$(t "已投递 {sent} 个文件" "sent=$SENT")"
   fi
   exit 0
 fi
@@ -130,4 +130,4 @@ if (( RESULT_CODE != 0 )); then
   fail "$MESSAGE" 4
 fi
 print -r -- "$RESULT"
-notify "$(t "Quaderno · 已保存至 Received")" "$MESSAGE"
+notify "$(t "TrueScale · 已保存至 Received")" "$MESSAGE"

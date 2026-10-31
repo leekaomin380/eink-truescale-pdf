@@ -730,10 +730,10 @@ class ConversionViewModel: ObservableObject {
 
     func deliverToDevice() {
         guard let pdfURL = currentPdfURL else {
-            setStatus(L("无可发送的内容"), .err)
+            setStatus(L("无可投递的内容"), .err)
             return
         }
-        setStatus(L("正在发送到 Quaderno…"), .run)
+        setStatus(L("正在投递到 QUADERNO…"), .run)
 
         // Deliver a copy to protect the original (invariant I2)
         // Use title as filename — QUADERNO client displays file name in its list

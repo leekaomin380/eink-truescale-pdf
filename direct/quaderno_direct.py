@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Local, pinned-TLS Quaderno transport. No official application at runtime.
 Protocol reference: https://github.com/janten/dpt-rp1-py (MIT).
-Only reads and creates documents; never deletes or overwrites device documents.
+Delivery only reads folders and adds documents; it never deletes or overwrites anything.
+Deleting, moving and creating folders happen only as explicit actions from the App's file manager.
 """
 import argparse
 import fcntl
@@ -73,15 +74,15 @@ MESSAGES = {
     '回读已通过，但设备目录未确认新文件。': (
         "Read-back passed, but the new file was not confirmed in the device's folder.",
         '読み戻しは成功しましたが、端末のフォルダーで新しいファイルを確認できませんでした。'),
-    '已保存至 Received：{name}（回读通过，已请求设备打开）': (
-        'Saved to Received: {name} (verified; asked the device to open it)',
-        'Received に保存しました：{name}（照合済み、端末に表示を要求しました）'),
-    '已保存至 Received：{name}（回读通过，设备未接受打开请求，请从 Received 打开）': (
-        'Saved to Received: {name} (verified; the device did not accept the open request — open it from Received)',
-        'Received に保存しました：{name}（照合済み。端末が表示要求を受け付けなかったため、Received から開いてください）'),
-    '尚未配置直连。请在 App 的「快捷投递」中迁移现有配对。': (
-        'Direct connection is not set up yet. Import the existing pairing under Quick Send in the app.',
-        '直接接続がまだ設定されていません。App の「クイック送信」で既存のペアリングを移行してください。'),
+    '已保存至 {folder}：{name}（回读通过，已请求设备打开）': (
+        'Saved to {folder}: {name} (verified; asked the device to open it)',
+        '{folder} に保存しました：{name}（照合済み、端末に表示を要求しました）'),
+    '已保存至 {folder}：{name}（回读通过，设备未接受打开请求，请从 {folder} 打开）': (
+        'Saved to {folder}: {name} (verified; the device did not accept the open request — open it from {folder})',
+        '{folder} に保存しました：{name}（照合済み。端末が表示要求を受け付けなかったため、{folder} から開いてください）'),
+    '尚未配置直连。请在 App 的「设置 → 设备」中迁移现有配对。': (
+        'Direct connection is not set up yet. Import the existing pairing in the app under Settings → Device.',
+        '直接接続がまだ設定されていません。App の「設定 → 端末」で既存のペアリングを移行してください。'),
     '未找到唯一的已有配对。请先确认当前 Mac 的设备配对信息。': (
         "Could not find a single existing pairing. Check this Mac's device pairing first.",
         '既存のペアリングを一意に特定できません。この Mac の端末ペアリング情報を確認してください。'),
@@ -101,9 +102,9 @@ MESSAGES = {
     '另一项设备投递正在进行，请稍后重试。': (
         'Another delivery to the device is in progress. Try again shortly.',
         '別の送信が進行中です。しばらくしてから再試行してください。'),
-    '快捷投递排版配置无效，请在 App 中检查排版设置。': (
-        'The quick-send layout settings are invalid. Check the layout in the app.',
-        'クイック送信のレイアウト設定が無効です。App でレイアウトを確認してください。'),
+    '快捷键投递排版配置无效，请在 App 中检查排版设置。': (
+        'The hotkey-send layout settings are invalid. Check the layout in the app.',
+        'ショートカット送信のレイアウト設定が無効です。App でレイアウトを確認してください。'),
     '渲染失败：{detail}': ('Rendering failed: {detail}', 'レンダリングに失敗しました：{detail}'),
     '{error}；PDF 已保留：{path}': ('{error} The PDF was kept: {path}', '{error} PDF は保存してあります：{path}'),
     '请选择已有的 PDF 文件。': ('Choose an existing PDF file.', '既存の PDF ファイルを選んでください。'),
@@ -125,27 +126,37 @@ MESSAGES = {
     '{error}（打开 QUADERNO PC App 后重试，可经官方 App 投递）': (
         '{error} (Open QUADERNO PC App and try again to send through the official app.)',
         '{error}（QUADERNO PC App を開いて再試行すると、公式 App 経由で送信できます）'),
+    # File management (App 设备文件 tab): explicit user actions only.
+    '设备上找不到这个文件夹：{path}': ('Folder not found on the device: {path}', '端末にこのフォルダーが見つかりません：{path}'),
+    '条目标识无效。': ('Invalid item identifier.', '項目の識別子が無効です。'),
+    '已请求设备打开：{name}': ('Asked the device to open: {name}', '端末に表示を要求しました：{name}'),
+    '已下载到 {path}': ('Downloaded to {path}', '{path} にダウンロードしました'),
+    '请选择要保存到的位置。': ('Choose where to save it.', '保存先を選んでください。'),
+    '已删除：{name}': ('Deleted: {name}', '削除しました：{name}'),
+    '已新建文件夹：{name}': ('Created folder: {name}', 'フォルダーを作成しました：{name}'),
+    '已移动：{name}': ('Moved: {name}', '移動しました：{name}'),
+    '文件夹名称不能为空，也不能包含「/」。': ('A folder name cannot be empty or contain "/".', 'フォルダー名は空にできず、「/」も使えません。'),
     # deliver.sh, through the `text` action
     '未找到 pandoc': ('pandoc not found', 'pandoc が見つかりません'),
     '未找到 typst': ('typst not found', 'typst が見つかりません'),
     '缺少排版模板': ('The layout template is missing', 'レイアウトテンプレートがありません'),
     '无法进入渲染目录': ('Cannot enter the rendering folder', 'レンダリング用フォルダーに入れません'),
     '无法创建临时目录': ('Cannot create a temporary folder', '一時フォルダーを作成できません'),
-    'Quaderno · 投递失败': ('Quaderno · Delivery failed', 'Quaderno · 送信に失敗しました'),
-    'Quaderno · 已保存至 Received': ('Quaderno · Saved to Received', 'Quaderno · Received に保存しました'),
+    'TrueScale · 投递失败': ('TrueScale · Delivery failed', 'TrueScale · 送信に失敗しました'),
+    'TrueScale · 已保存至 Received': ('TrueScale · Saved to Received', 'TrueScale · Received に保存しました'),
     '投递失败，请查看设备连接': ('Delivery failed. Check the device connection.', '送信に失敗しました。端末の接続を確認してください。'),
     '未选择文件': ('No files selected', 'ファイルが選択されていません'),
     '{file}：暂只支持 PDF、Markdown 和 TXT': (
         '{file}: only PDF, Markdown and TXT are supported for now',
         '{file}：現在は PDF・Markdown・TXT のみ対応しています'),
-    '已发送 {sent} 个，失败 {failed} 个。{first}': (
+    '已投递 {sent} 个，失败 {failed} 个。{first}': (
         'Sent {sent}, failed {failed}. {first}', '{sent} 件送信、{failed} 件失敗。{first}'),
-    '已发送 {sent} 个文件': ('Sent {sent} files', '{sent} 件のファイルを送信しました'),
-    '已发送 1 个文件': ('Sent 1 file', '1 件のファイルを送信しました'),
+    '已投递 {sent} 个文件': ('Sent {sent} files', '{sent} 件のファイルを送信しました'),
+    '已投递 1 个文件': ('Sent 1 file', '1 件のファイルを送信しました'),
     '剪贴板为空，已取消': ('The clipboard is empty — cancelled', 'クリップボードが空のため取り消しました'),
-    'Quaderno · 本机渲染与设备直连自检': (
-        'Quaderno · Local rendering and direct-connection self-check',
-        'Quaderno · ローカルレンダリングと直接接続のセルフチェック'),
+    'TrueScale · 本机渲染与设备直连自检': (
+        'TrueScale · Local rendering and direct-connection self-check',
+        'TrueScale · ローカルレンダリングと直接接続のセルフチェック'),
     '✅ PDF 渲染通过': ('✅ PDF rendering passed', '✅ PDF のレンダリングに成功'),
     '✅ 设备认证与目录读取通过；本次自检未上传文件。': (
         '✅ Device authentication and folder reading passed; no file was uploaded by this check.',
@@ -440,13 +451,59 @@ class Device:
         entries = self.request('GET', '/folders/' + root['entry_id'] + '/entries2').json()['entry_list']
         return {'ok': True, 'message': tr('设备已直连，认证及目录读取通过'), 'root_entries': len(entries), 'connection': self.target}
 
-    def upload(self, source):
+    # ---- File management: only explicit actions from the App's 设备文件 tab ----
+
+    def browse(self, path):
+        folder = self.resolve(path)
+        if not folder or folder.get('entry_type', 'folder') != 'folder':
+            raise DirectError(tr('设备上找不到这个文件夹：{path}', path=path))
+        items = self.request('GET', '/folders/' + folder['entry_id'] + '/entries2').json()['entry_list']
+        entries = [{'id': item['entry_id'], 'name': item.get('entry_name', ''), 'type': item.get('entry_type', ''),
+                    'path': item.get('entry_path', ''), 'size': item.get('file_size'),
+                    'modified': item.get('modified_date') or item.get('created_date')} for item in items]
+        entries.sort(key=lambda entry: (entry['type'] != 'folder', entry['name'].lower()))
+        return {'ok': True, 'message': '', 'entries': entries,
+                'folder': {'id': folder['entry_id'], 'path': folder.get('entry_path') or path}}
+
+    def open_document(self, document_id, name):
+        self.request('PUT', '/viewer/controls/open2', json_body={'document_id': entry_id(document_id), 'page': 1})
+        return {'ok': True, 'message': tr('已请求设备打开：{name}', name=name)}
+
+    def download(self, document_id, destination):
+        if not destination or not Path(destination).is_absolute():
+            raise DirectError(tr('请选择要保存到的位置。'))
+        destination = Path(destination)
+        content = self.request('GET', '/documents/' + entry_id(document_id) + '/file').content
+        temporary = destination.with_name('.' + destination.name + '.download')
+        temporary.write_bytes(content)
+        os.replace(temporary, destination)
+        return {'ok': True, 'message': tr('已下载到 {path}', path=destination), 'path': str(destination)}
+
+    def delete(self, item_id, kind, name):
+        collection = 'folders' if kind == 'folder' else 'documents'
+        self.request('DELETE', '/' + collection + '/' + entry_id(item_id))
+        return {'ok': True, 'message': tr('已删除：{name}', name=name)}
+
+    def make_folder(self, parent_id, name):
+        name = (name or '').strip()
+        if not name or '/' in name:
+            raise DirectError(tr('文件夹名称不能为空，也不能包含「/」。'))
+        self.request('POST', '/folders2', json_body={'folder_name': name, 'parent_folder_id': entry_id(parent_id)})
+        return {'ok': True, 'message': tr('已新建文件夹：{name}', name=name)}
+
+    def move(self, document_id, folder_id, name):
+        self.request('PUT', '/documents/' + entry_id(document_id),
+                     json_body={'parent_folder_id': entry_id(folder_id)})
+        return {'ok': True, 'message': tr('已移动：{name}', name=name)}
+
+    def upload(self, source, destination='Document/Received'):
         if not self.cookie:
             self.authenticate()
-        destination = 'Document/Received'
         parent = self.resolve(destination)
         if not parent or parent.get('entry_type', 'folder') != 'folder':
-            raise DirectError(tr('设备 Received 文件夹不存在，未上传文件。'))
+            if destination == 'Document/Received':
+                raise DirectError(tr('设备 Received 文件夹不存在，未上传文件。'))
+            raise DirectError(tr('设备上找不到这个文件夹：{path}', path=destination))
         remote = destination + '/' + source.name
         if self.resolve(remote):
             remote = destination + '/' + source.stem[:100] + '_' + uuid.uuid4().hex[:8] + '.pdf'
@@ -472,9 +529,10 @@ class Device:
         if not info or info['entry_id'] != document_id:
             raise DirectError(tr('回读已通过，但设备目录未确认新文件。'))
         name = remote.rsplit('/', 1)[-1]
-        message = tr('已保存至 Received：{name}（回读通过，已请求设备打开）' if display_requested else
-                     '已保存至 Received：{name}（回读通过，设备未接受打开请求，请从 Received 打开）', name=name)
-        record_delivery(name, display_requested)
+        message = tr('已保存至 {folder}：{name}（回读通过，已请求设备打开）' if display_requested else
+                     '已保存至 {folder}：{name}（回读通过，设备未接受打开请求，请从 {folder} 打开）',
+                     name=name, folder=destination.rsplit('/', 1)[-1])
+        record_delivery(name, display_requested, document_id=document_id, remote=remote)
         return {'ok': True, 'message': message, 'path': remote, 'sha256': expected,
                 'display_requested': display_requested}
 
@@ -483,11 +541,22 @@ class Device:
 HISTORY_LIMIT = 50
 
 
-def record_delivery(name, display_requested, via='direct'):
+def record_delivery(name, display_requested, via='direct', document_id=None, remote=None):
     """Append a verified delivery for the App's「最近投递」. Never fails the delivery itself."""
-    # QUADERNO_SOURCE: clipboard (Ctrl+1) / finder (right-click) / app; set by the caller.
-    entry = {'time': datetime.now().astimezone().isoformat(timespec='seconds'), 'name': name,
-             'source': os.environ.get('QUADERNO_SOURCE', 'app'), 'opened': display_requested, 'via': via}
+    append_history({'status': 'ok', 'name': name, 'opened': display_requested, 'via': via,
+                    'document_id': document_id, 'remote': remote})
+
+
+def record_failure(name, message, kept=None):
+    """A failed delivery, with the local PDF kept for retry (shown with 重试 / 在 Finder 中显示)."""
+    append_history({'status': 'failed', 'name': name, 'message': message,
+                    'kept': kept if kept and Path(kept).exists() else None})
+
+
+def append_history(entry):
+    # QUADERNO_SOURCE: clipboard (Ctrl+1) / finder (right-click) / app / files (Device Files) / retry.
+    entry = {'time': datetime.now().astimezone().isoformat(timespec='seconds'),
+             'source': os.environ.get('QUADERNO_SOURCE', 'app'), **entry}
     path = ROOT / 'history.jsonl'
     try:
         lines = path.read_text().splitlines() if path.exists() else []
@@ -495,6 +564,13 @@ def record_delivery(name, display_requested, via='direct'):
         save_private(path, ('\n'.join(lines) + '\n').encode())
     except OSError:
         pass
+
+
+def entry_id(value):
+    """Device entry ids go into URL paths; accept only the id alphabet the device uses."""
+    if not value or not re.fullmatch(r'[A-Za-z0-9_-]+', value):
+        raise DirectError(tr('条目标识无效。'))
+    return value
 
 
 def save_private(path, data):
@@ -513,7 +589,7 @@ def save_private(path, data):
 
 def load_device():
     if not (ROOT / 'connection.json').exists():
-        raise DirectError(tr('尚未配置直连。请在 App 的「快捷投递」中迁移现有配对。'))
+        raise DirectError(tr('尚未配置直连。请在 App 的「设置 → 设备」中迁移现有配对。'))
     settings = json.loads((ROOT / 'connection.json').read_text())
     return Device(settings, (ROOT / 'privatekey.pem').read_bytes(),
                   (ROOT / 'clientid.txt').read_text().strip())
@@ -731,7 +807,7 @@ def load_clipboard_layout():
             raise ValueError('printTime')
         return profile, mode
     except (OSError, ValueError, KeyError, TypeError):
-        raise DirectError(tr('快捷投递排版配置无效，请在 App 中检查排版设置。'))
+        raise DirectError(tr('快捷键投递排版配置无效，请在 App 中检查排版设置。'))
 
 
 def apply_clipboard_layout(args, directory):
@@ -813,6 +889,7 @@ def render_and_upload(args):
                 else:
                     result = device.upload(output)
             except Exception as error:
+                record_failure(output.name, str(error), kept=str(output))
                 raise DirectError(tr('{error}；PDF 已保留：{path}', error=error, path=output)) from error
     output.unlink(missing_ok=True)
     result['layout_source'] = mode
@@ -821,7 +898,8 @@ def render_and_upload(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'text'])
+    parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'text',
+                                           'browse', 'open-doc', 'download', 'delete', 'mkdir', 'move'])
     parser.add_argument('--address', default='Android.local')
     parser.add_argument('--file')
     parser.add_argument('--input')
@@ -839,6 +917,12 @@ def main():
     parser.add_argument('--leading', default='0.85em')
     parser.add_argument('--font-directory')
     parser.add_argument('values', nargs='*', help='text: MESSAGE [key=value ...]')
+    parser.add_argument('--path', default='Document', help='browse: device folder path')
+    parser.add_argument('--id', help='device entry id for open-doc / download / delete / move; parent for mkdir')
+    parser.add_argument('--kind', choices=['document', 'folder'], default='document')
+    parser.add_argument('--name', default='', help='display name (messages) or new folder name')
+    parser.add_argument('--to', help='download: absolute local path; move: destination folder id')
+    parser.add_argument('--folder', help='upload: device folder path (default Document/Received)')
     parser.add_argument('--title', help='file name for render-upload; default derives one from the text')
     args = parser.parse_args()
     if args.action == 'text':
@@ -861,16 +945,33 @@ def main():
                 result = import_pairing(args.address)
             elif args.action == 'check':
                 result = load_device().check()
+            elif args.action in ('browse', 'open-doc', 'download', 'delete', 'mkdir', 'move'):
+                device = connect_device()
+                result = {
+                    'browse': lambda: device.browse(args.path),
+                    'open-doc': lambda: device.open_document(args.id, args.name),
+                    'download': lambda: device.download(args.id, args.to),
+                    'delete': lambda: device.delete(args.id, args.kind, args.name),
+                    'mkdir': lambda: device.make_folder(args.id, args.name),
+                    'move': lambda: device.move(args.id, args.to, args.name),
+                }[args.action]()
             else:
                 source = Path(args.file)
                 if not source.is_file() or source.suffix.lower() != '.pdf':
                     raise DirectError(tr('请选择已有的 PDF 文件。'))
+                folder = args.folder or 'Document/Received'
                 try:
-                    device = connect_device()
-                except DeviceUnreachable as error:
-                    result = hand_off_or_raise(source, error)
-                else:
-                    result = device.upload(source)
+                    try:
+                        device = connect_device()
+                    except DeviceUnreachable as error:
+                        if folder != 'Document/Received':
+                            raise  # the official app's queue can only deliver to Received
+                        result = hand_off_or_raise(source, error)
+                    else:
+                        result = device.upload(source, folder)
+                except Exception as error:
+                    record_failure(source.name, str(error), kept=str(source))
+                    raise
         print(json.dumps(result, ensure_ascii=False))
     except Exception as error:
         if isinstance(error, (OSError, subprocess.TimeoutExpired)):

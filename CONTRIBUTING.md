@@ -45,6 +45,12 @@ regressions here are easy to introduce and easy to catch. If it can't run in you
 environment (missing `pandoc`/`typst`), say so in the PR rather than skipping it
 silently.
 
+If you touched the direct-connection tool or the macOS app, also run
+`tests/test_direct_delivery.py` and go through the relevant sections of
+[docs/CHECKLIST.md](docs/CHECKLIST.md) (中文) — device API changes, UI changes,
+naming and placement, and keeping user-facing text in sync. Each item there comes
+from a real regression.
+
 ### Style
 
 - Keep changes scoped to what the PR is about. Don't refactor adjacent code in the

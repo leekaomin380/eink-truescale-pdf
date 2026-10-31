@@ -5,14 +5,14 @@ enum InputMode: String, CaseIterable {
     case epub = "文件"
     case text = "文本"
     case wechat = "网页"
-    case shortcut = "快捷投递"
+    case shortcut = "快捷键投递"
 
     var title: String {
         switch self {
         case .epub: L("文件")
         case .text: L("文本")
         case .wechat: L("网页")
-        case .shortcut: L("快捷投递")
+        case .shortcut: L("快捷键投递")
         }
     }
 }
@@ -84,7 +84,8 @@ struct ContentView: View {
     private var windowTitle: String {
         switch navigation.page {
         case .settings: return L("设置")
-        case .about: return L("关于 Quaderno Converter")
+        case .about: return L("关于 TrueScale for QUADERNO")
+        case .files: return L("设备文件")
         case nil: break
         }
         switch inputMode {
@@ -96,7 +97,7 @@ struct ContentView: View {
         case .wechat:
             return vm.wechatURL.isEmpty ? L("网页链接") : vm.wechatURL
         case .shortcut:
-            return L("快捷投递")
+            return L("快捷键投递")
         }
     }
 
@@ -133,6 +134,8 @@ struct ContentView: View {
                 AppSettingsView()
             case .about:
                 AboutView()
+            case .files:
+                DeviceFilesPage()
             case nil:
                 HSplitView {
                     sidebar
@@ -148,6 +151,13 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar { pageToolbar }
+        .sheet(isPresented: $navigation.showSetupGuide) { SetupGuideSheet() }
+        .onAppear {
+            // 首次使用且尚未配对时自动打开设置向导；「以后再说」后不再自动弹出。
+            if !Pairing.isPaired && !UserDefaults.standard.bool(forKey: Pairing.guideDismissedKey) {
+                navigation.showSetupGuide = true
+            }
+        }
         .onChange(of: vm.currentPage) { _, _ in
             updatePreview()
         }
@@ -182,7 +192,13 @@ struct ContentView: View {
                     .help(L("返回输入页"))
             }
         }
+        ToolbarItem(placement: .primaryAction) { USBStatusBadge() }
+        ToolbarItem(placement: .primaryAction) { RecentDeliveriesButton() }
         ToolbarItemGroup(placement: .primaryAction) {
+            Button { togglePage(.files) } label: {
+                Label("设备文件", systemImage: navigation.page == .files ? "folder.fill" : "folder")
+            }
+            .help(L("设备文件"))
             // Buttons, not Toggles: a toolbar Toggle writes its binding while the toolbar is built.
             Button { togglePage(.settings) } label: {
                 Label("设置", systemImage: navigation.page == .settings ? "gearshape.fill" : "gearshape")
@@ -191,7 +207,7 @@ struct ContentView: View {
             Button { togglePage(.about) } label: {
                 Label("关于", systemImage: navigation.page == .about ? "info.circle.fill" : "info.circle")
             }
-            .help(L("关于 Quaderno Converter"))
+            .help(L("关于 TrueScale for QUADERNO"))
         }
     }
 
@@ -654,7 +670,7 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 if vm.hasQuaderno {
                     Button(action: { vm.ensureFresh { vm.deliverToDevice() } }) {
-                        Text("发送到 Quaderno")
+                        Text("投递到 QUADERNO")
                             .frame(maxWidth: .infinity)
                     }
                     .modifier(PrimaryStyled(isPrimary: inputMode != .wechat))
