@@ -63,8 +63,7 @@ mkdir -p "$DIST_DIR"
 print ">>> 构建 Hardened Runtime 预签名 App"
 SIGN_IDENTITY="$PREPARE_SIGN_IDENTITY" "$SCRIPT_DIR/build-app.sh"
 
-# Xcode 的 developer-id 导出可以使用已登录 Account Holder 的云管理证书，
-# 因而不必在构建机上长期保存 Developer ID 私钥。导出会保留预签名中的
+# Xcode 的 developer-id 导出使用云管理证书，不必在构建机上长期保存 Developer ID 私钥。导出会保留预签名中的
 # Hardened Runtime 标志，并把主程序、pandoc、typst 与 libgmp 全部重签。
 WORK_DIR=$(mktemp -d /tmp/quaderno-release.XXXXXX)
 ARCHIVE_DIR="$WORK_DIR/$APP_NAME.xcarchive"
@@ -93,12 +92,22 @@ plutil -insert method -string developer-id "$EXPORT_OPTIONS"
 plutil -insert signingStyle -string automatic "$EXPORT_OPTIONS"
 plutil -insert teamID -string "$TEAM_ID" "$EXPORT_OPTIONS"
 
+# 默认使用 Xcode「设置 → 账户」中已登录的 Account Holder / 有云签名权限的账号。
+# EXPORT_WITH_API_KEY=1 改用 API 密钥认证；实测团队 Admin 密钥默认没有
+# 云管理分发证书的访问权限（Cloud signing permission error），需另行授权。
+EXPORT_AUTH=()
+if [[ "${EXPORT_WITH_API_KEY:-0}" == 1 ]]; then
+  EXPORT_AUTH=(-authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID"
+               -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+fi
+
 print ">>> Xcode 云端 Developer ID 签名"
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE_DIR" \
   -exportPath "$EXPORT_DIR" \
   -exportOptionsPlist "$EXPORT_OPTIONS" \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates \
+  "${EXPORT_AUTH[@]}"
 
 rm -R -- "$APP_DIR"
 ditto "$EXPORT_DIR/$APP_NAME.app" "$APP_DIR"
