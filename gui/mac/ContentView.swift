@@ -5,16 +5,14 @@ enum InputMode: String, CaseIterable {
     case epub = "文件"
     case text = "文本"
     case wechat = "网页"
-    case shortcut = "快捷投递"
-    case device = "设备文件"
+    case shortcut = "快捷键投递"
 
     var title: String {
         switch self {
         case .epub: L("文件")
         case .text: L("文本")
         case .wechat: L("网页")
-        case .shortcut: L("快捷投递")
-        case .device: L("设备文件")
+        case .shortcut: L("快捷键投递")
         }
     }
 }
@@ -77,7 +75,7 @@ struct ContentView: View {
         case .epub:   return vm.sourceFileURL != nil
         case .text:   return !vm.pasteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .wechat: return !vm.wechatURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .shortcut, .device: return false
+        case .shortcut: return false
         }
     }
 
@@ -87,6 +85,7 @@ struct ContentView: View {
         switch navigation.page {
         case .settings: return L("设置")
         case .about: return L("关于 TrueScale for QUADERNO")
+        case .files: return L("设备文件")
         case nil: break
         }
         switch inputMode {
@@ -98,9 +97,7 @@ struct ContentView: View {
         case .wechat:
             return vm.wechatURL.isEmpty ? L("网页链接") : vm.wechatURL
         case .shortcut:
-            return L("快捷投递")
-        case .device:
-            return L("设备文件")
+            return L("快捷键投递")
         }
     }
 
@@ -137,6 +134,8 @@ struct ContentView: View {
                 AppSettingsView()
             case .about:
                 AboutView()
+            case .files:
+                DeviceFilesPage()
             case nil:
                 HSplitView {
                     sidebar
@@ -144,9 +143,6 @@ struct ContentView: View {
                     if inputMode == .shortcut {
                         QuickSendOverview()
                             .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
-                    } else if inputMode == .device {
-                        DeviceDocumentsView()
-                            .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         previewArea
                     }
@@ -197,7 +193,12 @@ struct ContentView: View {
             }
         }
         ToolbarItem(placement: .primaryAction) { USBStatusBadge() }
+        ToolbarItem(placement: .primaryAction) { RecentDeliveriesButton() }
         ToolbarItemGroup(placement: .primaryAction) {
+            Button { togglePage(.files) } label: {
+                Label("设备文件", systemImage: navigation.page == .files ? "folder.fill" : "folder")
+            }
+            .help(L("设备文件"))
             // Buttons, not Toggles: a toolbar Toggle writes its binding while the toolbar is built.
             Button { togglePage(.settings) } label: {
                 Label("设置", systemImage: navigation.page == .settings ? "gearshape.fill" : "gearshape")
@@ -223,8 +224,6 @@ struct ContentView: View {
 
             if inputMode == .shortcut {
                 ScrollView { QuickSendSidebar() }
-            } else if inputMode == .device {
-                DeviceFolderSidebar()
             } else {
                 if inputMode == .text {
                     textWorkspace
@@ -262,7 +261,7 @@ struct ContentView: View {
             clearedPasteText = nil
             clearedWechatURL = nil
 
-            if newMode == .shortcut || newMode == .device {
+            if newMode == .shortcut {
                 autoRenderTask?.cancel()
                 return
             }
@@ -270,7 +269,7 @@ struct ContentView: View {
                 case .epub: .epub
                 case .text: .text
                 case .wechat: .wechat
-                case .shortcut, .device: vm.activeKind
+                case .shortcut: vm.activeKind
             }
 
             // 每个来源的草稿各自保留；切换时只移除与当前来源不再对应的预览。

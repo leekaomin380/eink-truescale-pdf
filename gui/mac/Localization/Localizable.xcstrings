@@ -1620,34 +1620,34 @@
         }
       }
     },
-    "快捷投递": {
+    "快捷键投递": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quick Send"
+            "value": "Hotkey Send"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クイック送信"
+            "value": "ショートカット送信"
           }
         }
       }
     },
-    "快捷投递排版保存失败：%@": {
+    "快捷键投递排版保存失败：%@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Could not save the quick-send layout: %@"
+            "value": "Could not save the hotkey-send layout: %@"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "クイック送信のレイアウトを保存できませんでした：%@"
+            "value": "ショートカット送信のレイアウトを保存できませんでした：%@"
           }
         }
       }
@@ -3652,18 +3652,18 @@
         }
       }
     },
-    "还没有投递记录。复制一段文字，按 ⌃1 试试。": {
+    "还没有投递记录。投递的文件会显示在这里。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nothing sent yet. Copy some text and press ⌃1."
+            "value": "Nothing sent yet. Sent files will appear here."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "まだ送信履歴がありません。テキストをコピーして ⌃1 を押してみてください。"
+            "value": "まだ送信履歴がありません。送信したファイルがここに表示されます。"
           }
         }
       }

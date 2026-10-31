@@ -102,9 +102,9 @@ MESSAGES = {
     '另一项设备投递正在进行，请稍后重试。': (
         'Another delivery to the device is in progress. Try again shortly.',
         '別の送信が進行中です。しばらくしてから再試行してください。'),
-    '快捷投递排版配置无效，请在 App 中检查排版设置。': (
-        'The quick-send layout settings are invalid. Check the layout in the app.',
-        'クイック送信のレイアウト設定が無効です。App でレイアウトを確認してください。'),
+    '快捷键投递排版配置无效，请在 App 中检查排版设置。': (
+        'The hotkey-send layout settings are invalid. Check the layout in the app.',
+        'ショートカット送信のレイアウト設定が無効です。App でレイアウトを確認してください。'),
     '渲染失败：{detail}': ('Rendering failed: {detail}', 'レンダリングに失敗しました：{detail}'),
     '{error}；PDF 已保留：{path}': ('{error} The PDF was kept: {path}', '{error} PDF は保存してあります：{path}'),
     '请选择已有的 PDF 文件。': ('Choose an existing PDF file.', '既存の PDF ファイルを選んでください。'),
@@ -794,7 +794,7 @@ def load_clipboard_layout():
             raise ValueError('printTime')
         return profile, mode
     except (OSError, ValueError, KeyError, TypeError):
-        raise DirectError(tr('快捷投递排版配置无效，请在 App 中检查排版设置。'))
+        raise DirectError(tr('快捷键投递排版配置无效，请在 App 中检查排版设置。'))
 
 
 def apply_clipboard_layout(args, directory):

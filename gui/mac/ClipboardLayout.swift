@@ -107,7 +107,7 @@ final class ClipboardLayoutStore: ObservableObject {
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
             errorMessage = ""
         } catch {
-            errorMessage = L("快捷投递排版保存失败：\(error.localizedDescription)")
+            errorMessage = L("快捷键投递排版保存失败：\(error.localizedDescription)")
         }
     }
 }

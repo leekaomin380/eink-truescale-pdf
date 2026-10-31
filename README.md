@@ -43,13 +43,13 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 | **WeChat articles (微信公众号)** | Paste a link into the app — [jump](#reading-wechat-articles-微信公众号-on-a-quaderno) |
 | Pasted text | Type or paste into the app |
 
-The **Device Files** tab manages what is already on the device: browse folders, open a document
+**Device Files** (toolbar) manages what is already on the device: browse folders, open a document
 on the device, download it (with your handwritten notes) to the Mac, create folders, move and
 delete.
 
 Delivered files land in `Document/Received/` on the device and are opened on screen.
-Delivery never overwrites or deletes existing files. Deleting and moving happen only in the
-**Device Files** tab, when you choose to and confirm.
+Delivery never overwrites or deletes existing files. Deleting and moving happen only in
+**Device Files**, when you choose to and confirm.
 
 The WeChat support exists because QUADERNO is a Japanese device with no path for Chinese
 social-platform content, and 微信公众号 is where much of Chinese long-form writing lives.
@@ -141,14 +141,14 @@ creating a Shortcut and binding ⌃1 — with a **Copy Command** button. The com
 checkout does not break it. If the app itself is moved or renamed, copy the command again.
 
 Clipboard delivery follows the layout shared by the File, Text and Web tabs by default. On
-the **Quick Send** tab, turn off **Follow main window layout** to give ⌃1 and Finder sending
+the **Hotkey Send** tab, turn off **Follow main window layout** to give ⌃1 and Finder sending
 their own layout. Settings persist when the app is closed.
 
 ### Send from Finder
 
 Right-click one or more PDF, Markdown or TXT files in Finder and choose **Send to QUADERNO**
 at the bottom of the menu. PDFs are uploaded as they are; Markdown and TXT are typeset with
-the Quick Send layout and keep their file names. This is a native macOS service provided by
+the Hotkey Send layout and keep their file names. This is a native macOS service provided by
 the app — there is nothing to install. If the item is missing, enable it in
 **System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders**.
 
@@ -211,7 +211,8 @@ The first time you trigger it, macOS may ask for permission. Allow it once.
 Your current window never loses focus. Nothing opens on your Mac. Nothing flashes.
 
 The file name comes from the content: a YAML `title`, else the first Markdown heading, else
-the first sentence, plus a timestamp. The **Quick Send** tab lists the most recent deliveries.
+the first sentence, plus a timestamp. **Recent Deliveries** in the toolbar lists the latest deliveries from every entry point —
+⌃1, Finder, the app itself and the fallback.
 
 ### What the notifications mean
 
@@ -477,7 +478,7 @@ A few notes on why it's built this way:
 - **The device speaks an HTTPS API.** The protocol follows the community reference
   [dpt-rp1-py](https://github.com/janten/dpt-rp1-py); no code from it is bundled. Delivery only
   authenticates, lists folders, creates documents, uploads, reads back and asks the device to
-  open a file — it never deletes, overwrites or syncs. The **Device Files** tab adds browsing,
+  open a file — it never deletes, overwrites or syncs. **Device Files** adds browsing,
   downloading, new folders, moving and deleting, each only as an explicit action; deleting
   always asks first, because handwritten notes go with the document.
 - **The device's identity is pinned.** On first import the certificate chain is verified,
@@ -531,9 +532,10 @@ above applies only to the separate command-line clipboard workflow.
 
 Input tabs: **File** (ebook conversion), **Text** (pasted Markdown), **Web**
 (WeChat article links, [details above](#reading-wechat-articles-微信公众号-on-a-quaderno)) and
-**Quick Send** (connection status, ⌃1 layout, recent deliveries). Adjust fonts, size, margins
+**Hotkey Send** (⌃1 layout and how-to). Adjust fonts, size, margins
 and leading, preview any page, then save the PDF or send it straight to the device.
-**Settings** and **About** open in the same window from the toolbar.
+The toolbar shows the USB connection and **Recent Deliveries** everywhere, and opens
+**Device Files**, **Settings** and **About** in the same window.
 
 UI strings live in a String Catalog (`gui/mac/Localization/Localizable.xcstrings`). After
 changing UI text, run `gui/l10n-sync.sh` to extract new strings, then fill in English and

@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import IOKit
 
-// 「快捷投递」页（左栏连接状态与排版，右栏用法与最近投递）与主窗口内的「设置」页。
+// 「快捷键投递」页（左栏排版，右栏用法）、全局的连接状态与最近投递，以及主窗口内的「设置」页。
 
 /// 一条已通过回读校验的投递，由直连工具写入 Direct/history.jsonl。
 struct DeliveryRecord: Decodable, Identifiable {
@@ -25,7 +25,7 @@ struct DeliveryRecord: Decodable, Identifiable {
     }
 }
 
-/// USB 连接状态与最近投递。只在快捷投递页可见时轮询；两项都是本地读取，不访问设备。
+/// USB 连接状态与最近投递。App 运行时每 3 秒轮询；两项都是本地读取，不访问设备。
 @MainActor
 final class QuickSendMonitor: ObservableObject {
     static let shared = QuickSendMonitor()
@@ -65,7 +65,7 @@ final class QuickSendMonitor: ObservableObject {
         guard let text = try? String(contentsOf: historyURL, encoding: .utf8) else { return [] }
         let decoder = JSONDecoder()
         return text.split(separator: "\n").compactMap { try? decoder.decode(DeliveryRecord.self, from: Data($0.utf8)) }
-            .reversed().prefix(5).map { $0 }
+            .reversed().prefix(10).map { $0 }
     }
 }
 
@@ -103,8 +103,8 @@ enum QuadernoUSB {
 
 // MARK: - 主窗口页面切换
 
-/// 主窗口当前显示的页面：nil 为输入页（文件 / 文本 / 网页 / 快捷投递）。
-enum MainPage { case settings, about }
+/// 主窗口当前显示的页面：nil 为输入页（文件 / 文本 / 网页 / 快捷键投递）。
+enum MainPage { case settings, about, files }
 
 /// 菜单命令与工具栏共用的页面状态。
 @MainActor
@@ -119,7 +119,7 @@ final class MainNavigation: ObservableObject {
     }
 }
 
-// MARK: - 快捷投递页左栏：连接状态 + 排版
+// MARK: - 快捷键投递页左栏：排版
 
 struct QuickSendSidebar: View {
     @ObservedObject private var monitor = QuickSendMonitor.shared
@@ -135,7 +135,7 @@ struct QuickSendSidebar: View {
     }
 }
 
-/// 分组标题 + 圆角容器，设置页与快捷投递页共用。
+/// 分组标题 + 圆角容器，设置页与快捷键投递页共用。
 struct SettingsSection<Content: View>: View {
     let title: LocalizedStringKey
     let content: Content
@@ -316,7 +316,6 @@ struct QuickSendOverview: View {
                     HStack(alignment: .top, spacing: 18) { steps(arrow: arrow) }
                     VStack(spacing: 18) { steps(arrow: EmptyView()) }
                 }
-                recent
             }
             .padding(32)
             .frame(maxWidth: .infinity)
@@ -346,38 +345,6 @@ struct QuickSendOverview: View {
             Text(detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(width: 150)
-    }
-
-    private var recent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("最近投递").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            if monitor.history.isEmpty {
-                Text("还没有投递记录。复制一段文字，按 ⌃1 试试。").foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(monitor.history.enumerated()), id: \.element.id) { index, record in
-                    if index > 0 { Divider() }
-                    HStack(spacing: 12) {
-                        Image(systemName: record.via == "official" ? "arrow.triangle.branch" : "checkmark")
-                            .foregroundStyle(record.via == "official" ? Color.orange : Color.green).fontWeight(.semibold)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: record.name).lineLimit(1).truncationMode(.middle)
-                            Text(verbatim: detail(for: record)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 18).padding(.vertical, 16)
-        .frame(maxWidth: 520, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
-    }
-
-    private func detail(for record: DeliveryRecord) -> String {
-        let when = record.date.map { RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()) } ?? record.time
-        let route = record.via == "official" ? L("经 QUADERNO PC App") : L("回读校验通过")
-        return [when, record.sourceLabel, route].joined(separator: " · ")
     }
 }
 
@@ -671,5 +638,51 @@ struct USBStatusBadge: View {
         }
         .help(L("设备设置…"))
         .onAppear { monitor.start() }
+    }
+}
+
+// MARK: - 最近投递（全局：⌃1、Finder 右键、App 内发送、降级投递都会记录）
+
+struct RecentDeliveriesButton: View {
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing.toggle() } label: { Label("最近投递", systemImage: "clock.arrow.circlepath") }
+            .help(L("最近投递"))
+            .popover(isPresented: $showing, arrowEdge: .bottom) { RecentDeliveriesList().frame(width: 400) }
+    }
+}
+
+struct RecentDeliveriesList: View {
+    @ObservedObject private var monitor = QuickSendMonitor.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("最近投递").font(.headline)
+            if monitor.history.isEmpty {
+                Text("还没有投递记录。投递的文件会显示在这里。").foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(monitor.history.enumerated()), id: \.element.id) { index, record in
+                    if index > 0 { Divider() }
+                    HStack(spacing: 12) {
+                        Image(systemName: record.via == "official" ? "arrow.triangle.branch" : "checkmark")
+                            .foregroundStyle(record.via == "official" ? Color.orange : Color.green).fontWeight(.semibold)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: record.name).lineLimit(1).truncationMode(.middle).help(record.name)
+                            Text(verbatim: detail(for: record)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .onAppear { monitor.refresh() }
+    }
+
+    private func detail(for record: DeliveryRecord) -> String {
+        let when = record.date.map { RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()) } ?? record.time
+        let route = record.via == "official" ? L("经 QUADERNO PC App") : L("回读校验通过")
+        return [when, record.sourceLabel, route].joined(separator: " · ")
     }
 }

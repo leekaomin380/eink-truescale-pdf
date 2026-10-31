@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-// 「设备文件」标签页：浏览设备上的文件夹与文档，在设备上打开、下载到 Mac、移动、删除、新建文件夹。
+// 「设备文件」页面：浏览设备上的文件夹与文档，在设备上打开、下载到 Mac、移动、删除、新建文件夹。
 // 投递从不删除或覆盖文件；这里的删除与移动只在用户明确操作并确认后执行。
 
 struct DeviceEntry: Identifiable, Hashable {
@@ -91,6 +91,16 @@ final class DeviceFilesModel: ObservableObject {
               let path = folder["path"] as? String, let id = folder["id"] as? String,
               let items = json["entries"] as? [[String: Any]] else { return nil }
         return (path, id, items.compactMap(DeviceEntry.init))
+    }
+}
+
+/// 「设备文件」页面：从工具栏打开，独立于四种投递方式。
+struct DeviceFilesPage: View {
+    var body: some View {
+        HSplitView {
+            DeviceFolderSidebar().frame(minWidth: 240, idealWidth: 280, maxWidth: 420)
+            DeviceDocumentsView().frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 }
 
