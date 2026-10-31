@@ -10,6 +10,8 @@ struct DeliveryRecord: Decodable, Identifiable {
     let name: String
     let source: String
     let opened: Bool
+    /// direct：直连并回读校验；official：直连不可用时经 QUADERNO PC App 投递（无回读）。
+    let via: String?
     var id: String { time + name }
 
     var date: Date? { ISO8601DateFormatter().date(from: time) }
@@ -368,7 +370,8 @@ struct QuickSendOverview: View {
                 ForEach(Array(monitor.history.enumerated()), id: \.element.id) { index, record in
                     if index > 0 { Divider() }
                     HStack(spacing: 12) {
-                        Image(systemName: "checkmark").foregroundStyle(.green).fontWeight(.semibold)
+                        Image(systemName: record.via == "official" ? "arrow.triangle.branch" : "checkmark")
+                            .foregroundStyle(record.via == "official" ? Color.orange : Color.green).fontWeight(.semibold)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: record.name).lineLimit(1).truncationMode(.middle)
                             Text(verbatim: detail(for: record)).font(.caption).foregroundStyle(.secondary)
@@ -386,7 +389,8 @@ struct QuickSendOverview: View {
 
     private func detail(for record: DeliveryRecord) -> String {
         let when = record.date.map { RelativeDateTimeFormatter().localizedString(for: $0, relativeTo: Date()) } ?? record.time
-        return [when, record.sourceLabel, L("回读校验通过")].joined(separator: " · ")
+        let route = record.via == "official" ? L("经 QUADERNO PC App") : L("回读校验通过")
+        return [when, record.sourceLabel, route].joined(separator: " · ")
     }
 }
 

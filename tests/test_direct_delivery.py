@@ -392,3 +392,82 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual([entry['name'] for entry in entries], ['2.pdf', '3.pdf', '4.pdf'])
             self.assertEqual({entry['source'] for entry in entries}, {'finder'})
 
+
+
+class OfficialFallbackTests(unittest.TestCase):
+    def render_args(self, temp):
+        from types import SimpleNamespace
+        input_file = Path(temp) / 'input.md'
+        input_file.write_text('# 降级测试\n正文')
+        return SimpleNamespace(directory=temp, input=str(input_file), pandoc='pandoc', typst='typst',
+            format='markdown', template='template', font=[], page_width='157mm', page_height='209mm',
+            margin='14mm', size='10pt', leading='0.85em', font_directory=None, title='降级测试')
+
+    def fake_render(self, command, **kwargs):
+        from types import SimpleNamespace
+        Path(command[command.index('-o') + 1]).write_bytes(b'%PDF-fallback')
+        return SimpleNamespace(returncode=0, stderr=b'')
+
+    def test_unreachable_device_hands_pdf_to_running_official_app(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(direct, 'ROOT', Path(temp) / 'Direct'):
+            handed = []
+            unreachable = direct.DeviceUnreachable('USB 上未检测到 QUADERNO')
+            with patch.object(direct, 'connect_device', side_effect=unreachable), \
+                 patch.object(direct, 'official_app_running', return_value=True), \
+                 patch.object(direct, 'hand_off', side_effect=lambda pdf: handed.append(pdf.name) or {'ok': True, 'fallback': True}), \
+                 patch.object(direct.subprocess, 'run', side_effect=self.fake_render):
+                result = direct.render_and_upload(self.render_args(temp))
+            self.assertTrue(result['fallback'])
+            self.assertEqual(handed, ['降级测试.pdf'])
+
+    def test_failure_after_upload_started_never_falls_back(self):
+        class FailingDevice:
+            def upload(self, source):
+                raise direct.DirectError('文件已上传，但回读校验不一致。')
+        with tempfile.TemporaryDirectory() as temp, patch.object(direct, 'ROOT', Path(temp) / 'Direct'):
+            with patch.object(direct, 'connect_device', return_value=FailingDevice()), \
+                 patch.object(direct, 'official_app_running', return_value=True), \
+                 patch.object(direct, 'hand_off', side_effect=AssertionError('duplicate delivery')), \
+                 patch.object(direct.subprocess, 'run', side_effect=self.fake_render):
+                with self.assertRaisesRegex(direct.DirectError, '回读校验不一致'):
+                    direct.render_and_upload(self.render_args(temp))
+
+    def test_closed_official_app_is_suggested_not_launched(self):
+        error = direct.DeviceUnreachable('USB 上未检测到 QUADERNO')
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(direct, 'OFFICIAL_APP', Path(temp)), \
+             patch.object(direct, 'official_app_running', return_value=False), \
+             patch.object(direct, 'hand_off', side_effect=AssertionError('must not launch')):
+            with self.assertRaisesRegex(direct.DirectError, '打开 QUADERNO PC App 后重试'):
+                direct.hand_off_or_raise(Path(temp) / 'a.pdf', error)
+
+    def hand_off_with(self, behaviour):
+        """Run hand_off against a fake official client; behaviour(copy, log) acts like the client."""
+        import json
+        with tempfile.TemporaryDirectory() as temp, patch.object(direct, 'ROOT', Path(temp) / 'Direct'):
+            log = Path(temp) / 'logfile.log'
+            log.write_text('start\n')
+            pdf = Path(temp) / '原件.pdf'
+            pdf.write_bytes(b'%PDF')
+            def run(command, **kwargs):
+                from types import SimpleNamespace
+                behaviour(Path(command[-1]), log)
+                return SimpleNamespace(returncode=0)
+            with patch.object(direct, 'official_log', return_value=log), patch.object(direct.subprocess, 'run', side_effect=run):
+                try:
+                    return direct.hand_off(pdf, timeout=1), pdf.exists(), (Path(temp) / 'Direct/history.jsonl')
+                except direct.DirectError as error:
+                    return error, pdf.exists(), None
+
+    def test_consumed_copy_counts_as_delivered_and_is_recorded(self):
+        import json
+        result, original_kept, history = self.hand_off_with(lambda copy, log: copy.unlink())
+        self.assertTrue(result['ok'])
+        self.assertTrue(original_kept)
+
+    def test_client_log_error_is_a_failure(self):
+        result, original_kept, _ = self.hand_off_with(
+            lambda copy, log: log.write_text('start\nE_MW_DEVICE_NOT_FOUND\n'))
+        self.assertIsInstance(result, direct.DirectError)
+        self.assertIn('也失败', str(result))
+        self.assertTrue(original_kept)

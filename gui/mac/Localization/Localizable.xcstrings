@@ -2404,6 +2404,22 @@
         }
       }
     },
+    "经 QUADERNO PC App": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "via QUADERNO PC App"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QUADERNO PC App 経由"
+          }
+        }
+      }
+    },
     "绑定 ⌃1": {
       "localizations": {
         "en": {

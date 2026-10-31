@@ -11,6 +11,7 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import re
 import ipaddress
@@ -32,6 +33,7 @@ import yaml
 
 ROOT = Path.home() / 'Library/Application Support/Quaderno Converter/Direct'
 APP_BUNDLE_ID = 'io.github.leekaomin380.quaderno-converter'
+OFFICIAL_APP = Path('/Applications/QUADERNO PC App.app')
 
 # User-facing messages: zh-Hans source text -> (English, 日本語). Same languages as the App.
 MESSAGES = {
@@ -111,6 +113,18 @@ MESSAGES = {
     '设备协议或配对信息异常，请重新检查连接配置。': (
         'Unexpected device protocol or pairing data. Check the connection settings again.',
         '端末のプロトコルまたはペアリング情報に異常があります。接続設定を確認し直してください。'),
+    '直连不可用，已经 QUADERNO PC App 投递：{name}（由官方 App 送达，未做回读校验）': (
+        'Direct connection unavailable; sent through QUADERNO PC App: {name} (delivered by the official app, not read back)',
+        '直接接続が使えないため QUADERNO PC App 経由で送信しました：{name}（公式 App による送信、読み戻し照合なし）'),
+    '直连不可用，经 QUADERNO PC App 投递也失败（设备离线或投递被取消）。': (
+        'Direct connection unavailable, and delivery through QUADERNO PC App also failed (device offline or delivery cancelled).',
+        '直接接続が使えず、QUADERNO PC App 経由の送信も失敗しました（端末がオフラインか、送信が取り消されました）。'),
+    '已交给 QUADERNO PC App，但 60 秒内未确认送达。请在设备上检查。': (
+        'Handed to QUADERNO PC App, but delivery was not confirmed within 60 seconds. Check the device.',
+        'QUADERNO PC App に渡しましたが、60 秒以内に送信を確認できませんでした。端末で確認してください。'),
+    '{error}（打开 QUADERNO PC App 后重试，可经官方 App 投递）': (
+        '{error} (Open QUADERNO PC App and try again to send through the official app.)',
+        '{error}（QUADERNO PC App を開いて再試行すると、公式 App 経由で送信できます）'),
     # deliver.sh, through the `text` action
     '未找到 pandoc': ('pandoc not found', 'pandoc が見つかりません'),
     '未找到 typst': ('typst not found', 'typst が見つかりません'),
@@ -183,6 +197,10 @@ class ConnectionFailure(DirectError):
         message = tr("设备证书与已配对设备不一致，已拒绝连接。" if code == 90 else
                      "设备地址无法连接，请检查 USB / Wi-Fi 和设备唤醒状态。")
         super().__init__(message)
+
+
+class DeviceUnreachable(DirectError):
+    """Direct connection failed before anything was uploaded: safe to hand the PDF to the official app."""
 
 
 class UsbDisconnected(DirectError):
@@ -465,11 +483,11 @@ class Device:
 HISTORY_LIMIT = 50
 
 
-def record_delivery(name, display_requested):
+def record_delivery(name, display_requested, via='direct'):
     """Append a verified delivery for the App's「最近投递」. Never fails the delivery itself."""
     # QUADERNO_SOURCE: clipboard (Ctrl+1) / finder (right-click) / app; set by the caller.
     entry = {'time': datetime.now().astimezone().isoformat(timespec='seconds'), 'name': name,
-             'source': os.environ.get('QUADERNO_SOURCE', 'app'), 'opened': display_requested}
+             'source': os.environ.get('QUADERNO_SOURCE', 'app'), 'opened': display_requested, 'via': via}
     path = ROOT / 'history.jsonl'
     try:
         lines = path.read_text().splitlines() if path.exists() else []
@@ -499,6 +517,78 @@ def load_device():
     settings = json.loads((ROOT / 'connection.json').read_text())
     return Device(settings, (ROOT / 'privatekey.pem').read_bytes(),
                   (ROOT / 'clientid.txt').read_text().strip())
+
+
+def connect_device():
+    """Load the pairing and authenticate. Any failure here happened before an upload started."""
+    if os.environ.get('QUADERNO_DIRECT_DISABLED') == '1':  # exercise the fallback path on purpose
+        raise DeviceUnreachable(tr('设备地址无法连接，请检查 USB / Wi-Fi 和设备唤醒状态。'))
+    try:
+        device = load_device()
+        device.authenticate()
+        return device
+    except DirectError as error:
+        raise DeviceUnreachable(str(error)) from error
+    except (OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
+        raise DeviceUnreachable(tr('无法连接设备，请检查 USB / Wi-Fi、设备唤醒状态及设备地址。')) from error
+
+
+def official_app_running():
+    if not OFFICIAL_APP.exists():
+        return False
+    result = subprocess.run(['/usr/bin/pgrep', '-f', str(OFFICIAL_APP / 'Contents/MacOS/')],
+                            capture_output=True, timeout=5)
+    return result.returncode == 0
+
+
+def official_log():
+    logs = list((Path.home() / 'Library/Application Support/Fujitsu').rglob('logfile.log'))
+    return max(logs, key=lambda path: path.stat().st_mtime) if logs else None
+
+
+def hand_off(pdf, timeout=60):
+    """Minimum availability: let the running QUADERNO PC App deliver the PDF (its --print queue).
+
+    The official client deletes the file it has uploaded, so it gets a same-named copy; a consumed
+    copy means it took the file, new E_MW_* errors in its log mean delivery failed.
+    """
+    folder = Path(tempfile.mkdtemp(prefix='handoff-', dir=ROOT.parent))
+    copy = folder / pdf.name
+    shutil.copy2(pdf, copy)
+    log = official_log()
+    offset = log.stat().st_size if log else 0
+    subprocess.run(['/usr/bin/open', '-gj', '-na', str(OFFICIAL_APP), '--args', '--print', str(copy)],
+                   capture_output=True, timeout=30)
+    status = 'unknown'
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not copy.exists():
+            status = 'ok'
+            break
+        if log and log.exists() and log.stat().st_size > offset:
+            with log.open('rb') as stream:
+                stream.seek(offset)
+                if re.search(rb'E_MW_DEVICE_NOT_FOUND|E_MW_CANCELLED|E_MW_UO_SRC_NO_VALID_CONTENT', stream.read()):
+                    status = 'failed'
+                    break
+        time.sleep(0.2)
+    if status != 'unknown':  # an unconfirmed copy stays for the client to pick up later
+        shutil.rmtree(folder, ignore_errors=True)
+    if status == 'failed':
+        raise DirectError(tr('直连不可用，经 QUADERNO PC App 投递也失败（设备离线或投递被取消）。'))
+    if status == 'unknown':
+        raise DirectError(tr('已交给 QUADERNO PC App，但 60 秒内未确认送达。请在设备上检查。'))
+    record_delivery(pdf.name, False, via='official')
+    return {'ok': True, 'fallback': True, 'path': 'QUADERNO PC App',
+            'message': tr('直连不可用，已经 QUADERNO PC App 投递：{name}（由官方 App 送达，未做回读校验）', name=pdf.name)}
+
+
+def hand_off_or_raise(pdf, error):
+    if official_app_running():
+        return hand_off(pdf)
+    if OFFICIAL_APP.exists():
+        raise DirectError(tr('{error}（打开 QUADERNO PC App 后重试，可经官方 App 投递）', error=error)) from error
+    raise error
 
 
 def import_pairing(address):
@@ -708,17 +798,20 @@ def render_and_upload(args):
     # One helper startup; overlap fresh authentication with local PDF rendering.
     # Keep the complete transaction serialized against other App / hotkey deliveries.
     with connection_lock():
-        device = load_device()
         with ThreadPoolExecutor(max_workers=1) as executor:
-            authentication = executor.submit(device.authenticate)
+            connection = executor.submit(connect_device)
             result = subprocess.run(command, cwd='/tmp', capture_output=True, timeout=120)
             if result.returncode:
                 output.unlink(missing_ok=True)
                 (directory / 'render.log').write_bytes(result.stderr)
                 raise DirectError(tr('渲染失败：{detail}', detail=result.stderr.decode(errors='replace')[-160:]))
             try:
-                authentication.result()
-                result = device.upload(output)
+                try:
+                    device = connection.result()
+                except DeviceUnreachable as error:
+                    result = hand_off_or_raise(output, error)
+                else:
+                    result = device.upload(output)
             except Exception as error:
                 raise DirectError(tr('{error}；PDF 已保留：{path}', error=error, path=output)) from error
     output.unlink(missing_ok=True)
@@ -772,7 +865,12 @@ def main():
                 source = Path(args.file)
                 if not source.is_file() or source.suffix.lower() != '.pdf':
                     raise DirectError(tr('请选择已有的 PDF 文件。'))
-                result = load_device().upload(source)
+                try:
+                    device = connect_device()
+                except DeviceUnreachable as error:
+                    result = hand_off_or_raise(source, error)
+                else:
+                    result = device.upload(source)
         print(json.dumps(result, ensure_ascii=False))
     except Exception as error:
         if isinstance(error, (OSError, subprocess.TimeoutExpired)):

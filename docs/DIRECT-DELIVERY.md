@@ -80,3 +80,18 @@ App 通过 `Info.plist` 的 `NSServices` 提供原生服务「发送到 QUADERNO
 - 菜单项未出现：在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选。
 
 验证：通过 `NSPerformService` 调用服务，设备侧完成上传事务。
+
+## 降级到 QUADERNO PC App（2026-10-31）
+
+直连在**上传开始前**失败时（设备未连接、认证失败、尚未配对），如果 QUADERNO PC App 正在运行，
+就把 PDF 副本交给它（`open -gj -na … --args --print <副本>`），由官方 App 送达设备。
+
+- 判定：副本被客户端删除即已接收；客户端日志新增 `E_MW_DEVICE_NOT_FOUND` / `E_MW_CANCELLED` /
+  `E_MW_UO_SRC_NO_VALID_CONTENT` 为失败；60 秒内都没有则提示未确认送达，副本保留给客户端稍后处理。
+- 上传开始之后的失败（例如回读校验不一致）**不降级**，避免同一文件投递两次。
+- 官方 App 未运行时不替用户启动，只在错误消息中提示「打开 QUADERNO PC App 后重试」。
+- 适用于全部入口：⌃1、Finder 右键、App 内发送。降级投递没有回读校验，「最近投递」标为「经 QUADERNO PC App」。
+- 诊断：`QUADERNO_DIRECT_DISABLED=1` 让直连视为不可用，用于测试降级路径。
+
+实机验证：直连人为禁用时，Finder 入口投递一个 16848 字节的 PDF，1.8 秒内被官方 App 接收；
+随后经直连在设备 `Document/Received/` 查到同名文件，大小一致。
