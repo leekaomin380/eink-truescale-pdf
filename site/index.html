@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrueScale for QUADERNO</title>
+<meta name="description" content="Copy text, press ⌃1, and it opens on your FUJITSU QUADERNO — typeset at the screen's true physical size. A free, open-source macOS app.">
+<link rel="icon" href="assets/favicon.png">
+<meta property="og:title" content="TrueScale for QUADERNO">
+<meta property="og:description" content="Typeset for the page you hold. Copy text, press ⌃1, and it opens on your QUADERNO.">
+<meta property="og:image" content="assets/icon.png">
+<style>
+:root {
+  --ground: #f6f4ee;
+  --surface: #ffffff;
+  --ink: #1b1b19;
+  --muted: #5d5c57;
+  --rule: #dedbd2;
+  --accent: #1f6b5f;
+  --accent-ink: #ffffff;
+  --band: #b9472f;
+  --serif: "Iowan Old Style", "Hiragino Mincho ProN", "Songti SC", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans", "Helvetica Neue", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #171816;
+    --surface: #212220;
+    --ink: #ecebe6;
+    --muted: #a8a69f;
+    --rule: #34352f;
+    --accent: #5fb3a3;
+    --accent-ink: #0d1412;
+    --band: #e0765d;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #171816; --surface: #212220; --ink: #ecebe6; --muted: #a8a69f;
+  --rule: #34352f; --accent: #5fb3a3; --accent-ink: #0d1412; --band: #e0765d;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 17px/1.65 var(--sans); }
+a { color: var(--accent); }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.wrap .wrap { padding: 0; }
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+header { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.brand img { width: 32px; height: 32px; }
+.langs { display: flex; gap: 4px; }
+.langs button { font: inherit; font-size: 14px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+  padding: 6px 12px; border-radius: 999px; cursor: pointer; min-height: 36px; }
+.langs button[aria-pressed="true"] { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+
+.hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 56px; align-items: center; padding: 48px 0 72px; }
+.hero h1 { font: 600 clamp(36px, 5vw, 56px)/1.12 var(--serif); margin: 0 0 20px; letter-spacing: -0.01em; }
+.hero p.lead { font-size: 20px; color: var(--muted); margin: 0 0 32px; max-width: 34em; }
+.flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 15px; color: var(--muted); margin-bottom: 32px; }
+.key { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 32px; padding: 0 10px;
+  border: 1px solid var(--rule); border-bottom-width: 3px; border-radius: 7px; background: var(--surface);
+  color: var(--ink); font-weight: 600; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 10px; font-weight: 600;
+  text-decoration: none; min-height: 48px; }
+.button.primary { background: var(--accent); color: var(--accent-ink); }
+.button.secondary { border: 1px solid var(--rule); color: var(--ink); background: var(--surface); }
+.note { font-size: 14px; color: var(--muted); margin-top: 14px; }
+
+.device { justify-self: center; width: min(100%, 380px); background: #2b2b29; padding: 22px 22px 34px; border-radius: 18px;
+  box-shadow: 0 30px 60px -30px rgba(0,0,0,.45); position: relative; }
+.device::after { content: ""; position: absolute; right: 54px; top: -6px; bottom: -6px; width: 16px; border-radius: 3px;
+  background: var(--band); opacity: .9; }
+.device img { display: block; width: 100%; height: auto; background: #f4f3ef; border-radius: 3px; }
+.device figcaption { color: #bdbbb4; font-size: 12px; text-align: center; margin-top: 12px; }
+
+section { padding: 64px 0; border-top: 1px solid var(--rule); }
+section h2 { font: 600 clamp(26px, 3.2vw, 34px)/1.25 var(--serif); margin: 0 0 14px; }
+section > .wrap > p.intro { color: var(--muted); max-width: 40em; margin: 0 0 36px; font-size: 18px; }
+
+.why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 24px; }
+.panel h3 { margin: 0 0 8px; font-size: 18px; }
+.panel p { margin: 0; color: var(--muted); }
+.panel .figure { font: 600 clamp(22px, 6vw, 30px)/1.2 var(--serif); color: var(--ink); margin-bottom: 6px; white-space: nowrap; }
+
+.ways { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.way { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 22px; }
+.way svg { width: 28px; height: 28px; stroke: var(--accent); fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.way h3 { margin: 12px 0 6px; font-size: 17px; }
+.way p { margin: 0; color: var(--muted); font-size: 15px; }
+
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--rule); border-radius: 14px;
+  overflow: hidden; background: var(--surface); }
+.feature { padding: 22px 24px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.feature:nth-child(3n) { border-right: 0; }
+.feature:nth-last-child(-n+3) { border-bottom: 0; }
+.feature h3 { margin: 0 0 6px; font-size: 16px; }
+.feature p { margin: 0; color: var(--muted); font-size: 15px; }
+
+.steps { counter-reset: step; list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; max-width: 46em; }
+.steps li { counter-increment: step; display: grid; grid-template-columns: 36px 1fr; gap: 14px; align-items: start; }
+.steps li::before { content: counter(step); width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+  display: grid; place-items: center; font-weight: 600; font-size: 15px; }
+.requirements { margin-top: 28px; color: var(--muted); font-size: 15px; max-width: 46em; }
+.requirements li { margin: 4px 0; }
+
+footer { border-top: 1px solid var(--rule); padding: 32px 0 48px; color: var(--muted); font-size: 14px; }
+footer p { margin: 6px 0; max-width: 60em; }
+
+@media (max-width: 980px) {
+  .ways { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; gap: 40px; padding-top: 24px; }
+  .features { grid-template-columns: 1fr; }
+  .feature { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .feature:nth-last-child(-n+3) { border-bottom: 1px solid var(--rule); }
+  .feature:last-child { border-bottom: 0; }
+  .why { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .wrap { padding: 0 16px; }
+  .ways { grid-template-columns: 1fr; }
+  header { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="#"><img src="assets/icon.png" alt="" width="32" height="32"><span>TrueScale for QUADERNO</span></a>
+    <nav class="langs" aria-label="Language">
+      <button type="button" data-lang="zh" lang="zh-Hans">中文</button>
+      <button type="button" data-lang="en" lang="en">English</button>
+      <button type="button" data-lang="ja" lang="ja">日本語</button>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1 data-i18n="hero.title">Typeset for the page you hold.</h1>
+        <p class="lead" data-i18n="hero.lead">Copy text on your Mac, press a key, and it opens on your FUJITSU QUADERNO — laid out at the screen's true physical size, so it reads as sharply as print.</p>
+        <div class="flow" aria-hidden="true">
+          <span data-i18n="flow.copy">Copy</span><span>→</span><span class="key">⌃1</span><span>→</span><span data-i18n="flow.open">Open on QUADERNO</span>
+        </div>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/leekaomin380/eink-truescale-pdf/releases/latest" data-i18n="cta.download">Download for Mac</a>
+          <a class="button secondary" href="https://github.com/leekaomin380/eink-truescale-pdf" data-i18n="cta.source">Source on GitHub</a>
+        </div>
+        <p class="note" data-i18n="cta.note">Free and open source (MIT). Apple Silicon, macOS 14 or later.</p>
+      </div>
+      <figure class="device">
+        <img src="assets/device-page.png" width="1404" height="1872" alt="" data-i18n-alt="device.alt">
+        <figcaption data-i18n="device.caption">An actual screenshot from a QUADERNO A5, taken with the app.</figcaption>
+      </figure>
+    </div>
+
+    <section>
+      <div class="wrap">
+        <h2 data-i18n="why.title">Why PDFs look blurry on e-paper</h2>
+        <p class="intro" data-i18n="why.intro">An A4 page shrunk onto a 10.3-inch screen loses sharpness in the resampling — not for lack of pixels. TrueScale measures the screen first, then sets the page to exactly that size.</p>
+        <div class="why">
+          <div class="panel">
+            <div class="figure">156.97 × 209.30 mm</div>
+            <h3 data-i18n="why.measured">Measured, not assumed</h3>
+            <p data-i18n="why.measuredText">Derived from 1404 × 1872 pixels on a 10.3-inch diagonal (227.18 dpi, within 0.08% of the published 227 dpi), then checked with a ruler: a 100 mm line on the screen measures 100 mm.</p>
+          </div>
+          <div class="panel">
+            <div class="figure">1 : 1</div>
+            <h3 data-i18n="why.scale">No scaling on the device</h3>
+            <p data-i18n="why.scaleText">Because the page is the screen, the device shows it untouched. 10.5 pt on the page is a real 10.5 pt under your pen — the same size it would be in a printed book.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2 data-i18n="ways.title">Four ways in, none of them a dialog</h2>
+        <p class="intro" data-i18n="ways.intro">Everything is saved to Received on the device and opens on screen. Nothing on the device is ever overwritten.</p>
+        <div class="ways">
+          <div class="way">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 11h2M11 11h2M15 11h2M7 15h10"/></svg>
+            <h3 data-i18n="ways.hotkey">⌃1 from the clipboard</h3>
+            <p data-i18n="ways.hotkeyText">Copy any text or Markdown and press ⌃1. Named, typeset and delivered in about two seconds.</p>
+          </div>
+          <div class="way">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <h3 data-i18n="ways.finder">Right-click in Finder</h3>
+            <p data-i18n="ways.finderText">“Send to QUADERNO” on any PDF, Markdown or text file. Several at once.</p>
+          </div>
+          <div class="way">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5z"/><path d="M14 4v5h5M8 13h8M8 17h6"/></svg>
+            <h3 data-i18n="ways.books">E-books and web articles</h3>
+            <p data-i18n="ways.booksText">EPUB, MOBI, FB2, HTML and WeChat articles, with a table of contents and bookmarks.</p>
+          </div>
+          <div class="way">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/><path d="M8 3h3"/></svg>
+            <h3 data-i18n="ways.shot">Screenshots, back to the Mac</h3>
+            <p data-i18n="ways.shotText">One click saves the device screen — handwriting included — as PNG, JPEG or a true-size PDF into a folder you chose once.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2 data-i18n="feat.title">Built to be trusted with your notes</h2>
+        <div class="features">
+          <div class="feature"><h3 data-i18n="feat.direct">Direct over USB or Wi-Fi</h3><p data-i18n="feat.directText">Talks to the device itself. QUADERNO PC App does not need to be open.</p></div>
+          <div class="feature"><h3 data-i18n="feat.verify">Read back and verified</h3><p data-i18n="feat.verifyText">Every upload is downloaded again and checked by SHA-256 before it counts as delivered.</p></div>
+          <div class="feature"><h3 data-i18n="feat.pinned">Pinned device identity</h3><p data-i18n="feat.pinnedText">The device's public key is pinned at pairing; a different key is refused, never trusted.</p></div>
+          <div class="feature"><h3 data-i18n="feat.files">Device files</h3><p data-i18n="feat.filesText">Browse, search, download with handwriting, upload, move and delete — deleting always asks first.</p></div>
+          <div class="feature"><h3 data-i18n="feat.recent">Recent deliveries</h3><p data-i18n="feat.recentText">Every send, from every entry point. Failed ones keep their PDF for one-click retry.</p></div>
+          <div class="feature"><h3 data-i18n="feat.langs">中文 · English · 日本語</h3><p data-i18n="feat.langsText">The app and its notifications in three languages, switchable in Settings.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2 data-i18n="start.title">Getting started</h2>
+        <ol class="steps">
+          <li><div data-i18n="start.1">Download the app and drag it into Applications.</div></li>
+          <li><div data-i18n="start.2">Connect your QUADERNO by USB. The setup guide opens by itself.</div></li>
+          <li><div data-i18n="start.3">Import Pairing, then Check. Right-click sending works immediately; ⌃1 takes one more minute in the Shortcuts app.</div></li>
+        </ol>
+        <ul class="requirements">
+          <li data-i18n="req.mac">Apple Silicon Mac, macOS 14 or later.</li>
+          <li data-i18n="req.device">FUJITSU QUADERNO A5 (FMVDP51), tested. A4 (FMVDP41) works, but its page size is derived rather than measured yet.</li>
+          <li data-i18n="req.pairing">A pairing created once by QUADERNO PC App on the same Mac. Pairing a new device by PIN is not implemented yet.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p data-i18n="foot.independent">TrueScale for QUADERNO is an independent open-source project. It is not affiliated with, endorsed or sponsored by Fujitsu. FUJITSU and QUADERNO are trademarks of their respective owners.</p>
+    <p data-i18n="foot.license">MIT License. Bundles pandoc, Typst and other components under their own licenses — listed in the app's About page.</p>
+    <p><a href="https://github.com/leekaomin380/eink-truescale-pdf">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="https://github.com/leekaomin380/eink-truescale-pdf/issues" data-i18n="foot.issues">Report an issue</a></p>
+  </footer>
+</div>
+
+<script>
+const strings = {
+  zh: {
+    "hero.title": "为你手中的这一页排版。",
+    "hero.lead": "在 Mac 上复制文字，按一个键，它就出现在 FUJITSU QUADERNO 上——按屏幕的真实物理尺寸排版，读起来像印刷品一样清晰。",
+    "flow.copy": "复制", "flow.open": "在 QUADERNO 上打开",
+    "cta.download": "下载 Mac 版", "cta.source": "GitHub 源代码",
+    "cta.note": "免费、开源（MIT）。需要 Apple Silicon 芯片、macOS 14 或更新版本。",
+    "device.alt": "QUADERNO A5 屏幕截图：一页按实际尺寸排版的中英文文档",
+    "device.caption": "QUADERNO A5 的真实屏幕截图，由本 App 截取。",
+    "why.title": "为什么 PDF 在电子纸上看起来模糊",
+    "why.intro": "A4 尺寸的页面被缩小到 10.3 英寸的屏幕上，笔画在重采样中变虚——问题不在像素不够。TrueScale 先量清楚屏幕，再把页面做成恰好这么大。",
+    "why.measured": "实测，而不是假设",
+    "why.measuredText": "由 1404 × 1872 像素和 10.3 英寸对角线推算（227.18 dpi，与公布的 227 dpi 相差 0.08%），再用直尺验证：屏幕上一条 100 mm 的线，量出来正好 100 mm。",
+    "why.scale": "设备上不再缩放",
+    "why.scaleText": "页面就是屏幕，设备原样显示。页面上的 10.5 磅，就是笔尖下真实的 10.5 磅，和印刷书里一样大。",
+    "ways.title": "四个入口，没有一个需要弹窗",
+    "ways.intro": "投递的文件都保存到设备的 Received，并在屏幕上打开。设备上的任何文件都不会被覆盖。",
+    "ways.hotkey": "剪贴板 + ⌃1", "ways.hotkeyText": "复制任意文字或 Markdown，按 ⌃1。自动命名、排版、投递，约两秒。",
+    "ways.finder": "Finder 右键", "ways.finderText": "对 PDF、Markdown 或文本文件选择「投递到 QUADERNO」，可以多选。",
+    "ways.books": "电子书与网页文章", "ways.booksText": "EPUB、MOBI、FB2、HTML 和微信公众号文章，带目录与书签。",
+    "ways.shot": "截屏，传回 Mac", "ways.shotText": "一下保存设备屏幕（包括手写笔迹），格式可选 PNG、JPEG 或实际尺寸的 PDF，存进预先选好的文件夹。",
+    "feat.title": "可以放心交给它的笔记",
+    "feat.direct": "USB 或 Wi-Fi 直连", "feat.directText": "直接和设备通信，不需要打开 QUADERNO PC App。",
+    "feat.verify": "回读校验", "feat.verifyText": "每次上传后都会读回文件、核对 SHA-256，确认无误才算送达。",
+    "feat.pinned": "固定设备身份", "feat.pinnedText": "配对时固定设备公钥；换了公钥的设备会被拒绝，不会被信任。",
+    "feat.files": "设备文件", "feat.filesText": "浏览、搜索、连同手写批注下载、上传、移动、删除——删除前一定会确认。",
+    "feat.recent": "最近投递", "feat.recentText": "所有入口的每一次投递。失败的保留 PDF，一键重试。",
+    "feat.langs": "中文 · English · 日本語", "feat.langsText": "App 与通知都有三种语言，可在设置中切换。",
+    "start.title": "开始使用",
+    "start.1": "下载 App，拖进「应用程序」。",
+    "start.2": "用 USB 连接 QUADERNO，设置向导会自动打开。",
+    "start.3": "导入配对，然后自检。Finder 右键投递立即可用；⌃1 还需要在「快捷指令」里花一分钟设置。",
+    "req.mac": "Apple Silicon 芯片的 Mac，macOS 14 或更新版本。",
+    "req.device": "FUJITSU QUADERNO A5（FMVDP51）已实测。A4（FMVDP41）可用，但页面尺寸目前是推算值，尚未实测。",
+    "req.pairing": "需要这台 Mac 上已有 QUADERNO PC App 建立过一次的配对。用 PIN 全新配对尚未实现。",
+    "foot.independent": "TrueScale for QUADERNO 是独立的开源项目，与富士通没有关联，也未获得其认可或赞助。FUJITSU 与 QUADERNO 是其各自权利人的商标。",
+    "foot.license": "MIT 许可。打包的 pandoc、Typst 等组件遵循各自的许可，详见 App 的「关于」页。",
+    "foot.issues": "问题反馈"
+  },
+  ja: {
+    "hero.title": "手の中のページのための組版。",
+    "hero.lead": "Mac でテキストをコピーしてキーを押すだけで、FUJITSU QUADERNO に表示されます。画面の実寸で組むので、印刷物のようにくっきり読めます。",
+    "flow.copy": "コピー", "flow.open": "QUADERNO で開く",
+    "cta.download": "Mac 版をダウンロード", "cta.source": "GitHub のソースコード",
+    "cta.note": "無料・オープンソース（MIT）。Apple Silicon、macOS 14 以降。",
+    "device.alt": "QUADERNO A5 の画面：実寸で組版された日中英の文書",
+    "device.caption": "この App で取り込んだ QUADERNO A5 の実際の画面です。",
+    "why.title": "電子ペーパーで PDF がぼやける理由",
+    "why.intro": "A4 のページを 10.3 インチの画面に縮小すると、再サンプリングで線がにじみます。足りないのは画素ではありません。TrueScale はまず画面を測り、ページをその大きさちょうどに作ります。",
+    "why.measured": "推測ではなく実測",
+    "why.measuredText": "1404 × 1872 ピクセルと対角 10.3 インチから算出（227.18 dpi、公表値 227 dpi との差 0.08%）し、定規で確認しました。画面上の 100 mm の線は、測るとちょうど 100 mm です。",
+    "why.scale": "端末側で拡大縮小しない",
+    "why.scaleText": "ページが画面そのものなので、端末はそのまま表示します。ページ上の 10.5 pt は、ペン先の下でも本物の 10.5 pt。印刷された本と同じ大きさです。",
+    "ways.title": "4 つの入口、どれもダイアログなし",
+    "ways.intro": "送ったファイルは端末の Received に保存され、画面に表示されます。端末上のファイルを上書きすることはありません。",
+    "ways.hotkey": "クリップボード + ⌃1", "ways.hotkeyText": "テキストや Markdown をコピーして ⌃1。命名・組版・送信まで約 2 秒。",
+    "ways.finder": "Finder の右クリック", "ways.finderText": "PDF・Markdown・テキストファイルで「QUADERNO へ送信」。複数選択もできます。",
+    "ways.books": "電子書籍と Web 記事", "ways.booksText": "EPUB・MOBI・FB2・HTML、WeChat の記事にも対応。目次としおり付き。",
+    "ways.shot": "スクリーンショットを Mac へ", "ways.shotText": "端末の画面を手書きごと、PNG・JPEG・実寸 PDF でワンクリック保存。保存先は一度決めるだけ。",
+    "feat.title": "書き込みを任せられる作り",
+    "feat.direct": "USB / Wi-Fi で直接接続", "feat.directText": "端末と直接やり取りします。QUADERNO PC App を開いておく必要はありません。",
+    "feat.verify": "読み戻して照合", "feat.verifyText": "アップロードのたびに読み戻し、SHA-256 で照合してから送信完了とします。",
+    "feat.pinned": "端末の身元を固定", "feat.pinnedText": "ペアリング時に端末の公開鍵を固定。異なる鍵の端末は信頼せず拒否します。",
+    "feat.files": "端末のファイル", "feat.filesText": "閲覧・検索・手書きごとのダウンロード・アップロード・移動・削除。削除は必ず確認します。",
+    "feat.recent": "最近の送信", "feat.recentText": "すべての入口からの送信履歴。失敗したものは PDF を残し、ワンクリックで再試行。",
+    "feat.langs": "中文 · English · 日本語", "feat.langsText": "App と通知は 3 言語に対応し、設定で切り替えられます。",
+    "start.title": "使い始める",
+    "start.1": "App をダウンロードし、アプリケーションフォルダーへドラッグします。",
+    "start.2": "QUADERNO を USB で接続すると、設定ガイドが自動で開きます。",
+    "start.3": "ペアリングを移行し、セルフチェックを実行。Finder からの送信はすぐに使えます。⌃1 は「ショートカット」での設定にもう 1 分かかります。",
+    "req.mac": "Apple Silicon 搭載の Mac、macOS 14 以降。",
+    "req.device": "FUJITSU QUADERNO A5（FMVDP51）で実機確認済み。A4（FMVDP41）も使えますが、ページ寸法はまだ実測ではなく算出値です。",
+    "req.pairing": "同じ Mac で QUADERNO PC App が一度作成したペアリングが必要です。PIN による新規ペアリングは未対応です。",
+    "foot.independent": "TrueScale for QUADERNO は独立したオープンソースプロジェクトであり、富士通とは関係がなく、富士通による承認や支援も受けていません。FUJITSU および QUADERNO は、それぞれの権利者の商標です。",
+    "foot.license": "MIT ライセンス。同梱の pandoc・Typst などはそれぞれのライセンスに従います。詳細は App の「情報」画面をご覧ください。",
+    "foot.issues": "問題を報告"
+  }
+};
+const english = {};
+document.querySelectorAll("[data-i18n]").forEach(el => { english[el.dataset.i18n] = el.textContent; });
+document.querySelectorAll("[data-i18n-alt]").forEach(el => {
+  english[el.dataset.i18nAlt] = "QUADERNO A5 screen: a document typeset at true size";
+});
+strings.en = english;
+
+function apply(lang) {
+  const table = strings[lang] || strings.en;
+  document.documentElement.lang = lang === "zh" ? "zh-Hans" : lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const text = table[el.dataset.i18n];
+    if (text) el.textContent = text;
+  });
+  document.querySelectorAll("[data-i18n-alt]").forEach(el => {
+    const text = table[el.dataset.i18nAlt];
+    if (text) el.alt = text;
+  });
+  document.querySelectorAll(".langs button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  try { localStorage.setItem("lang", lang); } catch (e) {}
+}
+
+let initial = "en";
+try { initial = localStorage.getItem("lang") || ""; } catch (e) { initial = ""; }
+if (!initial) {
+  const preferred = (navigator.language || "en").toLowerCase();
+  initial = preferred.startsWith("zh") ? "zh" : preferred.startsWith("ja") ? "ja" : "en";
+}
+document.querySelectorAll(".langs button").forEach(b => b.addEventListener("click", () => apply(b.dataset.lang)));
+apply(initial);
+</script>
+</body>
+</html>
