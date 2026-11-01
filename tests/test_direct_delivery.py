@@ -13,6 +13,8 @@ direct = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(direct)
 # Never touch the real pairing / history folder, even in tests that do not patch ROOT.
 direct.ROOT = Path(tempfile.mkdtemp()) / 'Direct'
+# Never write to a real serial port from tests (connect_device switches USB mode first).
+direct.switch_to_network_mode = lambda wait=10: False
 
 
 class NamingTests(unittest.TestCase):
@@ -576,3 +578,38 @@ class HistoryDetailTests(unittest.TestCase):
             device.upload(source, 'Document/Reading')
             [entry] = self.entries(Path(temp) / 'Direct')
             self.assertEqual((entry['status'], entry['document_id'], entry['remote']), ('ok', 'new', 'Document/Reading/a.pdf'))
+
+
+class SerialModeTests(unittest.TestCase):
+    def test_finds_the_quaderno_serial_port_only_in_serial_mode(self):
+        serial = ('+-o FMVDP51@00100000  <class IOUSBHostDevice>\n  "idProduct" = 5718\n  "USB Product Name" = "FMVDP51"\n'
+                  '  "idVendor" = 1221\n  | +-o IOSerialBSDClient\n  |     "IOCalloutDevice" = "/dev/cu.usbmodem101"\n')
+        network = serial.replace('5718', '5719').replace('"IOCalloutDevice" = "/dev/cu.usbmodem101"', '')
+        other = '+-o Modem@00200000\n  "idProduct" = 5718\n  "idVendor" = 1452\n  "IOCalloutDevice" = "/dev/cu.usbmodem9"\n'
+        self.assertEqual(direct.serial_mode_port(other + serial), '/dev/cu.usbmodem101')
+        self.assertIsNone(direct.serial_mode_port(network))
+        self.assertIsNone(direct.serial_mode_port(other))
+        self.assertEqual(direct.CDC_ECM_SWITCH, bytes([1, 0, 0, 1, 0, 0, 0, 1, 1, 4]))
+
+
+class ScreenshotTests(unittest.TestCase):
+    def test_png_screenshot_is_saved_with_a_unique_dated_name(self):
+        key = direct.RSA.generate(1024).export_key()
+        device = direct.Device({'address': 'Android.local'}, key, 'c')
+        calls = []
+        device.request = lambda method, endpoint, **kw: calls.append(endpoint) or direct.Response(200, {}, b'\x89PNG-data')
+        with tempfile.TemporaryDirectory() as temp:
+            first = device.screenshot(temp, 'png')
+            second = device.screenshot(temp, 'png')
+            self.assertEqual(calls, ['/system/controls/screen_shot'] * 2)
+            self.assertNotEqual(first['path'], second['path'])  # same second: a numbered name, no overwrite
+            self.assertEqual(Path(first['path']).read_bytes(), b'\x89PNG-data')
+            self.assertTrue(Path(first['path']).name.startswith('QUADERNO 截屏 '))
+
+    def test_settings_fall_back_to_pictures_and_png(self):
+        with patch.object(direct, 'app_preference', return_value=None):
+            folder, fmt = direct.screenshot_settings()
+        self.assertTrue(folder.endswith('Pictures/QUADERNO 截屏'))
+        self.assertEqual(fmt, 'png')
+        with patch.object(direct, 'app_preference', side_effect=lambda key: {'ScreenshotFormat': 'PDF'}.get(key)):
+            self.assertEqual(direct.screenshot_settings('/tmp/x')[1], 'pdf')

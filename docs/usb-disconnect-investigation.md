@@ -48,3 +48,9 @@ en5 detaching
 /usr/bin/log show --last 8h --style compact \
   --predicate 'process == "kernel" AND eventMessage CONTAINS "FMVDP51"'
 ```
+
+## 补充（2026-11-01）：插着线却一直没有网卡
+
+另一种「连不上」与上文不同：设备一直在 USB 总线上，但停留在串口模式（0x1656），没有网卡。
+原因是设备需要主机写入切换序列才进入网卡模式，平时由 QUADERNO PC App 代做；官方 App 未运行时就会停在串口模式。
+TrueScale 现已自行切换（见 DIRECT-DELIVERY.md）。上文「休眠后自行掉出 USB 总线」是另一个现象，仍待确认。

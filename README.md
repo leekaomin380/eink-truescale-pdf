@@ -47,6 +47,10 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 open a document on the device, download it (with your handwritten notes) to the Mac, upload PDFs
 into any folder (or drop them on the list), create folders, move and delete — several at once.
 
+**Screenshot** (toolbar camera, ⌘⇧S, or a ⌃2 Shortcut) saves what the device shows right now —
+handwriting included — straight into a folder you choose once, as PNG, JPEG or a true-size PDF.
+No dialog each time.
+
 Delivered files land in `Document/Received/` on the device and are opened on screen.
 Delivery never overwrites or deletes existing files. Deleting and moving happen only in
 **Device Files**, when you choose to and confirm.

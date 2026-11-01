@@ -97,9 +97,21 @@ final class QuickSendMonitor: ObservableObject {
         }
     }
 
+    /// 已尝试切换过的串口；同一次插入只切换一次，拔掉后清空。
+    private var switchedPort: String?
+
     func refresh() {
         let model = QuadernoUSB.connectedModel()
         if model != usbModel { usbModel = model }
+        // 插上后设备先以串口模式出现，需要主机发切换命令才会变成网卡（以前由 QUADERNO PC App 代做）。
+        if let port = QuadernoUSB.serialModePort() {
+            if port != switchedPort {
+                switchedPort = port
+                QuadernoUSB.switchToNetworkMode(port: port)
+            }
+        } else if model == nil {
+            switchedPort = nil
+        }
         let records = loadHistory()
         if records.map(\.id) != history.map(\.id) { history = records }
     }
@@ -164,6 +176,48 @@ enum QuadernoUSB {
         return nil
     }
 
+    /// 处于串口模式（产品 0x1656）的 QUADERNO 的 /dev/cu.* 路径。
+    static func serialModePort() -> String? {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOSerialBSDClient"), &iterator) == KERN_SUCCESS else {
+            return nil
+        }
+        defer { IOObjectRelease(iterator) }
+        let parents = IOOptionBits(kIORegistryIterateRecursively | kIORegistryIterateParents)
+        var service = IOIteratorNext(iterator)
+        while service != 0 {
+            defer {
+                IOObjectRelease(service)
+                service = IOIteratorNext(iterator)
+            }
+            let vendor = IORegistryEntrySearchCFProperty(service, kIOServicePlane, "idVendor" as CFString, kCFAllocatorDefault, parents) as? Int
+            let product = IORegistryEntrySearchCFProperty(service, kIOServicePlane, "idProduct" as CFString, kCFAllocatorDefault, parents) as? Int
+            if vendor == 0x04c5, product == 0x1656,
+               let path = IORegistryEntryCreateCFProperty(service, "IOCalloutDevice" as CFString, kCFAllocatorDefault, 0)?
+                .takeRetainedValue() as? String {
+                return path
+            }
+        }
+        return nil
+    }
+
+    /// 写入 dpt-rp1-py 文档记载的 CDC/ECM 切换序列；设备约 1–2 秒后以网卡模式重新出现（实测）。
+    @discardableResult
+    static func switchToNetworkMode(port: String) -> Bool {
+        let descriptor = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK)
+        guard descriptor >= 0 else { return false }
+        defer { close(descriptor) }
+        var attributes = termios()
+        guard tcgetattr(descriptor, &attributes) == 0 else { return false }
+        cfmakeraw(&attributes)
+        attributes.c_cflag |= tcflag_t(CLOCAL | CREAD)
+        guard tcsetattr(descriptor, TCSANOW, &attributes) == 0 else { return false }
+        let sequence: [UInt8] = [0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x04]
+        let written = sequence.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
+        tcdrain(descriptor)
+        return written == sequence.count
+    }
+
     static func displayName(for model: String) -> String {
         switch model {
         case "FMVDP51": "QUADERNO A5 (FMVDP51)"
@@ -184,6 +238,7 @@ final class MainNavigation: ObservableObject {
     static let shared = MainNavigation()
     @Published var page: MainPage?
     @Published var showSetupGuide = false
+    @Published var toast: Toast?
 
     func show(_ target: MainPage) {
         page = target
@@ -281,6 +336,7 @@ struct AppSettingsView: View {
                 SettingsSection("设备") { deviceGroup }
                 SettingsSection("投递入口") { entriesGroup }
                 SettingsSection("⌃1 与 Finder 投递的排版") { ClipboardLayoutSettings() }
+                SettingsSection("截屏导出") { ScreenshotSettings() }
                 SettingsSection("常见问题") { faq }
             }
             .padding(32)
@@ -448,18 +504,22 @@ struct QuickSendOverview: View {
 
 struct HotkeySetupSheet: View {
     let scriptURL: URL?
+    /// 截屏快捷键：命令加 --screenshot，建议 ⌃2。
+    var screenshot = false
     @Environment(\.dismiss) private var dismiss
     @State private var copied = false
 
+    private var key: String { screenshot ? "⌃2" : "⌃1" }
+
     private var command: String {
         guard let path = scriptURL?.path else { return "" }
-        return "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        return "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'" + (screenshot ? " --screenshot" : "")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("设置 ⌃1 快捷键").font(.title2.weight(.semibold))
+                Text(screenshot ? L("设置截屏快捷键") : L("设置 ⌃1 快捷键")).font(.title2.weight(.semibold))
                 Text("macOS 不允许 App 替你绑定全局快捷键，需要在「快捷指令」里做一次。大约 1 分钟。")
                     .foregroundStyle(.secondary)
             }
@@ -482,12 +542,13 @@ struct HotkeySetupSheet: View {
                     NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
                 }
             }
-            step(3, "绑定 ⌃1") {
-                Text("在快捷指令详情中打开「用作快速操作」，添加键盘快捷键 ⌃1。").foregroundStyle(.secondary)
+            step(3, "绑定 \(key)") {
+                Text("在快捷指令详情中打开「用作快速操作」，添加键盘快捷键 \(key)。").foregroundStyle(.secondary)
             }
             Divider()
             HStack {
-                Text("设置好后，复制一段文字按 ⌃1 试一下").font(.caption).foregroundStyle(.secondary)
+                Text(screenshot ? L("设置好后，在设备上打开要分享的页面，按 ⌃2 试一下") : L("设置好后，复制一段文字按 ⌃1 试一下"))
+                    .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("完成") { dismiss() }.keyboardShortcut(.defaultAction)
             }
@@ -858,6 +919,151 @@ struct LinkStatus {
             color = .red
             title = L("未连接")
             detail = L("请用 USB 连接并唤醒设备；使用 Wi-Fi 时确认设备与 Mac 在同一网络。")
+        }
+    }
+}
+
+// MARK: - 截屏导出
+
+/// 截屏的保存位置与格式：设置一次，之后工具栏按钮或 ⌃2 一步完成，不再每次选择。
+enum ScreenshotPreferences {
+    static let folderKey = "ScreenshotFolder"
+    static let formatKey = "ScreenshotFormat"
+
+    static var folder: URL {
+        if let path = UserDefaults.standard.string(forKey: folderKey), !path.isEmpty {
+            return URL(fileURLWithPath: path)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Pictures").appendingPathComponent(L("QUADERNO 截屏"))
+    }
+
+    static var format: String { UserDefaults.standard.string(forKey: formatKey) ?? "png" }
+
+    /// 截取设备当前画面（含手写笔迹），按设置保存；结果显示在窗口底部。
+    @MainActor
+    static func capture() {
+        MainNavigation.shared.toast = Toast(message: L("正在截屏…"), path: nil, working: true)
+        Task {
+            let result = await DirectDelivery.run(["screenshot", "--folder", folder.path, "--image-format", format])
+            let json = (try? JSONSerialization.jsonObject(with: Data(result.details.utf8))) as? [String: Any]
+            MainNavigation.shared.toast = Toast(message: result.message, path: json?["path"] as? String,
+                                                working: false, failed: !result.success)
+        }
+    }
+}
+
+struct ScreenshotSettings: View {
+    @AppStorage(ScreenshotPreferences.formatKey) private var format = "png"
+    @AppStorage(ScreenshotPreferences.folderKey) private var folderPath = ""
+    @State private var showHotkey = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("截取设备屏幕上正在显示的内容，包括手写笔迹。点工具栏的相机按钮或按截屏快捷键，直接保存到下面的文件夹。")
+                .font(.caption).foregroundStyle(.secondary)
+            LabeledContent("保存到") {
+                HStack {
+                    Text(verbatim: ScreenshotPreferences.folder.path.replacingOccurrences(
+                        of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
+                        .lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
+                    Button("选择…") { chooseFolder() }
+                    Button { NSWorkspace.shared.open(ScreenshotPreferences.folder) } label: {
+                        Label("在 Finder 中显示", systemImage: "folder").labelStyle(.iconOnly)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(L("在 Finder 中显示"))
+                    .disabled(!FileManager.default.fileExists(atPath: ScreenshotPreferences.folder.path))
+                }
+            }
+            LabeledContent("格式") {
+                Picker("格式", selection: $format) {
+                    Text(verbatim: "PNG").tag("png")
+                    Text(verbatim: "JPEG").tag("jpeg")
+                    Text(verbatim: "PDF").tag("pdf")
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+            }
+            Text(formatNote).font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Text(verbatim: "⌃2").font(.caption.weight(.semibold)).frame(width: 34, height: 22)
+                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.tertiary))
+                Text("截屏快捷键（可选）")
+                Spacer()
+                Button("设置快捷键…") { showHotkey = true }.buttonStyle(.link)
+            }
+        }
+        .padding(12)
+        .sheet(isPresented: $showHotkey) {
+            HotkeySetupSheet(scriptURL: Bundle.main.url(forResource: "deliver", withExtension: "sh"), screenshot: true)
+        }
+    }
+
+    private var formatNote: String {
+        switch format {
+        case "jpeg": L("JPEG：兼容性最好，适合发到聊天软件。")
+        case "pdf": L("PDF：页面为设备屏幕的实际尺寸，打印出来与屏幕一样大。")
+        default: L("PNG：无损，灰阶画面的文件也最小。")
+        }
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = ScreenshotPreferences.folder
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        folderPath = url.path
+    }
+}
+
+struct Toast: Equatable {
+    var message: String
+    var path: String?
+    var working = false
+    var failed = false
+}
+
+struct ScreenshotButton: View {
+    var body: some View {
+        Button { ScreenshotPreferences.capture() } label: { Label("截屏", systemImage: "camera.viewfinder") }
+            .help(L("截取设备当前画面并保存"))
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+    }
+}
+
+/// 窗口底部的结果提示：几秒后自动消失。
+struct ToastView: View {
+    @ObservedObject private var navigation = MainNavigation.shared
+
+    var body: some View {
+        if let toast = navigation.toast {
+            HStack(spacing: 10) {
+                if toast.working {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: toast.failed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .foregroundStyle(toast.failed ? .orange : .green)
+                }
+                Text(verbatim: toast.message).lineLimit(2)
+                if let path = toast.path {
+                    Button("在 Finder 中显示") {
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                    }
+                    .buttonStyle(.link)
+                }
+            }
+            .font(.callout)
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.separator))
+            .padding(.bottom, 16)
+            .task(id: toast) {
+                guard !toast.working else { return }
+                try? await Task.sleep(for: .seconds(6))
+                if navigation.toast == toast { navigation.toast = nil }
+            }
         }
     }
 }
