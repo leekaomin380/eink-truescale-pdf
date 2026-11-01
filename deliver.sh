@@ -86,6 +86,20 @@ result_message() {
   printf '%s' "$RESULT" | /usr/bin/plutil -extract message raw -o - - 2>/dev/null || print -r -- "$1"
 }
 
+# 截屏：按 App「设置 → 截屏导出」中的文件夹和格式保存（可在快捷指令中绑定，例如 ⌃2）。
+if [[ "${1:-}" == "--screenshot" ]]; then
+  RESULT=$("$DIRECT_HELPER" screenshot)
+  CODE=$?
+  MESSAGE=$(result_message "$(t "TrueScale · 截屏失败")")
+  if (( CODE != 0 )); then
+    notify "$(t "TrueScale · 截屏失败")" "$MESSAGE"
+    exit 4
+  fi
+  print -r -- "$RESULT"
+  notify "$(t "TrueScale · 截屏已保存")" "$MESSAGE"
+  exit 0
+fi
+
 # Finder 右键「投递到 QUADERNO」：PDF 原样上传；Markdown / 纯文本按 Ctrl+1 排版渲染，沿用文件名。
 if [[ "${1:-}" == "--files" ]]; then
   shift

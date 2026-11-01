@@ -151,6 +151,7 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar { pageToolbar }
+        .overlay(alignment: .bottom) { ToastView() }
         .sheet(isPresented: $navigation.showSetupGuide) { SetupGuideSheet() }
         .onAppear {
             // 首次使用且尚未配对时自动打开设置向导；「以后再说」后不再自动弹出。
@@ -194,6 +195,7 @@ struct ContentView: View {
         }
         ToolbarItem(placement: .primaryAction) { USBStatusBadge() }
         ToolbarItem(placement: .primaryAction) { RecentDeliveriesButton() }
+        ToolbarItem(placement: .primaryAction) { ScreenshotButton() }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { togglePage(.files) } label: {
                 Label("设备文件", systemImage: navigation.page == .files ? "folder.fill" : "folder")

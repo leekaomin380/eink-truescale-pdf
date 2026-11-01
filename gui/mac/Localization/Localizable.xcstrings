@@ -292,6 +292,22 @@
         }
       }
     },
+    "JPEG：兼容性最好，适合发到聊天软件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JPEG: the most compatible; good for chat apps."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JPEG：互換性が最も高く、チャットアプリへの共有に向いています。"
+          }
+        }
+      }
+    },
     "JS 抽取器未打包，请重新构建 app": {
       "localizations": {
         "en": {
@@ -368,6 +384,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "PDF・Markdown・TXT · 設定不要"
+          }
+        }
+      }
+    },
+    "PDF：页面为设备屏幕的实际尺寸，打印出来与屏幕一样大。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF: the page is the screen's real size, so it prints exactly as large as on the device."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF：ページは画面の実寸なので、印刷しても端末と同じ大きさになります。"
+          }
+        }
+      }
+    },
+    "PNG：无损，灰阶画面的文件也最小。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PNG: lossless, and for grayscale screens also the smallest file."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PNG：劣化がなく、グレースケールの画面ではファイルも最小です。"
+          }
+        }
+      }
+    },
+    "QUADERNO 截屏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QUADERNO Screenshot"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QUADERNO スクリーンショット"
           }
         }
       }
@@ -736,6 +800,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "現在のクリップボードを置き換えます"
+          }
+        }
+      }
+    },
+    "保存到": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save to"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存先"
           }
         }
       }
@@ -1268,18 +1348,18 @@
         }
       }
     },
-    "在快捷指令详情中打开「用作快速操作」，添加键盘快捷键 ⌃1。": {
+    "在快捷指令详情中打开「用作快速操作」，添加键盘快捷键 %@。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "In the shortcut's details, turn on “Use as Quick Action” and add the keyboard shortcut ⌃1."
+            "value": "In the shortcut's details, turn on “Use as Quick Action” and add the keyboard shortcut %@."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ショートカットの詳細で「クイックアクションとして使用」をオンにし、キーボードショートカット ⌃1 を追加します。"
+            "value": "ショートカットの詳細で「クイックアクションとして使用」をオンにし、キーボードショートカット %@ を追加します。"
           }
         }
       }
@@ -1840,6 +1920,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "源ノ角ゴシック"
+          }
+        }
+      }
+    },
+    "截取设备屏幕上正在显示的内容，包括手写笔迹。点工具栏的相机按钮或按截屏快捷键，直接保存到下面的文件夹。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captures what the device screen shows, handwriting included. Click the camera button in the toolbar or press the screenshot hotkey to save straight into the folder below."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末の画面に表示されている内容を、手書きの書き込みも含めて取り込みます。ツールバーのカメラボタンかスクリーンショットのショートカットで、下のフォルダーにそのまま保存します。"
+          }
+        }
+      }
+    },
+    "截取设备当前画面并保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture the device screen and save it"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末の画面を取り込んで保存"
+          }
+        }
+      }
+    },
+    "截屏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクリーンショット"
+          }
+        }
+      }
+    },
+    "截屏导出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクリーンショット"
+          }
+        }
+      }
+    },
+    "截屏快捷键（可选）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot hotkey (optional)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクリーンショットのショートカット（任意）"
           }
         }
       }
@@ -2548,6 +2708,22 @@
         }
       }
     },
+    "格式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "形式"
+          }
+        }
+      }
+    },
     "检查未通过，请查看详情": {
       "localizations": {
         "en": {
@@ -2576,6 +2752,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Markdown を書き出し中…"
+          }
+        }
+      }
+    },
+    "正在截屏…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taking screenshot…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクリーンショットを取得中…"
           }
         }
       }
@@ -3204,18 +3396,18 @@
         }
       }
     },
-    "绑定 ⌃1": {
+    "绑定 %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Assign ⌃1"
+            "value": "Assign %@"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "⌃1 を割り当てる"
+            "value": "%@ を割り当てる"
           }
         }
       }
@@ -3604,6 +3796,22 @@
         }
       }
     },
+    "设置好后，在设备上打开要分享的页面，按 ⌃2 试一下": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once set up, open the page you want to share on the device and press ⌃2."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定後、共有したいページを端末で開き、⌃2 を押してみてください。"
+          }
+        }
+      }
+    },
     "设置好后，复制一段文字按 ⌃1 试一下": {
       "localizations": {
         "en": {
@@ -3632,6 +3840,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "ショートカットを設定…"
+          }
+        }
+      }
+    },
+    "设置截屏快捷键": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Up the Screenshot Hotkey"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクリーンショットのショートカット設定"
           }
         }
       }
@@ -4048,6 +4272,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "接続設定"
+          }
+        }
+      }
+    },
+    "选择…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択…"
           }
         }
       }

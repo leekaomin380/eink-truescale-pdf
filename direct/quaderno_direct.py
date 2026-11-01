@@ -7,6 +7,8 @@ Deleting, moving and creating folders happen only as explicit actions from the A
 import argparse
 import fcntl
 import functools
+import glob
+import termios
 from contextlib import contextmanager
 import base64
 import hashlib
@@ -135,6 +137,13 @@ MESSAGES = {
     '已删除：{name}': ('Deleted: {name}', '削除しました：{name}'),
     '已新建文件夹：{name}': ('Created folder: {name}', 'フォルダーを作成しました：{name}'),
     '已移动：{name}': ('Moved: {name}', '移動しました：{name}'),
+    'QUADERNO 截屏': ('QUADERNO Screenshot', 'QUADERNO スクリーンショット'),
+    '已保存截屏：{name}': ('Screenshot saved: {name}', 'スクリーンショットを保存しました：{name}'),
+    '截屏转换失败：{detail}': ('Could not convert the screenshot: {detail}', 'スクリーンショットを変換できませんでした：{detail}'),
+    'TrueScale · 截屏已保存': ('TrueScale · Screenshot saved', 'TrueScale · スクリーンショットを保存しました'),
+    'TrueScale · 截屏失败': ('TrueScale · Screenshot failed', 'TrueScale · スクリーンショットに失敗しました'),
+    '已将设备切换到网络模式。': ('Switched the device to network mode.', '端末をネットワークモードに切り替えました。'),
+    '设备已处于网络模式，无需切换。': ('The device is already in network mode.', '端末はすでにネットワークモードです。'),
     '文件夹名称不能为空，也不能包含「/」。': ('A folder name cannot be empty or contain "/".', 'フォルダー名は空にできず、「/」も使えません。'),
     # deliver.sh, through the `text` action
     '未找到 pandoc': ('pandoc not found', 'pandoc が見つかりません'),
@@ -229,6 +238,54 @@ def quaderno_in_ioreg(output):
                 '"USB Product Name" = "FMVDP' in block):
             return True
     return False
+
+
+# Plugged in, the device first enumerates as a USB serial device (product 0x1656) and only
+# becomes a network device (0x1657) after the host writes this documented switch sequence to
+# that serial port (dpt-rp1-py docs/linux-ethernet-over-usb.md, CDC/ECM variant for macOS).
+# QUADERNO PC App does this silently; without it the device stays unreachable (observed).
+SERIAL_MODE_PRODUCT = 0x1656
+CDC_ECM_SWITCH = b'\x01\x00\x00\x01\x00\x00\x00\x01\x01\x04'
+
+
+def serial_mode_port(ioreg_output):
+    """The QUADERNO's /dev/cu.* port while it is in serial mode, else None."""
+    for block in ('\n' + ioreg_output).split('\n+-o ')[1:]:
+        if (f'"idVendor" = {FUJITSU_USB_VENDOR}' in block and
+                f'"idProduct" = {SERIAL_MODE_PRODUCT}' in block):
+            match = re.search(r'"IOCalloutDevice" = "(/dev/cu\.[^"]+)"', block)
+            if match:
+                return match.group(1)
+            ports = glob.glob('/dev/cu.usbmodem*')
+            return ports[0] if len(ports) == 1 else None
+    return None
+
+
+def switch_to_network_mode(wait=10):
+    """Switch a serial-mode QUADERNO to Ethernet-over-USB. False when nothing needed switching."""
+    try:
+        output = subprocess.run(['/usr/sbin/ioreg', '-r', '-c', 'IOUSBHostDevice', '-l'],
+                                capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    port = serial_mode_port(output)
+    if not port:
+        return False
+    descriptor = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        attributes = termios.tcgetattr(descriptor)
+        attributes[0] = attributes[1] = attributes[3] = 0  # raw: no processing, no echo
+        attributes[2] |= termios.CLOCAL | termios.CREAD
+        termios.tcsetattr(descriptor, termios.TCSANOW, attributes)
+        os.write(descriptor, CDC_ECM_SWITCH)
+        termios.tcdrain(descriptor)
+    finally:
+        os.close(descriptor)
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:  # measured: re-enumerates and advertises within ~2 s
+        if advertising_interfaces(dns_sd_output(['-B', '_dp_fujitsu._tcp', 'local.'], duration=1)):
+            break
+    return True
 
 
 def quaderno_on_usb():
@@ -451,6 +508,43 @@ class Device:
         entries = self.request('GET', '/folders/' + root['entry_id'] + '/entries2').json()['entry_list']
         return {'ok': True, 'message': tr('设备已直连，认证及目录读取通过'), 'root_entries': len(entries), 'connection': self.target}
 
+    def screenshot(self, folder, fmt):
+        """Save what the device shows now, ink included, into folder as png / jpeg / pdf.
+
+        PNG comes from the device (lossless; for e-ink greys it is also smaller than the device's
+        JPEG). JPEG and PDF are converted locally with sips; the PDF page is the screen's physical
+        size (227.18 dpi, 156.97 x 209.30 mm on A5), so it prints and shares at true 1:1.
+        """
+        folder = Path(folder).expanduser()
+        folder.mkdir(parents=True, exist_ok=True)
+        png = self.request('GET', '/system/controls/screen_shot').content
+        extension = {'png': 'png', 'jpeg': 'jpg', 'pdf': 'pdf'}[fmt]
+        stem = tr('QUADERNO 截屏') + ' ' + datetime.now().strftime('%Y-%m-%d %H.%M.%S')
+        target = folder / (stem + '.' + extension)
+        counter = 2
+        while target.exists():
+            target = folder / (f'{stem} {counter}.{extension}')
+            counter += 1
+        with tempfile.TemporaryDirectory(prefix='quaderno-shot-') as work:
+            source = Path(work) / 'screen.png'
+            source.write_bytes(png)
+            if fmt == 'png':
+                command = None
+            elif fmt == 'jpeg':
+                command = ['/usr/bin/sips', '-s', 'format', 'jpeg', '-s', 'formatOptions', '90', str(source)]
+            else:
+                command = ['/usr/bin/sips', '-s', 'dpiWidth', '227.18', '-s', 'dpiHeight', '227.18',
+                           '-s', 'format', 'pdf', str(source)]
+            if command:
+                converted = Path(work) / ('converted.' + extension)
+                result = subprocess.run(command + ['--out', str(converted)], capture_output=True, timeout=60)
+                if result.returncode or not converted.exists():
+                    raise DirectError(tr('截屏转换失败：{detail}', detail=result.stderr.decode(errors='replace')[-160:]))
+                shutil.copyfile(converted, target)
+            else:
+                target.write_bytes(png)
+        return {'ok': True, 'message': tr('已保存截屏：{name}', name=target.name), 'path': str(target)}
+
     # ---- File management: only explicit actions from the App's 设备文件 tab ----
 
     def browse(self, path):
@@ -566,6 +660,23 @@ def append_history(entry):
         pass
 
 
+def app_preference(key):
+    """A value the App saved in its own preferences (read by file path: see language())."""
+    try:
+        result = subprocess.run(['/usr/bin/defaults', 'read', str(Path.home() / 'Library/Preferences' / APP_BUNDLE_ID), key],
+                                capture_output=True, text=True, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else None
+
+
+def screenshot_settings(folder=None, fmt=None):
+    """Explicit arguments win; otherwise the App's 截屏导出 settings; otherwise Pictures, PNG."""
+    folder = folder or app_preference('ScreenshotFolder') or str(Path.home() / 'Pictures' / tr('QUADERNO 截屏'))
+    fmt = (fmt or app_preference('ScreenshotFormat') or 'png').lower()
+    return folder, fmt if fmt in ('png', 'jpeg', 'pdf') else 'png'
+
+
 def entry_id(value):
     """Device entry ids go into URL paths; accept only the id alphabet the device uses."""
     if not value or not re.fullmatch(r'[A-Za-z0-9_-]+', value):
@@ -600,6 +711,10 @@ def connect_device():
     if os.environ.get('QUADERNO_DIRECT_DISABLED') == '1':  # exercise the fallback path on purpose
         raise DeviceUnreachable(tr('设备地址无法连接，请检查 USB / Wi-Fi 和设备唤醒状态。'))
     try:
+        try:
+            switch_to_network_mode()
+        except OSError:
+            pass  # port busy or gone: the official app may be switching it; carry on and let discovery decide
         device = load_device()
         device.authenticate()
         return device
@@ -899,7 +1014,8 @@ def render_and_upload(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'text',
-                                           'browse', 'open-doc', 'download', 'delete', 'mkdir', 'move'])
+                                           'browse', 'open-doc', 'download', 'delete', 'mkdir', 'move', 'usb-switch',
+                                           'screenshot'])
     parser.add_argument('--address', default='Android.local')
     parser.add_argument('--file')
     parser.add_argument('--input')
@@ -922,7 +1038,8 @@ def main():
     parser.add_argument('--kind', choices=['document', 'folder'], default='document')
     parser.add_argument('--name', default='', help='display name (messages) or new folder name')
     parser.add_argument('--to', help='download: absolute local path; move: destination folder id')
-    parser.add_argument('--folder', help='upload: device folder path (default Document/Received)')
+    parser.add_argument('--folder', help='upload: device folder path (default Document/Received); screenshot: local folder')
+    parser.add_argument('--image-format', dest='image_format', choices=['png', 'jpeg', 'pdf'], help='screenshot format')
     parser.add_argument('--title', help='file name for render-upload; default derives one from the text')
     args = parser.parse_args()
     if args.action == 'text':
@@ -944,7 +1061,14 @@ def main():
             if args.action == 'import-pairing':
                 result = import_pairing(args.address)
             elif args.action == 'check':
+                switch_to_network_mode()
                 result = load_device().check()
+            elif args.action == 'usb-switch':
+                switched = switch_to_network_mode()
+                result = {'ok': True, 'message': tr('已将设备切换到网络模式。' if switched else '设备已处于网络模式，无需切换。')}
+            elif args.action == 'screenshot':
+                folder, fmt = screenshot_settings(args.folder, args.image_format)
+                result = connect_device().screenshot(folder, fmt)
             elif args.action in ('browse', 'open-doc', 'download', 'delete', 'mkdir', 'move'):
                 device = connect_device()
                 result = {

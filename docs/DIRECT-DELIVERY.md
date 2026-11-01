@@ -103,3 +103,23 @@ App 新增「设备文件」标签页：按文件夹浏览、在设备上打开�
 - 投递流程不变：仍只读取目录和新增文档，不删除、不覆盖。
 - 删除、移动、新建文件夹只在用户于该标签页中明确操作时执行；删除前每次确认，并提示手写批注会一起删除且无法恢复。
 - 接口参照 dpt-rp1-py：`GET /folders/{id}/entries2`、`GET /documents/{id}/file`、`DELETE /documents/{id}` 与 `/folders/{id}`、`POST /folders2`、`PUT /documents/{id}`（`parent_folder_id`）。条目 ID 进入 URL 前校验字符集。
+
+## USB 模式切换：脱离官方 App 的最后一环（2026-11-01）
+
+现象：设备插着 USB、已唤醒，工具栏一直是黄色「网络未就绪」，拔插也不恢复。当时 QUADERNO PC App 没有运行。
+
+原因：设备插上后先以 **USB 串口**（产品 ID 0x1656，`/dev/cu.usbmodem*`）出现，需要主机向串口写入切换序列，
+才会以 **USB 以太网**（0x1657，`en*` 网卡）重新出现。此前一直由后台运行的 QUADERNO PC App 代做，所以没有暴露。
+切换序列见 dpt-rp1-py `docs/linux-ethernet-over-usb.md`，macOS 用 CDC/ECM：`01 00 00 01 00 00 00 01 01 04`。
+
+处理：App 发现串口模式时自动写入一次（同一次插入只写一次）；直连工具在每次连接前也会检查并切换，所以 ⌃1、
+Finder 右键在 App 未运行时同样可用。实测写入后约 1 秒变为 0x1657，2 秒内出现网卡与服务广播。
+
+## 截屏导出（2026-11-01）
+
+`GET /system/controls/screen_shot` 返回设备当前画面的 PNG（1404 × 1872，含手写笔迹，约 1.7 秒）。
+`screen_shot2?query=jpeg` 也可用，但对灰阶画面 JPEG 反而比 PNG 大，所以统一取 PNG，在本机用 `sips` 转换：
+JPEG（质量 90）或 PDF（227.18 dpi，页面即屏幕实际尺寸 156.97 × 209.30 mm）。
+
+保存位置与格式在「设置 → 截屏导出」中设置一次，默认「图片 / QUADERNO 截屏」、PNG。
+工具栏相机按钮（⌘⇧S）或 `deliver.sh --screenshot`（可在快捷指令中绑定 ⌃2）一步保存，文件按时间命名，不覆盖。
