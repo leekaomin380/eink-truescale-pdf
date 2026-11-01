@@ -5,6 +5,13 @@ version tags have been cut yet — everything below is `Unreleased`, seeded
 retrospectively from the project's git history to give newcomers a map without
 requiring them to read every commit.
 
+## [1.2.1] — 2026-11-01
+
+### Changed
+- New app icon: grayscale paper in the style of the author's ReadIsland app, with an
+  italic lowercase q in the top-left corner. The previous icon used more than four
+  colours. The landing page icon and favicon follow the same design.
+
 ## [1.2.0] — 2026-11-01
 
 Renamed **Quaderno Converter → TrueScale for QUADERNO** (bundle ID
