@@ -150,7 +150,7 @@ footer p { margin: 6px 0; max-width: 60em; }
           <a class="button primary" href="https://github.com/leekaomin380/eink-truescale-pdf/releases/latest" data-i18n="cta.download">Download for Mac</a>
           <a class="button secondary" href="https://github.com/leekaomin380/eink-truescale-pdf" data-i18n="cta.source">Source on GitHub</a>
         </div>
-        <p class="note" data-i18n="cta.note">Free and open source (MIT). Apple Silicon, macOS 14 or later.</p>
+        <p class="note"><span data-i18n="cta.version">Version</span> <span id="version">1.2.1</span> · <span data-i18n="cta.note">Free and open source (MIT). Apple Silicon, macOS 14 or later.</span></p>
       </div>
       <figure class="device">
         <img src="assets/device-page.png" width="1404" height="1872" alt="" data-i18n-alt="device.alt">
@@ -252,6 +252,7 @@ const strings = {
     "hero.lead": "在 Mac 上复制文字，按一个键，它就出现在 FUJITSU QUADERNO 上——按屏幕的真实物理尺寸排版，读起来像印刷品一样清晰。",
     "flow.copy": "复制", "flow.open": "在 QUADERNO 上打开",
     "cta.download": "下载 Mac 版", "cta.source": "GitHub 源代码",
+    "cta.version": "版本",
     "cta.note": "免费、开源（MIT）。需要 Apple Silicon 芯片、macOS 14 或更新版本。",
     "device.alt": "QUADERNO A5 屏幕截图：一页按实际尺寸排版的中英文文档",
     "device.caption": "QUADERNO A5 的真实屏幕截图，由本 App 截取。",
@@ -291,6 +292,7 @@ const strings = {
     "hero.lead": "Mac でテキストをコピーしてキーを押すだけで、FUJITSU QUADERNO に表示されます。画面の実寸で組むので、印刷物のようにくっきり読めます。",
     "flow.copy": "コピー", "flow.open": "QUADERNO で開く",
     "cta.download": "Mac 版をダウンロード", "cta.source": "GitHub のソースコード",
+    "cta.version": "バージョン",
     "cta.note": "無料・オープンソース（MIT）。Apple Silicon、macOS 14 以降。",
     "device.alt": "QUADERNO A5 の画面：実寸で組版された日中英の文書",
     "device.caption": "この App で取り込んだ QUADERNO A5 の実際の画面です。",
@@ -356,6 +358,15 @@ if (!initial) {
 }
 document.querySelectorAll(".langs button").forEach(b => b.addEventListener("click", () => apply(b.dataset.lang)));
 apply(initial);
+
+// 版本号：页面里写的是发布时的版本；能连上 GitHub 时换成最新 Release，失败就保留原值。
+fetch("https://api.github.com/repos/leekaomin380/eink-truescale-pdf/releases/latest")
+  .then(r => r.ok ? r.json() : null)
+  .then(release => {
+    const tag = release && /^v?(\d+\.\d+\.\d+)$/.exec(release.tag_name || "");
+    if (tag) document.getElementById("version").textContent = tag[1];
+  })
+  .catch(() => {});
 </script>
 </body>
 </html>
