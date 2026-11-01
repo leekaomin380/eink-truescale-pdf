@@ -5,7 +5,7 @@ version tags have been cut yet — everything below is `Unreleased`, seeded
 retrospectively from the project's git history to give newcomers a map without
 requiring them to read every commit.
 
-## [1.2.0] — 2026-10-31
+## [1.2.0] — 2026-11-01
 
 Renamed **Quaderno Converter → TrueScale for QUADERNO** (bundle ID
 `io.github.leekaomin380.quaderno-converter`). Settings are migrated on first launch;
@@ -21,7 +21,18 @@ re-copy the ⌃1 Shortcut command once, because the app's path changed.
 - 简体中文 / English / 日本語 UI and messages, with a language setting.
 - First-run setup guide (connect → import pairing → check → optional ⌃1).
 - Settings and About pages in the main window; About lists bundled components and licences.
-- Recent deliveries on the Quick Send tab; instant detection of a USB dropout.
+- Recent deliveries from every entry point (toolbar), with retry, reveal in Finder,
+  open on device and locate in Device Files.
+- Device Files: browse, search, sort, download (with handwriting), upload, move,
+  create folders and delete (always confirmed).
+- Screenshot export (⌘⇧S): saves the device screen, handwriting included, as PNG,
+  JPEG or a true-size PDF into a folder chosen once.
+- The device is switched from USB serial mode to network mode by TrueScale itself;
+  QUADERNO PC App no longer needs to be running.
+- Global USB / network status in the toolbar (ready / network not ready / disconnected).
+
+### Fixed
+- A title derived from the first line of the text was printed twice on the page.
 
 
 ### Added
