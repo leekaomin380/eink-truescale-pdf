@@ -166,6 +166,9 @@ $endif$
     } else { it }
   })
 }
+$if(pagetitle)$
+#set document(title: [$pagetitle$])
+$endif$
 $if(title)$
 #align(center)[
   #block(above: 1.2em, below: 1.4em)[#text(1.5em, weight: "bold")[$title$]]

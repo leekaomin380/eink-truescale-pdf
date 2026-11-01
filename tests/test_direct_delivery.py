@@ -613,3 +613,21 @@ class ScreenshotTests(unittest.TestCase):
         self.assertEqual(fmt, 'png')
         with patch.object(direct, 'app_preference', side_effect=lambda key: {'ScreenshotFormat': 'PDF'}.get(key)):
             self.assertEqual(direct.screenshot_settings('/tmp/x')[1], 'pdf')
+
+
+
+class PageTitleTests(unittest.TestCase):
+    def test_derived_title_names_the_file_but_is_not_printed_twice(self):
+        import yaml
+        title, rendered = direct.prepare_markdown('# 只有一级标题\n\n正文一段。')
+        meta = yaml.safe_load(rendered.split('---')[1])
+        self.assertEqual(title, '只有一级标题')
+        self.assertNotIn('title', meta)
+        self.assertEqual(meta['pagetitle'], '只有一级标题')
+
+    def test_front_matter_title_stays_the_page_title(self):
+        import yaml
+        _, rendered = direct.prepare_markdown('---\ntitle: 我的阅读\n---\n\n正文')
+        meta = yaml.safe_load(rendered.split('---')[1])
+        self.assertEqual(meta['title'], '我的阅读')
+        self.assertNotIn('pagetitle', meta)

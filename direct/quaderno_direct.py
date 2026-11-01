@@ -869,7 +869,12 @@ def prepare_markdown(text):
     if not title and candidates:
         title = clean_title(re.split(r'[。！？!?]', candidates[0], maxsplit=1)[0])
     title = title or tr('剪贴板摘录')
-    metadata['title'] = title
+    # A title the author wrote in front matter stays the page title. A name derived from the first
+    # heading or sentence only names the file and the PDF document: as `title` the template would
+    # print it above the body, which already contains that heading or sentence (seen on device).
+    if not (isinstance(raw_title, str) and clean_title(raw_title)):
+        metadata.pop('title', None)
+        metadata['pagetitle'] = title
     # Keep original body exactly; title selection changes metadata and filename only.
     rendered = '---\n' + yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False) + '---\n\n' + body
     return title, rendered
