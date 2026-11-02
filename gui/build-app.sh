@@ -197,13 +197,25 @@ for f in "$BIN_DIR"/* "$LIB_DIR"/*; do
 done
 
 echo ">>> 签名直连运行时"
+# --timestamp 要连 Apple 时间戳服务器，偶尔无响应导致 codesign 失败（2026-11-01、11-02 各遇一次，
+# 单独重跑即通过）。每个文件最多试 3 次，仍失败才中断并显示原因。
+sign_retry() {
+  local attempt output
+  for attempt in 1 2 3; do
+    output=$(codesign -f "${SIGN_FLAGS[@]}" -s "$SIGN_IDENTITY" "$1" 2>&1) && return 0
+    sleep 3
+  done
+  echo "!!! 签名失败：$1" >&2
+  echo "$output" >&2
+  return 1
+}
 find "$APP_DIR/Contents/Resources/direct" -type f | while IFS= read -r runtime_file; do
   if file -b "$runtime_file" | grep -q 'Mach-O'; then
-    codesign -f "${SIGN_FLAGS[@]}" -s "$SIGN_IDENTITY" "$runtime_file" >/dev/null 2>&1
+    sign_retry "$runtime_file"
   fi
 done
 find "$APP_DIR/Contents/Resources/direct" -type d -name '*.framework' | while IFS= read -r framework; do
-  codesign -f "${SIGN_FLAGS[@]}" -s "$SIGN_IDENTITY" "$framework" >/dev/null 2>&1
+  sign_retry "$framework"
 done
 
 # 自检：bundle 内的二进制不得再引用 Homebrew 路径
