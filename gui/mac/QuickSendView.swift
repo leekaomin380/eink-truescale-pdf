@@ -242,7 +242,7 @@ final class MainNavigation: ObservableObject {
 
     func show(_ target: MainPage) {
         page = target
-        NSApp.activate(ignoringOtherApps: true)
+        MainWindow.show()
     }
 }
 
@@ -250,21 +250,22 @@ final class MainNavigation: ObservableObject {
 
 struct QuickSendSidebar: View {
     @ObservedObject private var monitor = QuickSendMonitor.shared
-
-    @State private var showSetup = false
+    @ObservedObject private var hotkeys = GlobalHotkeys.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             SettingsSection("快捷键") {
                 HStack(spacing: 12) {
-                    Text(verbatim: "⌃1").font(.caption.weight(.semibold)).frame(width: 34, height: 22)
+                    Text(verbatim: hotkeys.combos[.deliver]?.display ?? "").font(.caption.weight(.semibold))
+                        .frame(minWidth: 34, minHeight: 22).padding(.horizontal, 4)
                         .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.tertiary))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("剪贴板快捷键")
-                        Text("由 macOS「快捷指令」提供").font(.caption).foregroundStyle(.secondary)
+                        Text(hotkeys.enabled[.deliver] == false ? L("已关闭") : L("App 运行时在任何应用中可用"))
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("设置快捷键…") { showSetup = true }.buttonStyle(.link)
+                    Button("在设置中修改…") { MainNavigation.shared.show(.settings) }.buttonStyle(.link)
                 }
                 .padding(12)
             }
@@ -279,9 +280,6 @@ struct QuickSendSidebar: View {
                 }
                 .padding(12)
             }
-        }
-        .sheet(isPresented: $showSetup) {
-            HotkeySetupSheet(scriptURL: Bundle.main.url(forResource: "deliver", withExtension: "sh"))
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -320,7 +318,6 @@ struct AppSettingsView: View {
     @State private var checking = false
     @State private var checkPassed: Bool?
     @State private var checkOutput = ""
-    @State private var showSetup = false
 
     private var scriptURL: URL? { Bundle.main.url(forResource: "deliver", withExtension: "sh") }
 
@@ -334,7 +331,8 @@ struct AppSettingsView: View {
                 }
                 SettingsSection("语言") { LanguageSettings() }
                 SettingsSection("设备") { deviceGroup }
-                SettingsSection("投递入口") { entriesGroup }
+                SettingsSection("快捷键") { HotkeySettings() }
+                SettingsSection("Finder 右键") { finderGroup }
                 SettingsSection("⌃1 与 Finder 投递的排版") { ClipboardLayoutSettings() }
                 SettingsSection("截屏导出") { ScreenshotSettings() }
                 SettingsSection("常见问题") { faq }
@@ -343,7 +341,6 @@ struct AppSettingsView: View {
             .frame(maxWidth: 640, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .sheet(isPresented: $showSetup) { HotkeySetupSheet(scriptURL: scriptURL) }
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
     }
@@ -392,25 +389,13 @@ struct AppSettingsView: View {
         }
     }
 
-    private var entriesGroup: some View {
+    private var finderGroup: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                Text(verbatim: "⌃1").font(.caption.weight(.semibold)).frame(width: 34, height: 22)
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.tertiary))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("剪贴板快捷键")
-                    Text("由 macOS「快捷指令」提供").font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("设置快捷键…") { showSetup = true }.buttonStyle(.link).disabled(scriptURL == nil)
-            }
-            .padding(12)
-            Divider().padding(.leading, 12)
             HStack(spacing: 12) {
                 Image(systemName: "folder").frame(width: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Finder 右键")
-                    Text("PDF、Markdown、TXT · 无需设置").font(.caption).foregroundStyle(.secondary)
+                    Text("PDF、EPUB、Markdown、TXT · 无需设置").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text("由本 App 提供").foregroundStyle(.secondary)
@@ -422,8 +407,8 @@ struct AppSettingsView: View {
 
     private var faq: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("提示「no such file or directory」？").fontWeight(.medium)
-            Text("通常是快捷指令仍引用已经移动的源码目录。重新复制本页命令并替换旧命令即可。命令使用 App 内置脚本，归档源码不会影响它；移动或重命名 App 后，需要重新复制命令。")
+            Text("按快捷键没有反应？").fontWeight(.medium)
+            Text("快捷键只在 App 运行时有效：关闭窗口后 App 留在菜单栏，从菜单栏图标选「退出」才会停止。开机后要自动可用，请打开「登录时启动」。以前在「快捷指令」里设置过同一组合的，请删除那个快捷指令的键盘快捷键，否则两边会抢同一个键。")
             Text("Ctrl+1 自动取内容自带标题、Markdown 标题或第一句正文作为文件名，并附加时间。App 主窗口仍使用手动标题。设备已有同名文件时另存新文件，避免覆盖手写批注。")
             Text("直连失败时保留本地 PDF，通知中显示路径；重新投递前可先检查设备，避免重复投递。")
             Text("由本 App 直接提供，无需安装。菜单项未出现时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选「投递到 QUADERNO」。")
@@ -497,75 +482,6 @@ struct QuickSendOverview: View {
             Text(detail).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(width: 150)
-    }
-}
-
-// MARK: - ⌃1 设置向导
-
-struct HotkeySetupSheet: View {
-    let scriptURL: URL?
-    /// 截屏快捷键：命令加 --screenshot，建议 ⌃2。
-    var screenshot = false
-    @Environment(\.dismiss) private var dismiss
-    @State private var copied = false
-
-    private var key: String { screenshot ? "⌃2" : "⌃1" }
-
-    private var command: String {
-        guard let path = scriptURL?.path else { return "" }
-        return "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'" + (screenshot ? " --screenshot" : "")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(screenshot ? L("设置截屏快捷键") : L("设置 ⌃1 快捷键")).font(.title2.weight(.semibold))
-                Text("macOS 不允许 App 替你绑定全局快捷键，需要在「快捷指令」里做一次。大约 1 分钟。")
-                    .foregroundStyle(.secondary)
-            }
-            step(1, "复制投递命令") {
-                HStack {
-                    Button(copied ? L("已复制命令") : L("复制命令"), systemImage: copied ? "checkmark" : "doc.on.doc") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(command, forType: .string)
-                        copied = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(command.isEmpty)
-                    Text("会替换当前剪贴板").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            step(2, "新建快捷指令，粘贴命令") {
-                Text("添加「运行 Shell 脚本」操作，Shell 选 /bin/zsh，粘贴刚才复制的命令。")
-                    .foregroundStyle(.secondary)
-                Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
-                }
-            }
-            step(3, "绑定 \(key)") {
-                Text("在快捷指令详情中打开「用作快速操作」，添加键盘快捷键 \(key)。").foregroundStyle(.secondary)
-            }
-            Divider()
-            HStack {
-                Text(screenshot ? L("设置好后，在设备上打开要分享的页面，按 ⌃2 试一下") : L("设置好后，复制一段文字按 ⌃1 试一下"))
-                    .font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button("完成") { dismiss() }.keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(28)
-        .frame(width: 520)
-    }
-
-    private func step<Content: View>(_ number: Int, _ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Text(verbatim: "\(number)").font(.callout.weight(.semibold)).foregroundStyle(.tint)
-                .frame(width: 24, height: 24).background(Color.accentColor.opacity(0.12), in: Circle())
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title).fontWeight(.semibold)
-                content()
-            }
-        }
     }
 }
 
@@ -669,7 +585,6 @@ struct SetupGuideSheet: View {
     @State private var checking = false
     @State private var checkPassed: Bool?
     @State private var checkOutput = ""
-    @State private var showHotkey = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -711,9 +626,9 @@ struct SetupGuideSheet: View {
                     }.font(.caption)
                 }
             }
-            step(4, done: false, optional: true, "设置 ⌃1 快捷键（可选）") {
-                Text("Finder 右键投递无需设置，已经可以使用。").foregroundStyle(.secondary)
-                Button("设置快捷键…") { showHotkey = true }
+            step(4, done: GlobalHotkeys.shared.conflicts.isEmpty, optional: true, "快捷键与 Finder 右键") {
+                Text("⌃1 投递剪贴板、⌃2 截屏，无需设置；可在设置中修改。Finder 右键投递也已可用。")
+                    .foregroundStyle(.secondary)
             }
             Divider()
             HStack {
@@ -724,9 +639,6 @@ struct SetupGuideSheet: View {
         }
         .padding(28)
         .frame(width: 540)
-        .sheet(isPresented: $showHotkey) {
-            HotkeySetupSheet(scriptURL: Bundle.main.url(forResource: "deliver", withExtension: "sh"))
-        }
         .onAppear { monitor.start() }
         .onDisappear { monitor.stop() }
     }
@@ -929,6 +841,8 @@ struct LinkStatus {
 enum ScreenshotPreferences {
     static let folderKey = "ScreenshotFolder"
     static let formatKey = "ScreenshotFormat"
+    /// 同时在桌面放一份（直连工具读同一个键，默认开）。
+    static let desktopCopyKey = "ScreenshotDesktopCopy"
 
     static var folder: URL {
         if let path = UserDefaults.standard.string(forKey: folderKey), !path.isEmpty {
@@ -956,11 +870,11 @@ enum ScreenshotPreferences {
 struct ScreenshotSettings: View {
     @AppStorage(ScreenshotPreferences.formatKey) private var format = "png"
     @AppStorage(ScreenshotPreferences.folderKey) private var folderPath = ""
-    @State private var showHotkey = false
+    @AppStorage(ScreenshotPreferences.desktopCopyKey) private var desktopCopy = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("截取设备屏幕上正在显示的内容，包括手写笔迹。点工具栏的相机按钮或按截屏快捷键，直接保存到下面的文件夹。")
+            Text("截取设备屏幕上正在显示的内容，包括手写笔迹。点工具栏的相机按钮或按截屏快捷键，直接保存到下面的文件夹。文件按正在看的文档和页码命名，如「读书笔记 第3页 2026-11-02 14.05.12」。")
                 .font(.caption).foregroundStyle(.secondary)
             LabeledContent("保存到") {
                 HStack {
@@ -985,18 +899,10 @@ struct ScreenshotSettings: View {
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
             }
             Text(formatNote).font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Text(verbatim: "⌃2").font(.caption.weight(.semibold)).frame(width: 34, height: 22)
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.tertiary))
-                Text("截屏快捷键（可选）")
-                Spacer()
-                Button("设置快捷键…") { showHotkey = true }.buttonStyle(.link)
-            }
+            Toggle(isOn: $desktopCopy) { Text("同时在桌面放一份") }
+            Text("便于立即拖进聊天或文档；保存位置本身就是桌面时不重复。").font(.caption).foregroundStyle(.secondary)
         }
         .padding(12)
-        .sheet(isPresented: $showHotkey) {
-            HotkeySetupSheet(scriptURL: Bundle.main.url(forResource: "deliver", withExtension: "sh"), screenshot: true)
-        }
     }
 
     private var formatNote: String {

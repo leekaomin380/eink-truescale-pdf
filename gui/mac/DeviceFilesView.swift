@@ -382,7 +382,7 @@ struct DeviceDocumentsView: View {
     private func upload(_ urls: [URL]) {
         let pdfs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
         guard !pdfs.isEmpty else {
-            model.report(L("这里只能上传 PDF。Markdown 和 TXT 请用 Finder 右键投递。"), error: true)
+            model.report(L("这里只能上传 PDF。EPUB、Markdown 和 TXT 请用 Finder 右键投递。"), error: true)
             return
         }
         let folder = model.folderPath

@@ -139,6 +139,10 @@ MESSAGES = {
     '已移动：{name}': ('Moved: {name}', '移動しました：{name}'),
     'QUADERNO 截屏': ('QUADERNO Screenshot', 'QUADERNO スクリーンショット'),
     '已保存截屏：{name}': ('Screenshot saved: {name}', 'スクリーンショットを保存しました：{name}'),
+    '已保存截屏：{name}（桌面也放了一份）': (
+        'Screenshot saved: {name} (a copy is on the Desktop)',
+        'スクリーンショットを保存しました：{name}（デスクトップにもコピーしました）'),
+    '第{page}页': ('p{page}', '{page}ページ'),
     '截屏转换失败：{detail}': ('Could not convert the screenshot: {detail}', 'スクリーンショットを変換できませんでした：{detail}'),
     'TrueScale · 截屏已保存': ('TrueScale · Screenshot saved', 'TrueScale · スクリーンショットを保存しました'),
     'TrueScale · 截屏失败': ('TrueScale · Screenshot failed', 'TrueScale · スクリーンショットに失敗しました'),
@@ -155,9 +159,14 @@ MESSAGES = {
     'TrueScale · 已保存至 Received': ('TrueScale · Saved to Received', 'TrueScale · Received に保存しました'),
     '投递失败，请查看设备连接': ('Delivery failed. Check the device connection.', '送信に失敗しました。端末の接続を確認してください。'),
     '未选择文件': ('No files selected', 'ファイルが選択されていません'),
-    '{file}：暂只支持 PDF、Markdown 和 TXT': (
-        '{file}: only PDF, Markdown and TXT are supported for now',
-        '{file}：現在は PDF・Markdown・TXT のみ対応しています'),
+    '{file}：暂只支持 PDF、EPUB、Markdown 和 TXT': (
+        '{file}: only PDF, EPUB, Markdown and TXT are supported for now',
+        '{file}：現在は PDF・EPUB・Markdown・TXT のみ対応しています'),
+    'TrueScale · 正在排版': ('TrueScale · Typesetting', 'TrueScale · 組版中'),
+    '{file}，完成后自动投递': (
+        '{file}. It will be sent when ready.',
+        '{file}。完了後に自動で送信します。'),
+    '{file}：电子书排版失败': ('{file}: could not typeset the e-book', '{file}：電子書籍を組版できませんでした'),
     '已投递 {sent} 个，失败 {failed} 个。{first}': (
         'Sent {sent}, failed {failed}. {first}', '{sent} 件送信、{failed} 件失敗。{first}'),
     '已投递 {sent} 个文件': ('Sent {sent} files', '{sent} 件のファイルを送信しました'),
@@ -508,8 +517,12 @@ class Device:
         entries = self.request('GET', '/folders/' + root['entry_id'] + '/entries2').json()['entry_list']
         return {'ok': True, 'message': tr('设备已直连，认证及目录读取通过'), 'root_entries': len(entries), 'connection': self.target}
 
-    def screenshot(self, folder, fmt):
+    def screenshot(self, folder, fmt, desktop=None):
         """Save what the device shows now, ink included, into folder as png / jpeg / pdf.
+
+        The name says what was on screen: the open document's title and page, then the time
+        (falls back to 「QUADERNO 截屏」 on the home screen). With desktop set, a copy also goes
+        there for immediate use, unless folder already is that directory.
 
         PNG comes from the device (lossless; for e-ink greys it is also smaller than the device's
         JPEG). JPEG and PDF are converted locally with sips; the PDF page is the screen's physical
@@ -519,12 +532,13 @@ class Device:
         folder.mkdir(parents=True, exist_ok=True)
         png = self.request('GET', '/system/controls/screen_shot').content
         extension = {'png': 'png', 'jpeg': 'jpg', 'pdf': 'pdf'}[fmt]
-        stem = tr('QUADERNO 截屏') + ' ' + datetime.now().strftime('%Y-%m-%d %H.%M.%S')
-        target = folder / (stem + '.' + extension)
-        counter = 2
-        while target.exists():
-            target = folder / (f'{stem} {counter}.{extension}')
-            counter += 1
+        try:
+            viewing = self.request('GET', '/viewer/status/current_viewing', allow_missing=True)
+            label = viewing_label(viewing.json()) if viewing else None
+        except (DirectError, ValueError):
+            label = None
+        stem = (label or tr('QUADERNO 截屏')) + ' ' + datetime.now().strftime('%Y-%m-%d %H.%M.%S')
+        target = unique_path(folder, stem, extension)
         with tempfile.TemporaryDirectory(prefix='quaderno-shot-') as work:
             source = Path(work) / 'screen.png'
             source.write_bytes(png)
@@ -543,7 +557,15 @@ class Device:
                 shutil.copyfile(converted, target)
             else:
                 target.write_bytes(png)
-        return {'ok': True, 'message': tr('已保存截屏：{name}', name=target.name), 'path': str(target)}
+        result = {'ok': True, 'message': tr('已保存截屏：{name}', name=target.name), 'path': str(target)}
+        if desktop is not None:
+            desktop = Path(desktop).expanduser()
+            if desktop.is_dir() and desktop.resolve() != folder.resolve():
+                copy = unique_path(desktop, stem, extension)
+                shutil.copyfile(target, copy)
+                result['desktop_path'] = str(copy)
+                result['message'] = tr('已保存截屏：{name}（桌面也放了一份）', name=target.name)
+        return result
 
     # ---- File management: only explicit actions from the App's 设备文件 tab ----
 
@@ -668,6 +690,39 @@ def app_preference(key):
     except (OSError, subprocess.TimeoutExpired):
         return None
     return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else None
+
+
+def viewing_label(status):
+    """「标题 第3页」from /viewer/status/current_viewing; None when no document is open."""
+    views = [view for view in (status or {}).get('views') or [] if isinstance(view, dict)]
+    if not views:
+        return None
+    view = views[0]
+    title = view.get('title') or Path(view.get('entry_path') or '').stem
+    # Drop the time suffix TrueScale adds to clipboard deliveries; the screenshot carries its own.
+    title = re.sub(r'_\d{8}-\d{6}$', '', title)
+    title = re.sub(r'[/\\:*?"<>|\x00-\x1f]', '_', title).strip(' ._')[:40].strip()
+    if not title:
+        return None
+    pages = [str(v.get('current_page')) for v in views
+             if v.get('entry_id') == view.get('entry_id') and str(v.get('current_page') or '').isdigit()]
+    if not pages:
+        return title
+    return title + ' ' + tr('第{page}页', page='–'.join(dict.fromkeys(pages)))
+
+
+def unique_path(folder, stem, extension):
+    target = folder / (stem + '.' + extension)
+    counter = 2
+    while target.exists():
+        target = folder / f'{stem} {counter}.{extension}'
+        counter += 1
+    return target
+
+
+def screenshot_desktop_copy():
+    """App 设置「同时在桌面放一份」，默认开。"""
+    return app_preference('ScreenshotDesktopCopy') not in ('0', 'false', 'NO')
 
 
 def screenshot_settings(folder=None, fmt=None):
@@ -1020,7 +1075,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'text',
                                            'browse', 'open-doc', 'download', 'delete', 'mkdir', 'move', 'usb-switch',
-                                           'screenshot'])
+                                           'screenshot', 'layout'])
     parser.add_argument('--address', default='Android.local')
     parser.add_argument('--file')
     parser.add_argument('--input')
@@ -1058,6 +1113,11 @@ def main():
             Path(args.markdown).write_text(rendered)
             print(title)
             return
+        if args.action == 'layout':
+            # deliver.sh: the ⌃1 / Finder layout as JSON, {} when none is saved (factory defaults apply).
+            profile, _ = load_clipboard_layout()
+            print(json.dumps(profile or {}, ensure_ascii=False))
+            return
         if args.action == 'render-upload':
             result = render_and_upload(args)
             print(json.dumps(result, ensure_ascii=False))
@@ -1073,7 +1133,8 @@ def main():
                 result = {'ok': True, 'message': tr('已将设备切换到网络模式。' if switched else '设备已处于网络模式，无需切换。')}
             elif args.action == 'screenshot':
                 folder, fmt = screenshot_settings(args.folder, args.image_format)
-                result = connect_device().screenshot(folder, fmt)
+                desktop = Path.home() / 'Desktop' if screenshot_desktop_copy() else None
+                result = connect_device().screenshot(folder, fmt, desktop)
             elif args.action in ('browse', 'open-doc', 'download', 'delete', 'mkdir', 'move'):
                 device = connect_device()
                 result = {

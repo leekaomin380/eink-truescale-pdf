@@ -60,6 +60,7 @@ swiftc \
     "$MAC_DIR/ContentView.swift" \
     "$MAC_DIR/QuickSendView.swift" \
     "$MAC_DIR/DeviceFilesView.swift" \
+    "$MAC_DIR/GlobalHotkeys.swift" \
     "$MAC_DIR/DirectDelivery.swift" \
     "$MAC_DIR/ClipboardLayout.swift" \
     "$MAC_DIR/ConversionViewModel.swift" \

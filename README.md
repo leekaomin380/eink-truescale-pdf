@@ -38,7 +38,7 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 | Source | How |
 |---|---|
 | Clipboard Markdown | Global hotkey ⌃1 — [jump](#bind-the-hotkey) |
-| Files in Finder | Right-click a PDF, Markdown or TXT file → **Send to QUADERNO** — [jump](#send-from-finder) |
+| Files in Finder | Right-click a PDF, EPUB, Markdown or TXT file → **Send to QUADERNO** — [jump](#send-from-finder) |
 | EPUB / FB2 / HTML / MOBI ebooks | The app, or `book.sh` — [jump](#converting-ebooks) |
 | **WeChat articles (微信公众号)** | Paste a link into the app — [jump](#reading-wechat-articles-微信公众号-on-a-quaderno) |
 | Pasted text | Type or paste into the app |
@@ -47,9 +47,10 @@ Built for people who read long-form text on e-ink and are tired of this dance:
 open a document on the device, download it (with your handwritten notes) to the Mac, upload PDFs
 into any folder (or drop them on the list), create folders, move and delete — several at once.
 
-**Screenshot** (toolbar camera, ⌘⇧S, or a ⌃2 Shortcut) saves what the device shows right now —
+**Screenshot** (toolbar camera, ⌘⇧S, or the ⌃2 hotkey) saves what the device shows right now —
 handwriting included — straight into a folder you choose once, as PNG, JPEG or a true-size PDF.
-No dialog each time.
+The file is named after the open document and page (e.g. `Reading notes p3 2026-11-02 14.05.12.png`),
+and by default a copy also lands on the Desktop for immediate use. No dialog each time.
 
 Delivered files land in `Document/Received/` on the device and are opened on screen.
 Delivery never overwrites or deletes existing files. Deleting and moving happen only in
@@ -108,9 +109,9 @@ still works, and you can save the PDF and transfer it however you normally would
    2. **Import Pairing** — reuses the pairing QUADERNO PC App created on this Mac. Once only.
    3. **Check** — renders a test PDF and authenticates to the device, uploading nothing.
 
-That's it. Right-click a PDF, Markdown or TXT file in Finder → **Send to QUADERNO** works
-immediately. The ⌃1 clipboard hotkey is an optional fourth step in the same guide, because
-macOS only lets you bind it yourself in the Shortcuts app (about a minute).
+That's it. Right-click a PDF, EPUB, Markdown or TXT file in Finder → **Send to QUADERNO** works
+immediately, and so do the hotkeys: **⌃1** sends the clipboard, **⌃2** saves a screenshot of the
+device. Nothing to set up in the Shortcuts app.
 
 The guide can be reopened at any time from **Settings → Setup Guide…** (⚙︎ in the toolbar,
 or ⌘,). Apple Silicon only. EPUB, FB2, HTML, Markdown, pasted text and web links work
@@ -138,11 +139,16 @@ talks to your device — you should be able to read it before you run it.
 
 ### Desktop app
 
-Open **Settings → Ways to Send → Clipboard hotkey → Set Up Hotkey…** (also step 4 of the
-setup guide). It walks through the one step macOS will not let an app do for you —
-creating a Shortcut and binding ⌃1 — with a **Copy Command** button. The command runs
-`deliver.sh` inside the installed app, with bundled pandoc and typst, so moving the source
-checkout does not break it. If the app itself is moved or renamed, copy the command again.
+Nothing to bind: the app registers **⌃1** (send clipboard) and **⌃2** (screenshot) itself,
+using Carbon's `RegisterEventHotKey`, which needs no accessibility permission. Change or turn
+them off in **Settings → Hotkeys**; a combination already taken by the system or another app
+is reported there.
+
+Hotkeys work while the app is running. Closing the window keeps the app in the menu bar (its
+menu also has Send Clipboard, Screenshot and Quit); turn on **Open at Login** in the same
+section to have them after a restart. If you bound ⌃1 in the Shortcuts app with an earlier
+version, remove that keyboard shortcut — a Shortcuts binding takes the key first, and then
+neither runs.
 
 Clipboard delivery follows the layout shared by the File, Text and Web tabs by default. On
 the **Hotkey Send** tab, turn off **Follow main window layout** to give ⌃1 and Finder sending
@@ -150,10 +156,12 @@ their own layout. Settings persist when the app is closed.
 
 ### Send from Finder
 
-Right-click one or more PDF, Markdown or TXT files in Finder and choose **Send to QUADERNO**
+Right-click one or more PDF, EPUB, Markdown or TXT files in Finder and choose **Send to QUADERNO**
 at the bottom of the menu. PDFs are uploaded as they are; Markdown and TXT are typeset with
-the Hotkey Send layout and keep their file names. This is a native macOS service provided by
-the app — there is nothing to install. If the item is missing, enable it in
+the Hotkey Send layout; EPUBs are typeset as books (chapters, table of contents, bookmarks)
+with the same layout. All keep their file names. No window opens: the app works in the
+background, even if it was not running, and reports the result as a notification. This is a
+native macOS service provided by the app — there is nothing to install. If the item is missing, enable it in
 **System Settings → Keyboard → Keyboard Shortcuts → Services → Files and Folders**.
 
 ### Source checkout
@@ -169,10 +177,9 @@ To be precise about what is and isn't possible, since this is easy to get wrong:
 authoring a *Shortcuts.app* shortcut and binding a key to it. The two are different
 mechanisms, and only the latter is closed off.
 
-So this manual step exists because the CLI workflow routes through Shortcuts.app.
-Building the hotkey into the app was considered and **deliberately dropped** — see
-[TODO.md](TODO.md) for the reasoning. If you want a hotkey, bind one here; if you'd
-rather not, the desktop app covers the same ground without one.
+So this manual step exists only because the CLI workflow has no app to hold the hotkey.
+The desktop app registers its own hotkeys since 1.2.2 (see [TODO.md](TODO.md) for why this
+was first dropped and later adopted).
 
 1. Open **Shortcuts.app** → click **+** to create a new shortcut
 2. Search the action list for **Run Shell Script** and add it

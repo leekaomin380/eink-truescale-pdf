@@ -148,6 +148,22 @@
         }
       }
     },
+    "App 运行时在任何应用中可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Works in any app while TrueScale is running"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App の起動中はどのアプリでも使えます"
+          }
+        }
+      }
+    },
     "Ctrl+1 自动取内容自带标题、Markdown 标题或第一句正文作为文件名，并附加时间。App 主窗口仍使用手动标题。设备已有同名文件时另存新文件，避免覆盖手写批注。": {
       "localizations": {
         "en": {
@@ -240,22 +256,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Finder の右クリック"
-          }
-        }
-      }
-    },
-    "Finder 右键投递无需设置，已经可以使用。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sending from Finder needs no setup and already works."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Finder からの送信は設定不要で、すでに使えます。"
           }
         }
       }
@@ -372,18 +372,18 @@
         }
       }
     },
-    "PDF、Markdown、TXT · 无需设置": {
+    "PDF、EPUB、Markdown、TXT · 无需设置": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "PDF, Markdown, TXT · no setup needed"
+            "value": "PDF, EPUB, Markdown, TXT · no setup needed"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "PDF・Markdown・TXT · 設定不要"
+            "value": "PDF・EPUB・Markdown・TXT · 設定不要"
           }
         }
       }
@@ -468,22 +468,6 @@
         }
       }
     },
-    "macOS 不允许 App 替你绑定全局快捷键，需要在「快捷指令」里做一次。大约 1 分钟。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS doesn't let apps assign global hotkeys for you, so this is done once in Shortcuts. It takes about a minute."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS では App がグローバルショートカットを代わりに割り当てられないため、「ショートカット」で一度だけ設定します。1 分ほどで終わります。"
-          }
-        }
-      }
-    },
     "macOS 不提供查询服务开关的接口。菜单中没有这一项时，请在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中打开「投递到 QUADERNO」。": {
       "localizations": {
         "en": {
@@ -560,6 +544,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "⌃1 と Finder 送信のレイアウト"
+          }
+        }
+      }
+    },
+    "⌃1 投递剪贴板、⌃2 截屏，无需设置；可在设置中修改。Finder 右键投递也已可用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃1 sends the clipboard and ⌃2 takes a screenshot, with no setup; change them in Settings. Sending from Finder works too."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃1 でクリップボードを送信、⌃2 でスクリーンショット。設定は不要で、設定画面で変更できます。Finder からの送信も使えます。"
           }
         }
       }
@@ -788,18 +788,18 @@
         }
       }
     },
-    "会替换当前剪贴板": {
+    "便于立即拖进聊天或文档；保存位置本身就是桌面时不重复。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Replaces the current clipboard"
+            "value": "Handy for dragging straight into a chat or document. No second copy when the folder is the Desktop itself."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "現在のクリップボードを置き換えます"
+            "value": "チャットや書類にすぐドラッグできます。保存先がデスクトップの場合は重複しません。"
           }
         }
       }
@@ -1188,6 +1188,22 @@
         }
       }
     },
+    "另一个快捷键已经在用这个组合。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The other shortcut already uses this combination."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "もう一方のショートカットがこの組み合わせを使っています。"
+          }
+        }
+      }
+    },
     "另存 PDF…": {
       "localizations": {
         "en": {
@@ -1264,6 +1280,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "適切"
+          }
+        }
+      }
+    },
+    "同时在桌面放一份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also put a copy on the Desktop"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デスクトップにもコピーを置く"
           }
         }
       }
@@ -1348,22 +1380,6 @@
         }
       }
     },
-    "在快捷指令详情中打开「用作快速操作」，添加键盘快捷键 %@。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In the shortcut's details, turn on “Use as Quick Action” and add the keyboard shortcut %@."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ショートカットの詳細で「クイックアクションとして使用」をオンにし、キーボードショートカット %@ を追加します。"
-          }
-        }
-      }
-    },
     "在设备上打开": {
       "localizations": {
         "en": {
@@ -1408,38 +1424,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "設定で変更…"
-          }
-        }
-      }
-    },
-    "复制命令": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy Command"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コマンドをコピー"
-          }
-        }
-      }
-    },
-    "复制投递命令": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy the delivery command"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "送信コマンドをコピー"
           }
         }
       }
@@ -1684,6 +1668,22 @@
         }
       }
     },
+    "已关闭": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフ"
+          }
+        }
+      }
+    },
     "已取消 Markdown 导出": {
       "localizations": {
         "en": {
@@ -1696,22 +1696,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Markdown の書き出しを取り消しました"
-          }
-        }
-      }
-    },
-    "已复制命令": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Command Copied"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コピーしました"
           }
         }
       }
@@ -1860,6 +1844,54 @@
         }
       }
     },
+    "快捷键与 Finder 右键": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts and Finder"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカットと Finder"
+          }
+        }
+      }
+    },
+    "快捷键只在 App 运行时有效：关闭窗口后 App 留在菜单栏，从菜单栏图标选「退出」才会停止。开机后要自动可用，请打开「登录时启动」。以前在「快捷指令」里设置过同一组合的，请删除那个快捷指令的键盘快捷键，否则两边会抢同一个键。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts work only while the app is running. Closing the window keeps it in the menu bar; it stops only when you choose Quit from the menu bar icon. To have them ready after you log in, turn on Open at Login. If you set up the same combination in the Shortcuts app before, remove that shortcut’s keyboard shortcut, or the two will compete for the key."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカットは App の起動中のみ有効です。ウインドウを閉じても App はメニューバーに残り、メニューバーのアイコンから「終了」を選ぶまで動作します。ログイン後すぐ使うには「ログイン時に起動」をオンにしてください。以前「ショートカット」App で同じ組み合わせを設定した場合は、そのキーボードショートカットを削除してください。両方が同じキーを取り合います。"
+          }
+        }
+      }
+    },
+    "快捷键在 App 运行时有效。关闭窗口后 App 留在菜单栏；打开此项，开机后也会自动在后台运行。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts work while the app is running. Closing the window keeps it in the menu bar; with this on, it also starts in the background when you log in."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカットは App の起動中に有効です。ウインドウを閉じても App はメニューバーに残ります。オンにすると、ログイン時にもバックグラウンドで起動します。"
+          }
+        }
+      }
+    },
     "快捷键投递": {
       "localizations": {
         "en": {
@@ -1924,18 +1956,34 @@
         }
       }
     },
-    "截取设备屏幕上正在显示的内容，包括手写笔迹。点工具栏的相机按钮或按截屏快捷键，直接保存到下面的文件夹。": {
+    "恢复默认": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Captures what the device screen shows, handwriting included. Click the camera button in the toolbar or press the screenshot hotkey to save straight into the folder below."
+            "value": "Restore Default"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "端末の画面に表示されている内容を、手書きの書き込みも含めて取り込みます。ツールバーのカメラボタンかスクリーンショットのショートカットで、下のフォルダーにそのまま保存します。"
+            "value": "デフォルトに戻す"
+          }
+        }
+      }
+    },
+    "截取设备屏幕上正在显示的内容，包括手写笔迹。点工具栏的相机按钮或按截屏快捷键，直接保存到下面的文件夹。文件按正在看的文档和页码命名，如「读书笔记 第3页 2026-11-02 14.05.12」。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captures what the device shows, handwriting included. Click the camera button in the toolbar or press the screenshot hotkey to save straight into the folder below. Files are named after the open document and page, such as “Reading notes p3 2026-11-02 14.05.12”."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端末の画面に表示中の内容を手書きごと保存します。ツールバーのカメラボタンかスクリーンショットのショートカットで、下のフォルダに直接保存します。ファイル名は表示中の書類とページで付きます（例：「読書ノート 3ページ 2026-11-02 14.05.12」）。"
           }
         }
       }
@@ -1988,22 +2036,6 @@
         }
       }
     },
-    "截屏快捷键（可选）": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Screenshot hotkey (optional)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "スクリーンショットのショートカット（任意）"
-          }
-        }
-      }
-    },
     "打包失败：%@": {
       "localizations": {
         "en": {
@@ -2036,18 +2068,18 @@
         }
       }
     },
-    "打开快捷指令": {
+    "打开 TrueScale": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open Shortcuts"
+            "value": "Open TrueScale"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ショートカットを開く"
+            "value": "TrueScale を開く"
           }
         }
       }
@@ -2084,22 +2116,6 @@
         }
       }
     },
-    "投递入口": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ways to Send"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "送信方法"
-          }
-        }
-      }
-    },
     "投递到 QUADERNO": {
       "localizations": {
         "en": {
@@ -2112,6 +2128,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "QUADERNO へ送信"
+          }
+        }
+      }
+    },
+    "投递剪贴板": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send Clipboard"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップボードを送信"
           }
         }
       }
@@ -2212,6 +2244,22 @@
         }
       }
     },
+    "按快捷键没有反应？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing happens when you press a shortcut?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカットを押しても反応しない場合"
+          }
+        }
+      }
+    },
     "按电子纸屏幕的真实物理尺寸排版文字、网页与电子书，并直接投递到 FUJITSU QUADERNO。由一位 QUADERNO 用户为自己的阅读习惯开发，以开源方式发布。": {
       "localizations": {
         "en": {
@@ -2256,22 +2304,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "レイアウト設定"
-          }
-        }
-      }
-    },
-    "提示「no such file or directory」？": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seeing “no such file or directory”?"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "「no such file or directory」と表示される場合"
           }
         }
       }
@@ -2416,22 +2448,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "作成"
-          }
-        }
-      }
-    },
-    "新建快捷指令，粘贴命令": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create a shortcut and paste the command"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ショートカットを作成してコマンドを貼り付け"
           }
         }
       }
@@ -2884,22 +2900,6 @@
         }
       }
     },
-    "添加「运行 Shell 脚本」操作，Shell 选 /bin/zsh，粘贴刚才复制的命令。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add a “Run Shell Script” action, set Shell to /bin/zsh, and paste the command you just copied."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "「シェルスクリプトを実行」アクションを追加し、シェルに /bin/zsh を選んで、コピーしたコマンドを貼り付けます。"
-          }
-        }
-      }
-    },
     "清空正文": {
       "localizations": {
         "en": {
@@ -3060,6 +3060,22 @@
         }
       }
     },
+    "点击后按下新的组合；Esc 取消": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click, then press a new combination; Esc cancels"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリックして新しい組み合わせを押します。Esc でキャンセル"
+          }
+        }
+      }
+    },
     "版心 %@mm": {
       "localizations": {
         "en": {
@@ -3104,22 +3120,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "USB ケーブルで QUADERNO を接続してスリープ解除"
-          }
-        }
-      }
-    },
-    "由 macOS「快捷指令」提供": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Provided by macOS Shortcuts"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS の「ショートカット」で提供"
           }
         }
       }
@@ -3184,6 +3184,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "表示言語"
+          }
+        }
+      }
+    },
+    "登录时启动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open at Login"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン時に起動"
           }
         }
       }
@@ -3392,22 +3408,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "QUADERNO PC App 経由"
-          }
-        }
-      }
-    },
-    "绑定 %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Assign %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ を割り当てる"
           }
         }
       }
@@ -3732,38 +3732,6 @@
         }
       }
     },
-    "设置 ⌃1 快捷键": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set Up the ⌃1 Hotkey"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌃1 ショートカットの設定"
-          }
-        }
-      }
-    },
-    "设置 ⌃1 快捷键（可选）": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set up the ⌃1 hotkey (optional)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌃1 ショートカットの設定（任意）"
-          }
-        }
-      }
-    },
     "设置…": {
       "localizations": {
         "en": {
@@ -3792,70 +3760,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "設定ガイド…"
-          }
-        }
-      }
-    },
-    "设置好后，在设备上打开要分享的页面，按 ⌃2 试一下": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Once set up, open the page you want to share on the device and press ⌃2."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "設定後、共有したいページを端末で開き、⌃2 を押してみてください。"
-          }
-        }
-      }
-    },
-    "设置好后，复制一段文字按 ⌃1 试一下": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Once set up, copy some text and press ⌃1 to try it"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "設定後、テキストをコピーして ⌃1 を押して試してください"
-          }
-        }
-      }
-    },
-    "设置快捷键…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set Up Hotkey…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ショートカットを設定…"
-          }
-        }
-      }
-    },
-    "设置截屏快捷键": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set Up the Screenshot Hotkey"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "スクリーンショットのショートカット設定"
           }
         }
       }
@@ -3952,6 +3856,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "先にファイルを選択してください"
+          }
+        }
+      }
+    },
+    "请按下新的快捷键…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press a new shortcut…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいショートカットを押してください…"
           }
         }
       }
@@ -4164,6 +4084,22 @@
         }
       }
     },
+    "这个组合已被系统或其他 App 占用，请换一个。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This combination is already used by the system or another app. Choose another."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この組み合わせはシステムまたは別の App が使用中です。別の組み合わせを選んでください。"
+          }
+        }
+      }
+    },
     "这些组件作为独立程序随 App 分发，由 App 启动调用，各自许可不受本项目 MIT 许可影响。pandoc 仅改写了动态库加载路径并重新签名，未修改源代码。": {
       "localizations": {
         "en": {
@@ -4180,18 +4116,18 @@
         }
       }
     },
-    "这里只能上传 PDF。Markdown 和 TXT 请用 Finder 右键投递。": {
+    "这里只能上传 PDF。EPUB、Markdown 和 TXT 请用 Finder 右键投递。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only PDFs can be uploaded here. Send Markdown and TXT from Finder."
+            "value": "Only PDFs can be uploaded here. Send EPUB, Markdown and TXT from Finder."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ここにアップロードできるのは PDF のみです。Markdown と TXT は Finder から送信してください。"
+            "value": "ここにアップロードできるのは PDF のみです。EPUB・Markdown・TXT は Finder から送信してください。"
           }
         }
       }
@@ -4276,6 +4212,22 @@
         }
       }
     },
+    "退出 TrueScale": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit TrueScale"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TrueScale を終了"
+          }
+        }
+      }
+    },
     "选择…": {
       "localizations": {
         "en": {
@@ -4288,22 +4240,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "選択…"
-          }
-        }
-      }
-    },
-    "通常是快捷指令仍引用已经移动的源码目录。重新复制本页命令并替换旧命令即可。命令使用 App 内置脚本，归档源码不会影响它；移动或重命名 App 后，需要重新复制命令。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Usually the shortcut still points to a source folder that has moved. Copy the command on this page again and replace the old one. The command uses the script inside the app, so archived source code does not affect it; after moving or renaming the app, copy the command again."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "多くの場合、ショートカットが移動済みのソースフォルダーを参照したままになっています。このページのコマンドをコピーし直して置き換えてください。コマンドは App 内蔵のスクリプトを使うため、ソースのアーカイブは影響しません。App を移動・名前変更した場合はコマンドをコピーし直してください。"
           }
         }
       }
@@ -4400,6 +4336,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "先に QUADERNO PC App をインストールし、端末と一度ペアリングしてください。"
+          }
+        }
+      }
+    },
+    "需要包含 ⌃、⌥ 或 ⌘ 中的至少一个。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include at least one of ⌃, ⌥ or ⌘."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃・⌥・⌘ のいずれかを含めてください。"
           }
         }
       }

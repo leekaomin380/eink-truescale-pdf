@@ -81,6 +81,15 @@
       需要热键的用户仍可用 Shortcuts.app 绑定（README 有一分钟的配置步骤）。
       任务书 `tasks/T-007.md` 保留作记录，不再执行。
 
+- [x] **2026-11-02 推翻上条，内建全局热键（1.2.2）**
+      前提变了：使用者重新天天用 ⌃1，又要加 ⌃2 截屏；而 Shortcuts.app 这条路实际出过问题——
+      App 改名后命令指向不存在的路径，⌃1 静默失效，排查要读 Shortcuts 数据库才找到原因。
+      第二个快捷键意味着再走一遍一分钟的手工步骤。常驻菜单栏的代价实测不大（约 68 MB 内存、
+      CPU 0.4%），还顺带让 USB 自动切换网卡模式不必开着窗口。
+      实现：`gui/mac/GlobalHotkeys.swift`（Carbon `RegisterEventHotKey`，可改键、可关；登录项用
+      `SMAppService.mainApp`）。注意：Shortcuts 服务的键盘快捷键（pbs 的 `key_equivalent`）会先于
+      Carbon 热键截走同一组合（实测 ⌃1 被旧快捷指令截走、两边都不触发），迁移时要删掉旧绑定。
+
 ---
 
 ## 分发准备

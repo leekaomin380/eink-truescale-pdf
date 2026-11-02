@@ -5,6 +5,23 @@ version tags have been cut yet — everything below is `Unreleased`, seeded
 retrospectively from the project's git history to give newcomers a map without
 requiring them to read every commit.
 
+## [1.2.2] — 2026-11-02
+
+### Changed
+- Finder right-click **Send to QUADERNO** no longer shows the app: it hands the foreground back
+  to Finder, and when the app was not running it works without a window or Dock icon and quits
+  when the delivery finishes.
+
+### Added
+- Finder right-click delivery for EPUB, typeset as a book with the ⌃1 / Finder layout.
+- Built-in global hotkeys: ⌃1 sends the clipboard, ⌃2 saves a device screenshot. No setup in
+  the Shortcuts app; change or turn them off in Settings → Hotkeys. Remove an old ⌃1 binding
+  in the Shortcuts app, which would otherwise take the key first.
+- Screenshots are named after the open document and page (e.g. `Reading notes p3 2026-11-02 14.05.12.png`)
+  instead of only the time, and a copy also goes to the Desktop (Settings → Screenshot, on by default).
+- The app stays in the menu bar when its window is closed, so hotkeys and automatic USB
+  network switching keep working; optional Open at Login.
+
 ## [1.2.1] — 2026-11-01
 
 ### Changed

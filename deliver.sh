@@ -82,6 +82,27 @@ render_upload() {
   RESULT=$("$DIRECT_HELPER" "${args[@]}")
   RESULT_CODE=$?
 }
+# EPUB：用 book.sh 排版（分章、目录、书签），排版参数沿用「⌃1 与 Finder 投递的排版」，再原样上传。
+book_upload() {
+  local file="$1" out="$JOBDIR/${1:t:r}.pdf" layout value
+  local -a bargs=(--size "$BODY_SIZE" --margin "$PAGE_MARGIN" --leading "$LEADING" --lang "$DOC_LANG"
+    --font "${(j:,:)FONTS}" --page "$PAGE_W" "$PAGE_H")
+  layout=$("$DIRECT_HELPER" layout 2>/dev/null)
+  if [[ -n "$layout" && "$layout" != "{}" ]]; then
+    field() { printf '%s' "$layout" | /usr/bin/plutil -extract "$1" raw -o - - 2>/dev/null; }
+    bargs=(--size "$(field bodySize)" --margin "$(field margin)" --leading "$(field leading)"
+      --lang "$(field docLang)" --font "$(field latinFont),$(field cjkFont)"
+      --page "$(field pageW)" "$(field pageH)")
+    [[ "$(field printTime)" == true ]] && bargs+=(--time) || bargs+=(--no-time)
+  fi
+  if ! "$SCRIPT_DIR/book.sh" "$file" -o "$out" "${bargs[@]}" >/dev/null 2>"$JOBDIR/book.log"; then
+    RESULT="$(tail -n 1 "$JOBDIR/book.log")"; RESULT_CODE=1
+    rm -f "$out" "$JOBDIR/book.log"
+    return
+  fi
+  RESULT=$("$DIRECT_HELPER" upload --file "$out"); RESULT_CODE=$?
+  rm -f "$out" "$JOBDIR/book.log"
+}
 result_message() {
   printf '%s' "$RESULT" | /usr/bin/plutil -extract message raw -o - - 2>/dev/null || print -r -- "$1"
 }
@@ -100,7 +121,7 @@ if [[ "${1:-}" == "--screenshot" ]]; then
   exit 0
 fi
 
-# Finder 右键「投递到 QUADERNO」：PDF 原样上传；Markdown / 纯文本按 Ctrl+1 排版渲染，沿用文件名。
+# Finder 右键「投递到 QUADERNO」：PDF 原样上传；Markdown / 纯文本按 Ctrl+1 排版渲染；EPUB 按书排版，均沿用文件名。
 if [[ "${1:-}" == "--files" ]]; then
   shift
   export QUADERNO_SOURCE=finder
@@ -111,7 +132,14 @@ if [[ "${1:-}" == "--files" ]]; then
     case "${file:e:l}" in
       pdf) RESULT=$("$DIRECT_HELPER" upload --file "$file"); RESULT_CODE=$? ;;
       md|markdown|txt) render_upload "$file" "${file:t:r}" ;;
-      *) FAILURES+=("$(t "{file}：暂只支持 PDF、Markdown 和 TXT" "file=${file:t}")"); continue ;;
+      epub)
+        notify "$(t "TrueScale · 正在排版")" "$(t "{file}，完成后自动投递" "file=${file:t}")"
+        book_upload "$file"
+        if (( RESULT_CODE != 0 )) && [[ "$RESULT" != \{* ]]; then
+          print -ru2 -- "$RESULT"
+          FAILURES+=("$(t "{file}：电子书排版失败" "file=${file:t}")"); continue
+        fi ;;
+      *) FAILURES+=("$(t "{file}：暂只支持 PDF、EPUB、Markdown 和 TXT" "file=${file:t}")"); continue ;;
     esac
     if (( RESULT_CODE == 0 )); then
       (( SENT++ ))
@@ -134,7 +162,13 @@ fi
 
 # 自动命名仅属于剪贴板入口，不改变主窗口手动输入标题的规则。
 export QUADERNO_SOURCE=clipboard
-pbpaste > "$JOBDIR/input.md"
+# App 的 ⌃1 先在 App 进程内读剪贴板再交给本脚本：macOS 15.4 起程序读取通用剪贴板需要用户授权，
+# App 调起的 pbpaste 读到的是空内容且不会弹出授权（2026-11-02 实测）。命令行与快捷指令仍用 pbpaste。
+if [[ "${1:-}" == "--clipboard-file" && -n "${2:-}" ]]; then
+  cat -- "$2" > "$JOBDIR/input.md"
+else
+  pbpaste > "$JOBDIR/input.md"
+fi
 [[ -n "$(tr -d '[:space:]' < "$JOBDIR/input.md")" ]] || fail "$(t "剪贴板为空，已取消")" 1
 # Single process: authenticate while rendering, then upload, open and verify.
 render_upload "$JOBDIR/input.md"

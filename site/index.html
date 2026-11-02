@@ -190,7 +190,7 @@ footer p { margin: 6px 0; max-width: 60em; }
           <div class="way">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
             <h3 data-i18n="ways.finder">Right-click in Finder</h3>
-            <p data-i18n="ways.finderText">“Send to QUADERNO” on any PDF, Markdown or text file. Several at once.</p>
+            <p data-i18n="ways.finderText">“Send to QUADERNO” on any PDF, EPUB, Markdown or text file. Several at once, with no window.</p>
           </div>
           <div class="way">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5z"/><path d="M14 4v5h5M8 13h8M8 17h6"/></svg>
@@ -200,7 +200,7 @@ footer p { margin: 6px 0; max-width: 60em; }
           <div class="way">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/><path d="M8 3h3"/></svg>
             <h3 data-i18n="ways.shot">Screenshots, back to the Mac</h3>
-            <p data-i18n="ways.shotText">One click saves the device screen — handwriting included — as PNG, JPEG or a true-size PDF into a folder you chose once.</p>
+            <p data-i18n="ways.shotText">⌃2 or one click saves the device screen — handwriting included — as PNG, JPEG or a true-size PDF into a folder you chose once.</p>
           </div>
         </div>
       </div>
@@ -226,7 +226,7 @@ footer p { margin: 6px 0; max-width: 60em; }
         <ol class="steps">
           <li><div data-i18n="start.1">Download the app and drag it into Applications.</div></li>
           <li><div data-i18n="start.2">Connect your QUADERNO by USB. The setup guide opens by itself.</div></li>
-          <li><div data-i18n="start.3">Import Pairing, then Check. Right-click sending works immediately; ⌃1 takes one more minute in the Shortcuts app.</div></li>
+          <li><div data-i18n="start.3">Import Pairing, then Check. Right-click sending, ⌃1 and ⌃2 work immediately — no setup in the Shortcuts app.</div></li>
         </ol>
         <ul class="requirements">
           <li data-i18n="req.mac">Apple Silicon Mac, macOS 14 or later.</li>
@@ -265,9 +265,9 @@ const strings = {
     "ways.title": "四个入口，没有一个需要弹窗",
     "ways.intro": "投递的文件都保存到设备的 Received，并在屏幕上打开。设备上的任何文件都不会被覆盖。",
     "ways.hotkey": "剪贴板 + ⌃1", "ways.hotkeyText": "复制任意文字或 Markdown，按 ⌃1。自动命名、排版、投递，约两秒。",
-    "ways.finder": "Finder 右键", "ways.finderText": "对 PDF、Markdown 或文本文件选择「投递到 QUADERNO」，可以多选。",
+    "ways.finder": "Finder 右键", "ways.finderText": "对 PDF、EPUB、Markdown 或文本文件选择「投递到 QUADERNO」，可以多选，不弹出窗口。",
     "ways.books": "电子书与网页文章", "ways.booksText": "EPUB、MOBI、FB2、HTML 和微信公众号文章，带目录与书签。",
-    "ways.shot": "截屏，传回 Mac", "ways.shotText": "一下保存设备屏幕（包括手写笔迹），格式可选 PNG、JPEG 或实际尺寸的 PDF，存进预先选好的文件夹。",
+    "ways.shot": "截屏，传回 Mac", "ways.shotText": "按 ⌃2 或点一下，保存设备屏幕（包括手写笔迹），格式可选 PNG、JPEG 或实际尺寸的 PDF，存进预先选好的文件夹。",
     "feat.title": "可以放心交给它的笔记",
     "feat.direct": "USB 或 Wi-Fi 直连", "feat.directText": "直接和设备通信，不需要打开 QUADERNO PC App。",
     "feat.verify": "回读校验", "feat.verifyText": "每次上传后都会读回文件、核对 SHA-256，确认无误才算送达。",
@@ -278,7 +278,7 @@ const strings = {
     "start.title": "开始使用",
     "start.1": "下载 App，拖进「应用程序」。",
     "start.2": "用 USB 连接 QUADERNO，设置向导会自动打开。",
-    "start.3": "导入配对，然后自检。Finder 右键投递立即可用；⌃1 还需要在「快捷指令」里花一分钟设置。",
+    "start.3": "导入配对，然后自检。Finder 右键投递、⌃1 和 ⌃2 立即可用，无需在「快捷指令」里设置。",
     "req.mac": "Apple Silicon 芯片的 Mac，macOS 14 或更新版本。",
     "req.device": "FUJITSU QUADERNO A5（FMVDP51）已实测。A4（FMVDP41）可用，但页面尺寸目前是推算值，尚未实测。",
     "req.pairing": "需要这台 Mac 上已有 QUADERNO PC App 建立过一次的配对。用 PIN 全新配对尚未实现。",
@@ -305,9 +305,9 @@ const strings = {
     "ways.title": "4 つの入口、どれもダイアログなし",
     "ways.intro": "送ったファイルは端末の Received に保存され、画面に表示されます。端末上のファイルを上書きすることはありません。",
     "ways.hotkey": "クリップボード + ⌃1", "ways.hotkeyText": "テキストや Markdown をコピーして ⌃1。命名・組版・送信まで約 2 秒。",
-    "ways.finder": "Finder の右クリック", "ways.finderText": "PDF・Markdown・テキストファイルで「QUADERNO へ送信」。複数選択もできます。",
+    "ways.finder": "Finder の右クリック", "ways.finderText": "PDF・EPUB・Markdown・テキストファイルで「QUADERNO へ送信」。複数選択でき、ウインドウも開きません。",
     "ways.books": "電子書籍と Web 記事", "ways.booksText": "EPUB・MOBI・FB2・HTML、WeChat の記事にも対応。目次としおり付き。",
-    "ways.shot": "スクリーンショットを Mac へ", "ways.shotText": "端末の画面を手書きごと、PNG・JPEG・実寸 PDF でワンクリック保存。保存先は一度決めるだけ。",
+    "ways.shot": "スクリーンショットを Mac へ", "ways.shotText": "端末の画面を手書きごと、PNG・JPEG・実寸 PDF で保存。⌃2 かワンクリックで完了。保存先は一度決めるだけ。",
     "feat.title": "書き込みを任せられる作り",
     "feat.direct": "USB / Wi-Fi で直接接続", "feat.directText": "端末と直接やり取りします。QUADERNO PC App を開いておく必要はありません。",
     "feat.verify": "読み戻して照合", "feat.verifyText": "アップロードのたびに読み戻し、SHA-256 で照合してから送信完了とします。",
@@ -318,7 +318,7 @@ const strings = {
     "start.title": "使い始める",
     "start.1": "App をダウンロードし、アプリケーションフォルダーへドラッグします。",
     "start.2": "QUADERNO を USB で接続すると、設定ガイドが自動で開きます。",
-    "start.3": "ペアリングを移行し、セルフチェックを実行。Finder からの送信はすぐに使えます。⌃1 は「ショートカット」での設定にもう 1 分かかります。",
+    "start.3": "ペアリングを移行し、セルフチェックを実行。Finder からの送信、⌃1 と ⌃2 はすぐに使えます。「ショートカット」での設定は不要です。",
     "req.mac": "Apple Silicon 搭載の Mac、macOS 14 以降。",
     "req.device": "FUJITSU QUADERNO A5（FMVDP51）で実機確認済み。A4（FMVDP41）も使えますが、ページ寸法はまだ実測ではなく算出値です。",
     "req.pairing": "同じ Mac で QUADERNO PC App が一度作成したペアリングが必要です。PIN による新規ペアリングは未対応です。",

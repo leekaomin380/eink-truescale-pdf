@@ -71,12 +71,14 @@ Ctrl+1 默认共享「文件、文本、网页」当前共用的字号、字体�
 ## Finder 右键投递（2026-10-31）
 
 App 通过 `Info.plist` 的 `NSServices` 提供原生服务「发送到 QUADERNO」，不依赖 Automator 或快捷指令，也不需要安装步骤。
-在 Finder 中右键 PDF、Markdown 或 TXT 文件，该项出现在菜单底部（文件较多时在「服务」子菜单）。
+在 Finder 中右键 PDF、EPUB、Markdown 或 TXT 文件，该项出现在菜单底部（文件较多时在「服务」子菜单）。
 
-- PDF 原样上传；Markdown 和 TXT 按 Ctrl+1 排版渲染，文件名沿用原文件名。可多选。
+- PDF 原样上传；Markdown 和 TXT 按 Ctrl+1 排版渲染；EPUB 由 `book.sh` 按书排版（分章、目录、书签），排版参数同样取「⌃1 与 Finder 投递的排版」。文件名沿用原文件名。可多选。
 - 与 Ctrl+1 相同：保存到 `Document/Received/`，回读校验，不覆盖同名文件，结果以系统通知显示。
-- `FinderSendService` 收到文件后立即返回，后台执行 App 包内的 `deliver.sh --files`。App 未运行时由系统启动。
-- 其他格式（EPUB 等）会提示暂不支持，不上传。
+- `FinderSendService` 收到文件后立即返回，后台执行 App 包内的 `deliver.sh --files`。
+- 不显示界面（2026-11-02）：系统在送来服务请求前会把 App 切到前台，App 收到请求后把前台还给原来的程序（通常是 Finder）。
+  App 未运行时由系统启动；这时 `NSApplicationLaunchIsDefaultLaunchKey` 为 false，App 不开窗口、不进 Dock（`LSUIElement`，正常启动时再转为普通 App），投递结束后自行退出；30 秒内没收到请求也退出。
+- 其他格式会提示暂不支持，不上传。
 - 菜单项未出现：在「系统设置 → 键盘 → 键盘快捷键 → 服务 → 文件和文件夹」中勾选。
 
 验证：通过 `NSPerformService` 调用服务，设备侧完成上传事务。
@@ -122,4 +124,21 @@ Finder 右键在 App 未运行时同样可用。实测写入后约 1 秒变为 0
 JPEG（质量 90）或 PDF（227.18 dpi，页面即屏幕实际尺寸 156.97 × 209.30 mm）。
 
 保存位置与格式在「设置 → 截屏导出」中设置一次，默认「图片 / QUADERNO 截屏」、PNG。
-工具栏相机按钮（⌘⇧S）或 `deliver.sh --screenshot`（可在快捷指令中绑定 ⌃2）一步保存，文件按时间命名，不覆盖。
+工具栏相机按钮（⌘⇧S）、全局快捷键 ⌃2 或 `deliver.sh --screenshot` 一步保存，同名时加序号，不覆盖。
+
+- 命名（2026-11-02）：截屏前读 `GET /viewer/status/current_viewing`，取 `views[0]` 的 `title`（去掉剪贴板投递加的
+  `_YYYYMMDD-HHMMSS`）和 `current_page`，双页显示时写成「第3–4页」，再接时间，如「读书笔记 第3页 2026-11-02 14.05.12.png」。
+  主屏幕没有打开文档时 `views` 为空，退回「QUADERNO 截屏 + 时间」。读取失败不影响截屏。
+- 桌面副本：设置「同时在桌面放一份」（偏好键 `ScreenshotDesktopCopy`，默认开）时，另复制一份到 `~/Desktop`；
+  保存位置本身就是桌面时不重复。
+
+## 全局快捷键与常驻（2026-11-02）
+
+App 用 Carbon `RegisterEventHotKey` 注册 ⌃1（剪贴板投递）与 ⌃2（截屏），不需要辅助功能权限，也不经过快捷指令；
+在「设置 → 快捷键」中可改键、可关闭，注册失败（组合被占用）时在该处提示。按下后在后台运行 App 包内的 `deliver.sh`，
+结果以系统通知显示，不打开窗口。
+
+- 关闭窗口不退出：App 收起 Dock 图标，留在菜单栏；菜单栏菜单有投递剪贴板、截屏、打开、设置、退出。
+- 常驻期间持续监视 USB，插上设备即切换为网卡模式，不必打开窗口。
+- 「登录时启动」用 `SMAppService.mainApp`；登录项启动时不开窗口。
+- Shortcuts.app 中旧的 ⌃1 绑定（服务的 `key_equivalent`）会先截走按键，导致两边都不触发，需删除。

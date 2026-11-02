@@ -1,5 +1,6 @@
 """Offline invariants: clipboard naming, source preservation, no overwrite, pinned transport."""
 import hashlib
+import json
 import importlib.util
 import os
 from pathlib import Path
@@ -601,10 +602,32 @@ class ScreenshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             first = device.screenshot(temp, 'png')
             second = device.screenshot(temp, 'png')
-            self.assertEqual(calls, ['/system/controls/screen_shot'] * 2)
+            self.assertEqual(calls, ['/system/controls/screen_shot', '/viewer/status/current_viewing'] * 2)
             self.assertNotEqual(first['path'], second['path'])  # same second: a numbered name, no overwrite
             self.assertEqual(Path(first['path']).read_bytes(), b'\x89PNG-data')
             self.assertTrue(Path(first['path']).name.startswith('QUADERNO 截屏 '))
+
+    def test_name_comes_from_the_open_document_and_a_copy_goes_to_the_desktop(self):
+        key = direct.RSA.generate(1024).export_key()
+        device = direct.Device({'address': 'Android.local'}, key, 'c')
+        # Shape taken from a real FMVDP51 response (2026-11-02).
+        viewing = {'orientation': 'portlait', 'view_mode': 'single', 'views': [{
+            'current_page': '3', 'entry_id': 'e1', 'entry_path': 'Document/Received/读书笔记_20261102-114850.pdf',
+            'title': '读书笔记_20261102-114850', 'total_page': '9'}]}
+        device.request = lambda method, endpoint, **kw: direct.Response(
+            200, {}, json.dumps(viewing).encode() if 'viewer' in endpoint else b'\x89PNG-data')
+        with tempfile.TemporaryDirectory() as folder, tempfile.TemporaryDirectory() as desktop:
+            result = device.screenshot(folder, 'png', desktop)
+            self.assertTrue(Path(result['path']).name.startswith('读书笔记 第3页 '))
+            self.assertEqual(Path(result['desktop_path']).parent, Path(desktop))
+            self.assertEqual(Path(result['desktop_path']).read_bytes(), b'\x89PNG-data')
+            # Saving into the Desktop itself makes no second copy.
+            self.assertNotIn('desktop_path', device.screenshot(desktop, 'png', desktop))
+
+    def test_home_screen_falls_back_to_the_generic_name(self):
+        self.assertIsNone(direct.viewing_label({'views': []}))
+        self.assertEqual(direct.viewing_label({'views': [{'title': 'a/b:c', 'entry_id': 'x', 'current_page': '2'},
+                                                        {'entry_id': 'x', 'current_page': '3'}]}), 'a_b_c 第2–3页')
 
     def test_settings_fall_back_to_pictures_and_png(self):
         with patch.object(direct, 'app_preference', return_value=None):
