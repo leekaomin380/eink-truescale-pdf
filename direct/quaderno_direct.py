@@ -52,6 +52,11 @@ MESSAGES = {
     'USB 上未检测到 QUADERNO，设备已断开。请重新插拔 USB 线后重试。': (
         'No QUADERNO found on USB — the device has disconnected. Unplug and reconnect the USB cable, then try again.',
         'USB 上に QUADERNO が見つかりません（接続が切れています）。USB ケーブルを挿し直してから再試行してください。'),
+    'QUADERNO 仍在 USB 上，但 USB 网络链路已断开，自动恢复未成功（常见于 Mac 睡眠唤醒后）。请重新插拔 USB 线后重试。': (
+        'The QUADERNO is still on USB, but its USB network link is down and automatic recovery failed '
+        '(common after the Mac wakes from sleep). Unplug and reconnect the USB cable, then try again.',
+        'QUADERNO は USB に接続されていますが、USB ネットワークのリンクが切れており、自動復旧に失敗しました'
+        '（Mac のスリープ解除後によく起こります）。USB ケーブルを挿し直してから再試行してください。'),
     '未找到可连接的已配对设备。': (
         'No reachable paired device was found.',
         '接続できるペアリング済み端末が見つかりません。'),
@@ -237,6 +242,11 @@ class UsbDisconnected(DirectError):
         super().__init__(tr('USB 上未检测到 QUADERNO，设备已断开。请重新插拔 USB 线后重试。'))
 
 
+class UsbLinkDown(DirectError):
+    def __init__(self):
+        super().__init__(tr('QUADERNO 仍在 USB 上，但 USB 网络链路已断开，自动恢复未成功（常见于 Mac 睡眠唤醒后）。请重新插拔 USB 线后重试。'))
+
+
 FUJITSU_USB_VENDOR = 0x04c5
 
 
@@ -295,6 +305,134 @@ def switch_to_network_mode(wait=10):
         if advertising_interfaces(dns_sd_output(['-B', '_dp_fujitsu._tcp', 'local.'], duration=1)):
             break
     return True
+
+
+NETWORK_MODE_PRODUCT = 0x1657
+IFM_AVALID, IFM_ACTIVE = 0x1, 0x2  # IOLinkStatus bits (IOKit/network/IONetworkMedium.h)
+
+
+def usb_link_down(ioreg_output):
+    """True when the QUADERNO is a USB network device whose Ethernet link reports inactive.
+
+    Observed 2026-11-04: when the Mac sleeps, en5 goes link_off; after the Mac wakes the device
+    stays enumerated (0x1657) but never raises the link again, even with its screen awake.
+    """
+    for block in ('\n' + ioreg_output).split('\n+-o ')[1:]:
+        if (f'"idVendor" = {FUJITSU_USB_VENDOR}' in block and
+                f'"idProduct" = {NETWORK_MODE_PRODUCT}' in block):
+            match = re.search(r'"IOLinkStatus" = (\d+)', block)
+            if not match:
+                return False  # no network driver attached yet: nothing to judge
+            status = int(match.group(1))
+            return bool(status & IFM_AVALID) and not status & IFM_ACTIVE
+    return False
+
+
+def reenumerate_quaderno():
+    """Software replug: ask macOS to re-enumerate the QUADERNO. No root needed (verified 2026-11-04).
+
+    Calls IOUSBDeviceInterface187::USBDeviceReEnumerate through ctypes; vtable slots and UUIDs
+    were taken from the macOS SDK headers with offsetof (Release 3, Open 8, Close 9, ReEnumerate 37).
+    Returns True when the request was accepted.
+    """
+    import ctypes
+    iokit = ctypes.CDLL('/System/Library/Frameworks/IOKit.framework/IOKit')
+    cf = ctypes.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+    cf.CFUUIDGetConstantUUIDWithBytes.restype = ctypes.c_void_p
+    cf.CFUUIDGetConstantUUIDWithBytes.argtypes = [ctypes.c_void_p] + [ctypes.c_uint8] * 16
+    iokit.IOServiceNameMatching.restype = ctypes.c_void_p
+    iokit.IOServiceNameMatching.argtypes = [ctypes.c_char_p]
+    iokit.IOServiceGetMatchingServices.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    iokit.IOIteratorNext.restype = ctypes.c_uint32
+    iokit.IOIteratorNext.argtypes = [ctypes.c_uint32]
+    iokit.IOObjectRelease.argtypes = [ctypes.c_uint32]
+    iokit.IOCreatePlugInInterfaceForService.argtypes = [
+        ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_int32)]
+
+    def uuid_ref(hex_bytes):
+        return cf.CFUUIDGetConstantUUIDWithBytes(None, *bytes.fromhex(hex_bytes))
+
+    class UUIDBytes(ctypes.Structure):
+        _fields_ = [('bytes', ctypes.c_uint8 * 16)]
+
+    user_client = uuid_ref('9dc7b7809ec011d4a54f000a27052861')  # kIOUSBDeviceUserClientTypeID
+    plugin_id = uuid_ref('c244e858109c11d491d40050e4c6426f')    # kIOCFPlugInInterfaceID
+    device_187 = UUIDBytes((ctypes.c_uint8 * 16)(*bytes.fromhex('3c9ee1eb240211b28e7e000a27801e86')))
+
+    def method(instance, slot, restype, *argtypes):
+        vtable = ctypes.cast(ctypes.cast(instance, ctypes.POINTER(ctypes.c_void_p))[0],
+                             ctypes.POINTER(ctypes.c_void_p))
+        return ctypes.CFUNCTYPE(restype, ctypes.c_void_p, *argtypes)(vtable[slot])
+
+    requested = False
+    for name in (b'FMVDP51', b'FMVDP41'):  # A5 / A4
+        iterator = ctypes.c_uint32()
+        # IOServiceGetMatchingServices consumes the matching dictionary.
+        if iokit.IOServiceGetMatchingServices(0, iokit.IOServiceNameMatching(name), ctypes.byref(iterator)):
+            continue
+        try:
+            while service := iokit.IOIteratorNext(iterator):
+                try:
+                    plugin, score = ctypes.c_void_p(), ctypes.c_int32()
+                    if iokit.IOCreatePlugInInterfaceForService(service, user_client, plugin_id,
+                                                               ctypes.byref(plugin), ctypes.byref(score)):
+                        continue
+                    device = ctypes.c_void_p()
+                    method(plugin, 1, ctypes.c_int32, UUIDBytes, ctypes.POINTER(ctypes.c_void_p))(
+                        plugin, device_187, ctypes.byref(device))
+                    method(plugin, 3, ctypes.c_uint32)(plugin)
+                    if not device:
+                        continue
+                    try:
+                        if method(device, 8, ctypes.c_int32)(device) == 0:  # USBDeviceOpen
+                            requested |= method(device, 37, ctypes.c_int32, ctypes.c_uint32)(device, 0) == 0
+                            method(device, 9, ctypes.c_int32)(device)    # USBDeviceClose
+                    finally:
+                        method(device, 3, ctypes.c_uint32)(device)
+                finally:
+                    iokit.IOObjectRelease(service)
+        finally:
+            iokit.IOObjectRelease(iterator.value)
+    return requested
+
+
+def usb_link_stuck_now():
+    try:
+        output = subprocess.run(['/usr/sbin/ioreg', '-r', '-c', 'IOUSBHostDevice', '-l'],
+                                capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return usb_link_down(output)
+
+
+def recover_usb_link(wait=12):
+    """Re-enumerate a QUADERNO whose USB link is stuck down. True when a recovery was attempted."""
+    if not usb_link_stuck_now():
+        return False
+    try:
+        if not reenumerate_quaderno():
+            return False
+    except (OSError, AttributeError):
+        return False
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:  # measured: link active within ~2 s, still in 0x1657
+        time.sleep(0.5)
+        try:
+            switch_to_network_mode(wait=max(1, deadline - time.monotonic()))  # in case it came back as serial
+        except OSError:
+            pass
+        if advertising_interfaces(dns_sd_output(['-B', '_dp_fujitsu._tcp', 'local.'], duration=1)):
+            break
+    return True
+
+
+def prepare_usb():
+    """Bring a USB-attached QUADERNO to a reachable state; failures are left to discovery to report."""
+    try:
+        switch_to_network_mode()
+    except OSError:
+        pass  # port busy or gone: the official app may be switching it; carry on and let discovery decide
+    recover_usb_link()
 
 
 def quaderno_on_usb():
@@ -383,8 +521,13 @@ def discover_endpoints(address):
     # The device can drop off the USB bus while still plugged in; it then stays gone
     # until replugged. Fail at once instead of timing out against a same-named LAN host.
     # A Wi-Fi connection still advertises the service, so it is never blocked here.
-    if not advertising_interfaces(service_output) and quaderno_on_usb() is False:
-        raise UsbDisconnected()
+    if not advertising_interfaces(service_output):
+        if quaderno_on_usb() is False:
+            raise UsbDisconnected()
+        # Still on USB but the link is down (recovery already ran in prepare_usb):
+        # say so instead of timing out against a same-named LAN host.
+        if usb_link_stuck_now():
+            raise UsbLinkDown()
     return found or [address]
 
 
@@ -766,10 +909,7 @@ def connect_device():
     if os.environ.get('QUADERNO_DIRECT_DISABLED') == '1':  # exercise the fallback path on purpose
         raise DeviceUnreachable(tr('设备地址无法连接，请检查 USB / Wi-Fi 和设备唤醒状态。'))
     try:
-        try:
-            switch_to_network_mode()
-        except OSError:
-            pass  # port busy or gone: the official app may be switching it; carry on and let discovery decide
+        prepare_usb()
         device = load_device()
         device.authenticate()
         return device
@@ -1126,7 +1266,7 @@ def main():
             if args.action == 'import-pairing':
                 result = import_pairing(args.address)
             elif args.action == 'check':
-                switch_to_network_mode()
+                prepare_usb()
                 result = load_device().check()
             elif args.action == 'usb-switch':
                 switched = switch_to_network_mode()

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 os.environ['QUADERNO_LANG'] = 'zh-Hans'  # assertions below use the source-language text
 spec = importlib.util.spec_from_file_location('direct', Path(__file__).parents[1] / 'direct/quaderno_direct.py')
@@ -16,6 +16,9 @@ spec.loader.exec_module(direct)
 direct.ROOT = Path(tempfile.mkdtemp()) / 'Direct'
 # Never write to a real serial port from tests (connect_device switches USB mode first).
 direct.switch_to_network_mode = lambda wait=10: False
+# Never re-enumerate the real USB device from tests; UsbLinkTests exercises the original.
+REAL_RECOVER_USB_LINK = direct.recover_usb_link
+direct.recover_usb_link = lambda wait=12: False
 
 
 class NamingTests(unittest.TestCase):
@@ -187,8 +190,19 @@ class DiscoveryTests(unittest.TestCase):
             def dns_sd(arguments, duration=0.8):
                 return lan if arguments[0] == '-G' else service_output
             with patch.object(direct, 'dns_sd_output', side_effect=dns_sd), \
-                 patch.object(direct, 'quaderno_on_usb', return_value=on_usb):
+                 patch.object(direct, 'quaderno_on_usb', return_value=on_usb), \
+                 patch.object(direct, 'usb_link_stuck_now', return_value=False):
                 self.assertEqual(direct.discover_endpoints('Android.local'), ['192.168.31.40'])
+
+    def test_stuck_usb_link_fails_fast_with_its_own_message(self):
+        lan = "10:00:00 Add 40000003 11 Android.local. 192.168.31.40 120"
+        def dns_sd(arguments, duration=0.8):
+            return lan if arguments[0] == '-G' else ''
+        with patch.object(direct, 'dns_sd_output', side_effect=dns_sd), \
+             patch.object(direct, 'quaderno_on_usb', return_value=True), \
+             patch.object(direct, 'usb_link_stuck_now', return_value=True):
+            with self.assertRaises(direct.UsbLinkDown):
+                direct.discover_endpoints('Android.local')
 
     def test_ioreg_detection_requires_fujitsu_vendor_and_model(self):
         quaderno = '+-o FMVDP51@00100000  <class IOUSBHostDevice>\n  {\n    "USB Product Name" = "FMVDP51"\n    "idVendor" = 1221\n  }\n'
@@ -591,6 +605,48 @@ class SerialModeTests(unittest.TestCase):
         self.assertIsNone(direct.serial_mode_port(network))
         self.assertIsNone(direct.serial_mode_port(other))
         self.assertEqual(direct.CDC_ECM_SWITCH, bytes([1, 0, 0, 1, 0, 0, 0, 1, 1, 4]))
+
+
+class UsbLinkTests(unittest.TestCase):
+    NETWORK = ('+-o FMVDP51@00100000  <class IOUSBHostDevice>\n  "idProduct" = 5719\n  "USB Product Name" = "FMVDP51"\n'
+               '  "idVendor" = 1221\n  +-o CDC Ethernet Control Model (ECM)@0\n  | +-o AppleUserECM\n'
+               '  |   | |   "IOLinkStatus" = {status}\n  |   |   |   "BSD Name" = "en5"\n')
+
+    def test_link_down_only_for_a_network_mode_quaderno_reporting_inactive(self):
+        other = '+-o Dock@00200000\n  "idProduct" = 5719\n  "idVendor" = 1452\n  "IOLinkStatus" = 1\n'
+        self.assertTrue(direct.usb_link_down(other + self.NETWORK.format(status=1)))
+        self.assertFalse(direct.usb_link_down(self.NETWORK.format(status=3)))
+        self.assertFalse(direct.usb_link_down(self.NETWORK.format(status=0)))  # status not valid: do not act
+        self.assertFalse(direct.usb_link_down(self.NETWORK.replace('  |   | |   "IOLinkStatus" = {status}\n', '')))
+        self.assertFalse(direct.usb_link_down(self.NETWORK.format(status=1).replace('5719', '5718')))
+        self.assertFalse(direct.usb_link_down(other))
+
+    def test_recovery_reenumerates_only_a_stuck_link_and_stops_once_advertised(self):
+        advertised = "10:00:00 Add 2 5 local. _dp_fujitsu._tcp. Digital Paper FMVDP51"
+        with patch.object(direct, 'usb_link_stuck_now', return_value=False), \
+             patch.object(direct, 'reenumerate_quaderno', side_effect=AssertionError('healthy link replugged')):
+            self.assertFalse(REAL_RECOVER_USB_LINK())
+        with patch.object(direct, 'usb_link_stuck_now', return_value=True), \
+             patch.object(direct, 'reenumerate_quaderno', return_value=True) as reenumerate, \
+             patch.object(direct, 'switch_to_network_mode', return_value=False), \
+             patch.object(direct, 'dns_sd_output', return_value=advertised) as browse, \
+             patch.object(direct.time, 'sleep'):
+            self.assertTrue(REAL_RECOVER_USB_LINK())
+        reenumerate.assert_called_once_with()
+        self.assertEqual(browse.call_count, 1)
+        with patch.object(direct, 'usb_link_stuck_now', return_value=True), \
+             patch.object(direct, 'reenumerate_quaderno', side_effect=OSError('IOKit unavailable')):
+            self.assertFalse(REAL_RECOVER_USB_LINK())
+
+    def test_connecting_switches_and_recovers_before_authenticating(self):
+        order = []
+        device = Mock()
+        device.authenticate.side_effect = lambda: order.append('auth')
+        with patch.object(direct, 'switch_to_network_mode', side_effect=lambda: order.append('switch')), \
+             patch.object(direct, 'recover_usb_link', side_effect=lambda: order.append('recover')), \
+             patch.object(direct, 'load_device', return_value=device):
+            self.assertIs(direct.connect_device(), device)
+        self.assertEqual(order, ['switch', 'recover', 'auth'])
 
 
 class ScreenshotTests(unittest.TestCase):
