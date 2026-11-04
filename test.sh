@@ -523,11 +523,14 @@ grep -A12 'Label("页面尺寸统一"' "$CV" | grep -q 'fixedSize(horizontal: tr
 # ---------------------------------------------------------------------------
 sec "底部操作区 · Quaderno 与另存按钮不得被垂直压缩出窗口"
 
+# 断言检查结构性不变量，不锁按钮文案：文案随本地化/原生重写变化时不应产生假阳性。
+# （2026-11-04 修正：原断言找 Text("发送到 Quaderno")，那是旧 HTML 版 GUI 的字面量。）
 if grep -A8 'sidebarFooter' "$CV" | grep -q 'fixedSize(horizontal: false, vertical: true)' \
-   && grep -q 'Text("发送到 Quaderno")' "$CV"; then
-  ok "底部操作区固定其固有高度，发送按钮保持可见"
+   && grep -A40 'private var actionButtons' "$CV" | grep -q 'deliverToDevice()' \
+   && grep -A40 'private var actionButtons' "$CV" | grep -q 'savePDF()'; then
+  ok "底部操作区固定其固有高度，投递与另存按钮保持可见"
 else
-  no "底部操作区仍可被压缩，发送到 Quaderno 按钮可能落到窗口外"
+  no "底部操作区仍可被压缩，投递按钮可能落到窗口外"
 fi
 
 # ---------------------------------------------------------------------------

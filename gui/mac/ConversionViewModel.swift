@@ -516,7 +516,7 @@ class ConversionViewModel: ObservableObject {
                 "--font", "\(selectedLatinFont),\(selectedCjkFont)",
                 "--page", config.pageW, config.pageH,
                 printTime ? "--time" : "--no-time"
-            ])
+            ], timeout: 1800)
 
             DispatchQueue.main.async { [self] in
                 isConverting = false
@@ -681,7 +681,7 @@ class ConversionViewModel: ObservableObject {
                 "--page", config.pageW, config.pageH,
                 printTime ? "--time" : "--no-time",
                 "--plain"
-            ])
+            ], timeout: 1800)
 
             DispatchQueue.main.async { [self] in
                 isConverting = false
@@ -961,11 +961,11 @@ class ConversionViewModel: ObservableObject {
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
         proc.arguments = ["-r", "-q", dest.path, "."]
         proc.currentDirectoryURL = dir
-        try proc.run()
-        proc.waitUntilExit()
-        guard proc.terminationStatus == 0 else {
-            throw NSError(domain: "Quaderno", code: Int(proc.terminationStatus),
-                userInfo: [NSLocalizedDescriptionKey: L("zip 命令失败")])
+        let outcome = ProcessRunner.run(proc, mode: .none, timeout: 120)
+        guard !outcome.timedOut, outcome.launchError.isEmpty, outcome.exitCode == 0 else {
+            let reason = outcome.launchError.isEmpty ? L("zip 命令失败") : outcome.launchError
+            throw NSError(domain: "Quaderno", code: Int(outcome.exitCode),
+                userInfo: [NSLocalizedDescriptionKey: reason + (outcome.timedOut ? " [timeout 120s]" : "")])
         }
     }
 
@@ -1015,7 +1015,10 @@ class ConversionViewModel: ObservableObject {
         return cmd   // 交给 Process 报错，调用方已有失败分支
     }
 
-    private func runShell(_ args: [String], cwd: URL? = nil) -> (stdout: String, stderr: String, exitCode: Int32) {
+    /// Pipes are drained concurrently and the child has a hard deadline; see ProcessRunner.
+    /// Long book.sh jobs pass a larger timeout, but none can hang the App indefinitely.
+    private func runShell(_ args: [String], cwd: URL? = nil,
+                          timeout: TimeInterval = 600) -> (stdout: String, stderr: String, exitCode: Int32) {
         let proc = Process()
         if let cwd = cwd { proc.currentDirectoryURL = cwd }
         // executableURL 不做 PATH 查找 —— 设 environment["PATH"] 只影响孙进程。
@@ -1029,31 +1032,14 @@ class ConversionViewModel: ObservableObject {
         env["LC_ALL"] = "en_US.UTF-8"
         proc.environment = env
 
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        proc.standardOutput = outPipe
-        proc.standardError = errPipe
-
-        do { try proc.run() } catch {
-            return ("", error.localizedDescription, -1)
-        }
-        // 两个管道必须在等待退出之前、并发地读完：管道缓冲约 64 KB，任何一路写满后子进程会阻塞在
-        // write 上，而先 waitUntilExit 再读就会互相等待、永久卡住（book.sh 整本书的警告、
-        // typst fonts --variants 的 131 KB 输出都足以触发）。stderr 在后台读，stdout 在当前线程读。
-        let errCollector = PipeCollector()
-        let errDone = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .utility).async {
-            errCollector.data = errPipe.fileHandleForReading.readDataToEndOfFile()
-            errDone.signal()
-        }
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        errDone.wait()
-        proc.waitUntilExit()
-        let errData = errCollector.data
+        let outcome = ProcessRunner.run(proc, mode: .separate, timeout: timeout)
+        var err = String(data: outcome.stderr, encoding: .utf8) ?? ""
+        if !outcome.launchError.isEmpty { err += outcome.launchError }
+        if outcome.timedOut { err += "\n[timeout \(Int(timeout))s]" }
         return (
-            String(data: outData, encoding: .utf8) ?? "",
-            String(data: errData, encoding: .utf8) ?? "",
-            proc.terminationStatus
+            String(data: outcome.stdout, encoding: .utf8) ?? "",
+            err,
+            outcome.launchError.isEmpty && !outcome.timedOut ? outcome.exitCode : -1
         )
     }
 
@@ -1094,10 +1080,4 @@ class ConversionViewModel: ObservableObject {
 
         return lines.first(where: { $0.contains("❌") })?.replacingOccurrences(of: "❌ ", with: "") ?? L("渲染未完成")
     }
-}
-
-/// 后台读管道的结果容器。读写由 DispatchSemaphore 排序（后台线程写入后 signal，调用方 wait 后才读），
-/// 不会并发访问，故标为 @unchecked Sendable。
-private final class PipeCollector: @unchecked Sendable {
-    var data = Data()
 }

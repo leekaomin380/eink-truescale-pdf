@@ -542,6 +542,15 @@ def transfer_timeout(size):
     return BASE_REQUEST_SECONDS + -(-max(0, size) // MIN_TRANSFER_BYTES_PER_SECOND)
 
 
+def file_sha256(path):
+    """Hash a file in 1 MiB chunks: peak memory is bounded, not proportional to file size."""
+    digest = hashlib.sha256()
+    with open(path, 'rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 class Response:
     def __init__(self, status, headers, content):
         self.status_code, self.headers, self.content = status, headers, content
@@ -558,9 +567,11 @@ class Device:
         self.target = settings.get('address', '')
         self.base = 'https://digitalpaper.local:8443'
 
-    def request(self, method, endpoint, *, json_body=None, source=None, allow_missing=False, transfer_size=0):
+    def request(self, method, endpoint, *, json_body=None, source=None, allow_missing=False,
+                transfer_size=0, verify_sha256=None):
         # System curl resolves USB mDNS correctly on macOS; no proxy or external runtime.
         # transfer_size: bytes expected to move (upload / readback); scales the total time limit.
+        # verify_sha256: hash the curl output file in chunks instead of loading it into memory.
         max_time = transfer_timeout(transfer_size)
         with tempfile.TemporaryDirectory(prefix='quaderno-http-') as directory:
             directory = Path(directory)
@@ -596,12 +607,17 @@ class Device:
                 if ':' in line:
                     key, value = line.split(':', 1)
                     header_map[key.lower()] = value.strip()
-            response = Response(status, header_map, output.read_bytes())
             if status == 404 and allow_missing:
                 return None
             if not 200 <= status < 300:
                 raise DeviceResponseError(status)
-            return response
+            if verify_sha256 is not None:
+                # curl already wrote the body to disk; verify it there and return no body bytes.
+                # A full readback of a 1 GB PDF must not allocate 1 GB of Python heap.
+                if file_sha256(output) != verify_sha256:
+                    raise DirectError(tr('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。'))
+                return Response(status, header_map, b'')
+            return Response(status, header_map, output.read_bytes())
 
     def cached_endpoint(self):
         if not self.settings.get('address') or not self.settings.get('public_key_pin'):
@@ -800,7 +816,9 @@ class Device:
         remote = destination + '/' + source.name
         if self.resolve(remote):
             remote = destination + '/' + source.stem[:100] + '_' + uuid.uuid4().hex[:8] + '.pdf'
-        content = source.read_bytes()
+        # Size and hash come from stat/streaming, never from holding the whole PDF in memory.
+        size = source.stat().st_size
+        expected = file_sha256(source)
         created = self.request('POST', '/documents2', json_body={
             'file_name': remote.split('/')[-1], 'parent_folder_id': parent['entry_id'],
             'document_source': ''}).json()
@@ -808,7 +826,7 @@ class Device:
         # From here until readback passes, a failure leaves an entry with missing or wrong content
         # on the device: remove it (or remember it for the next connection) before reporting.
         try:
-            self.request('PUT', '/documents/' + document_id + '/file', source=source, transfer_size=len(content))
+            self.request('PUT', '/documents/' + document_id + '/file', source=source, transfer_size=size)
             # Start device rendering immediately after the complete upload.
             # Success is still withheld until readback and directory verification finish.
             display_requested = False
@@ -818,10 +836,9 @@ class Device:
                 display_requested = True
             except (DirectError, OSError, subprocess.TimeoutExpired):
                 pass
-            expected = hashlib.sha256(content).hexdigest()
-            readback = self.request('GET', '/documents/' + document_id + '/file', transfer_size=len(content))
-            if hashlib.sha256(readback.content).hexdigest() != expected:
-                raise DirectError(tr('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。'))
+            # request() hashes curl's output file in chunks and returns no body bytes.
+            self.request('GET', '/documents/' + document_id + '/file',
+                         transfer_size=size, verify_sha256=expected)
         except BaseException:
             self.discard_incomplete(document_id)
             raise

@@ -133,8 +133,7 @@ final class FinderSendService: NSObject {
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = [script.path, "--files"] + urls.map(\.path)
             process.environment = helperEnvironment()
-            try? process.run()
-            process.waitUntilExit()
+            _ = ProcessRunner.run(process, mode: .none, timeout: 3600)
         }
     }
 }

@@ -81,7 +81,11 @@ class TransportTests(unittest.TestCase):
             device.request = request
             result = device.upload(source)
             self.assertEqual(result['sha256'], hashlib.sha256(source.read_bytes()).hexdigest())
-            self.assertIn(('GET', '/documents/new/file', {'transfer_size': len(b'%PDF-test-content')}), calls)
+            get_kwargs = [kw for m, ep, kw in calls if m == 'GET' and ep == '/documents/new/file']
+            self.assertEqual(len(get_kwargs), 1)
+            self.assertEqual(get_kwargs[0]['transfer_size'], len(b'%PDF-test-content'))
+            self.assertEqual(get_kwargs[0]['verify_sha256'],
+                             hashlib.sha256(b'%PDF-test-content').hexdigest())
             self.assertFalse(any(method == 'DELETE' for method, _, _ in calls))
             self.assertTrue(source.exists())
 
@@ -91,8 +95,14 @@ class TransportTests(unittest.TestCase):
             device = direct.Device({}, b'', '')
             device.authenticate = lambda: None
             device.resolve = lambda path: {'entry_id': 'root'} if path == 'Document/Received' else None
-            device.request = lambda method, endpoint, **kw: direct.Response(200, {},
-                b'{"document_id":"new"}' if method == 'POST' else b'wrong bytes')
+            def request(method, endpoint, **kw):
+                if method == 'POST':
+                    return direct.Response(201, {}, b'{"document_id":"new"}')
+                payload = b'wrong bytes'
+                if kw.get('verify_sha256') and hashlib.sha256(payload).hexdigest() != kw['verify_sha256']:
+                    raise direct.DirectError('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。')
+                return direct.Response(200, {}, payload)
+            device.request = request
             with self.assertRaisesRegex(direct.DirectError, '回读校验不一致'):
                 device.upload(source)
 
@@ -153,7 +163,11 @@ class InterruptedUploadTests(unittest.TestCase):
             if (method, endpoint) == fail:
                 raise direct.ConnectionFailure(56)
             if endpoint.endswith('/file') and method == 'GET':
-                return direct.Response(200, {}, b'corrupt' if fail == 'mismatch' else source.read_bytes())
+                payload = b'corrupt' if fail == 'mismatch' else source.read_bytes()
+                expected = kwargs.get('verify_sha256')
+                if expected and hashlib.sha256(payload).hexdigest() != expected:
+                    raise direct.DirectError('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。')
+                return direct.Response(200, {}, payload)
             return direct.Response(204, {}, b'')
         device.request = request
         return device
@@ -188,6 +202,62 @@ class InterruptedUploadTests(unittest.TestCase):
             with self.assertRaisesRegex(direct.DirectError, '设备目录未确认'):
                 self.device(source, None, deleted, listed=False).upload(source)
             self.assertEqual(deleted, [])
+
+
+class StreamingUploadTests(unittest.TestCase):
+    """Upload must not hold the whole PDF, or its readback, in memory."""
+
+    def test_file_sha256_spans_multiple_chunks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'big.pdf'
+            payload = b'%PDF-chunked' * 300000  # > 3 MiB, crosses several 1 MiB chunks
+            source.write_bytes(payload)
+            self.assertEqual(direct.file_sha256(source), hashlib.sha256(payload).hexdigest())
+
+    def test_upload_never_reads_source_as_one_blob(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / 'a.pdf'; source.write_bytes(b'%PDF-a')
+            device = direct.Device({'public_key_pin': 'sha256//pin'}, b'', '')
+            device.authenticate = lambda: None
+            device.resolve = lambda path: {'entry_id': 'root'} if path == 'Document/Received' else {'entry_id': 'new'}
+            seen = {}
+            def request(method, endpoint, **kwargs):
+                if method == 'GET' and endpoint.endswith('/file'):
+                    seen['verify'] = kwargs.get('verify_sha256')
+                    seen['size'] = kwargs.get('transfer_size')
+                    if seen['verify'] != hashlib.sha256(b'%PDF-a').hexdigest():
+                        raise direct.DirectError('回读校验不一致')
+                    return direct.Response(200, {}, b'')
+                return direct.Response(201 if method == 'POST' else 204, {},
+                                       b'{"document_id":"new"}' if method == 'POST' else b'')
+            device.request = request
+            original = Path.read_bytes
+            read_calls = []
+            def spy(path_self, *args, **kwargs):
+                read_calls.append(str(path_self))
+                return original(path_self, *args, **kwargs)
+            with patch.object(Path, 'read_bytes', spy):
+                result = device.upload(source)
+            self.assertTrue(result['ok'])
+            self.assertNotIn(str(source), read_calls)
+            self.assertEqual(seen['size'], len(b'%PDF-a'))
+            self.assertEqual(seen['verify'], hashlib.sha256(b'%PDF-a').hexdigest())
+
+    def test_request_verifies_readback_on_disk_without_loading_body(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = b'%PDF-streamed' * 1000
+            expected = hashlib.sha256(payload).hexdigest()
+            device = direct.Device({'address': 'a', 'public_key_pin': 'sha256//p'}, b'', '')
+            def fake_run(args, **kwargs):
+                Path(args[args.index('--dump-header') + 1]).write_text('HTTP/1.1 200 OK\n')
+                Path(args[args.index('--output') + 1]).write_bytes(payload)
+                return type('Result', (), {'returncode': 0, 'stdout': b'200'})()
+            with patch.object(direct.subprocess, 'run', side_effect=fake_run):
+                response = device.request('GET', '/documents/new/file',
+                                          transfer_size=len(payload), verify_sha256=expected)
+                self.assertEqual(response.content, b'')
+                with self.assertRaisesRegex(direct.DirectError, '回读校验不一致'):
+                    device.request('GET', '/documents/new/file', verify_sha256='0' * 64)
 
 
 class TransferTimeoutTests(unittest.TestCase):

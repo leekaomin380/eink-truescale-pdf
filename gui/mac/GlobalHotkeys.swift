@@ -203,8 +203,7 @@ final class GlobalHotkeys: ObservableObject {
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = arguments
             process.environment = helperEnvironment()
-            try? process.run()
-            process.waitUntilExit()
+            _ = ProcessRunner.run(process, mode: .none, timeout: 3600)
             if let clipboardFile { try? FileManager.default.removeItem(at: clipboardFile) }
             DispatchQueue.main.async { self.running -= 1 }
         }

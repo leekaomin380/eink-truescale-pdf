@@ -64,6 +64,7 @@ swiftc \
     "$MAC_DIR/DirectDelivery.swift" \
     "$MAC_DIR/ClipboardLayout.swift" \
     "$MAC_DIR/ConversionViewModel.swift" \
+    "$MAC_DIR/ProcessRunner.swift" \
     "$MAC_DIR/wechat/WeChatExtractor.swift" \
     "$MAC_DIR/wechat/ImageInliner.swift" \
     "$MAC_DIR/wechat/LocalExtraction.swift" \

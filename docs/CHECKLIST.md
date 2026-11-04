@@ -48,6 +48,7 @@
 ## 五、每次提交前
 
 - [ ] `tests/test_direct_delivery.py` 全部通过（使用 `.build/direct/venv/bin/python`）。
+- [ ] `./test.sh` 全部通过（74 项）。它断言的是排版 / UI / 脚本行为不变量，与上面的 Python 单测覆盖不同，不能互相代替；需要本机有 `pandoc`、`typst`、`pdfinfo`。
 - [ ] 改了直连工具：先 `zsh direct/build-helper.sh`，再 `zsh gui/build-app.sh`，否则 App 里打包的是旧版本。
 - [ ] 改了服务名或 App 路径：`lsregister` 中只剩一份当前登记（`lsregister -dump | grep "service id"`），
   旧的测试构建要注销，否则 Finder 菜单会出现重复项。

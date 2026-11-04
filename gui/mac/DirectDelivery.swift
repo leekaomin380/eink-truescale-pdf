@@ -18,21 +18,21 @@ enum DirectDelivery {
             process.executableURL = resources.appendingPathComponent("direct/quaderno-direct")
             process.arguments = arguments
             process.environment = helperEnvironment().merging(extra) { _, new in new }
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            do {
-                try process.run()
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                let output = String(decoding: data, as: UTF8.self)
-                let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-                return Result(success: process.terminationStatus == 0 && json?["ok"] as? Bool == true,
-                              message: json?["message"] as? String ?? L("直连失败，请检查设备连接"),
-                              details: output)
-            } catch {
-                return Result(success: false, message: L("无法运行直连工具"), details: error.localizedDescription)
+            // `.merged` keeps the legacy single-pipe JSON contract; only the deadline is new.
+            let outcome = ProcessRunner.run(process, mode: .merged, timeout: 3600)
+            let data = outcome.combined
+            let output = String(decoding: data, as: UTF8.self)
+            if !outcome.launchError.isEmpty {
+                return Result(success: false, message: L("无法运行直连工具"), details: outcome.launchError)
             }
+            if outcome.timedOut {
+                return Result(success: false, message: L("直连失败，请检查设备连接"),
+                              details: output + "\n[timeout 3600s]")
+            }
+            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            return Result(success: outcome.exitCode == 0 && json?["ok"] as? Bool == true,
+                          message: json?["message"] as? String ?? L("直连失败，请检查设备连接"),
+                          details: output)
         }.value
     }
 }

@@ -1,0 +1,26 @@
+# Portable gate: the Python invariants need no macOS toolchain.
+# test.sh is deliberately NOT run here — it asserts on SwiftUI source text and needs
+# pandoc / typst / pdfinfo plus macOS paths. It stays a local pre-commit / release gate
+# (docs/CHECKLIST.md §5, gui/release-github.sh).
+name: Python invariants
+
+on:
+  push:
+    branches: [master]
+    paths: ["direct/**", "tests/**", ".github/workflows/python-tests.yml"]
+  pull_request:
+    paths: ["direct/**", "tests/**", ".github/workflows/python-tests.yml"]
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install runtime dependencies used by quaderno_direct.py
+        run: python -m pip install --upgrade pip && python -m pip install pycryptodome==3.24.1 PyYAML==6.0.3
+      - name: Run direct-delivery invariants
+        run: python -m unittest tests/test_direct_delivery.py -v

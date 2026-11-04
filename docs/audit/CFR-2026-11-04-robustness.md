@@ -239,3 +239,61 @@
 - 该次测试写入 `history.jsonl` 的一条投递记录已移除（41/42 条保留，权限 `0600` 不变，备份 `/tmp/truescale-history-backup-20261104-212126.jsonl`）。
 - 本地临时样本保留在 `/tmp/TRUESCALE-THROUGHPUT-PROBE-20261104.pdf` 与 `/tmp/TRUESCALE-PROBE-READBACK.pdf`。
 - 未 push、未自合；`icon/` 与 `output/` 两个历史遗留未跟踪目录未纳入本轮提交。
+
+---
+
+## 7. 优先级动作落地：P0 三项（2026-11-04 21:50 后）
+
+对应上一轮评估清单的 P0-1 / P0-2 / P0-3；P1、P2、P3 各动作仍保持开放。
+
+### 7.1 P0-1 回归断言与质量闸门 / Quality Gate
+
+- `test.sh` 的「底部操作区」断言原先找 `Text("发送到 Quaderno")`（旧 HTML 版 GUI 的字面量），原生重写后按钮已改为 `Text("投递到 QUADERNO")`，导致 73/74 的假失败。断言改为检查**结构性不变量**：`sidebarFooter` 调用点的 `.fixedSize(horizontal: false, vertical: true)` + `actionButtons` 中仍存在 `deliverToDevice()` / `savePDF()`，不再锁定文案。
+- 闸门接入：`docs/CHECKLIST.md` §5 增列 `./test.sh`；`gui/release-github.sh` 在版本校验后增加预检（unittest → test.sh → `git diff --quiet` / `--cached --quiet`）；新增 `.github/workflows/python-tests.yml` 只跑可移植的 Python 不变量。
+- **取舍**：`test.sh` 的断言依赖 SwiftUI 源码文本与 macOS 上的 pandoc / typst / pdfinfo，不进 Ubuntu CI；它在本地提交前与发布前跑。CI 只承载与平台无关的 63 项单测。这区分了「行为不变量」与「实现快照」。
+- 结果：`./test.sh` → `全部通过 · 74 项断言`；`zsh -n` 对 `test.sh` 与 `release-github.sh` 通过；workflow YAML 解析通过。
+
+### 7.2 P0-2 上传链路去整文件内存驻留 / Bounded Memory
+
+- 新增 `file_sha256(path)`（1 MiB 分块）；`upload()` 改用 `source.stat().st_size` 与流式哈希，删除函数级的 `content` 变量。
+- `Device.request(..., verify_sha256=...)`：curl 把回读写到临时文件后，直接对该文件分块哈希比对，返回 `Response(content=b'')`，响应体不进入 Python 堆。404 / 非 2xx 判断前移到哈希之前，避免把错误页当作内容校验。
+- 新增 3 个单测：`file_sha256` 跨多分块一致；`upload()` 全程不调用 `Path.read_bytes()` 读取源 PDF（spy 断言），且 `transfer_size` / `verify_sha256` 正确下传；`request()` 校验通过时 `content == b''`、校验失败抛「回读校验不一致」。同步修正 3 处测试桩以模拟新的校验位置。
+- 结果：63 项单测 OK；真机 24 MiB 端到端 `upload` 4.47 s、SHA-256 一致，条目已删除、history 记录已清理。
+- **边界**：`download()` 仍用 `Response.content` 整份载入，不在本次动作范围；磁盘 I/O 由 1 次全量读变为 3 次顺序读（源哈希、curl PUT、curl 回读），以内存有界为交换。
+
+### 7.3 P0-3 子进程超时与终止 / Hard Deadline
+
+- 新增 `gui/mac/ProcessRunner.swift` 作为**单一收敛点**：并发排空 stdout / stderr（保留 64 KB 缓冲死锁的防线）、`DispatchGroup` 等待带硬超时、超时后 SIGTERM → 3 s 宽限 → SIGKILL → 2 s 收尾；区分 `.none` / `.separate` / `.merged` 三种捕获模式，启动失败返回 `launchError` 而不是崩溃。已加入 `build-app.sh` 的 swiftc 文件列表。
+- 6 个等待点全部接入，超时分级：
+
+| 调用点 | 模式 | 上限 | 依据 |
+|---|---|---|---|
+| `runShell` 常规（typst fonts、pandoc 导出） | `.separate` | 600 s | 输出量可控 |
+| `runShell` 的 book.sh 整本排版（2 处） | `.separate` | 1800 s | 长书耗时最高 |
+| `zipDirectory` | `.none` | 120 s | 本地 zip，无网络 |
+| `QuickSendView` `--check` | `.merged` | 180 s | `prepare_usb()` ≤12 s + curl 120 s + 余量 |
+| `DirectDelivery.run` | `.merged` | 3600 s | 覆盖 upload / download / screenshot |
+| `GlobalHotkeys` / `QuadernoApp` 的 deliver.sh | `.none` | 3600 s | 整本书投递 |
+
+- 独立 Swift 探针实证（`/tmp/pr_probe_src/main.swift`，编译 `ProcessRunner.swift`）：双路各 200 KB 输出 → `(200000, 200000)`、`rc=0`；`sleep 30` 子进程在 **2.06 s** 返回 `timedOut=true`、`rc=15`、`stillRunning=false`；不存在的可执行文件 → `launchError` 被捕获、`rc=-1`。
+- **转换进度反馈核实**：`isConverting` + `ProgressView` 已在 `ContentView.swift:662/738` 实现，`TODO.md` 的「界面静默」条目已过时，本轮更新为已完成；未重复实现 UI。
+- **层界说明**：Swift 侧 3600 s 与 Python 侧 `transfer_timeout(1.2 GiB)=4920 s` 不是配置冲突。前者是用户可感知的外层硬上限，刻意先于后者触发，为「尺寸缩放上限无 cap」提供兜底；后者仍是单次 HTTP 请求上限。P1-2（给 `transfer_timeout` 设 cap）依然开放。
+- **未改行为**：`DirectDelivery` / `QuickSendView` 仍用 `.merged` 单管道，CFR §3 的 P2-3（stderr 混入 JSON）保持开放。
+
+### 7.4 验证矩阵
+
+| 层 | 结果 |
+|---|---|
+| Python 单测 | `Ran 63 tests / OK` |
+| 回归套件 | `全部通过 · 74 项断言` |
+| 构建 | `EXIT=0`，零 warning / 零 error；戳记闸门因 `quaderno_direct.py` 改动自动重建运行时（`2283645bcf55`） |
+| 签名 / 安装 | `codesign --verify --deep --strict` 通过；安装后 `check` 通过 |
+| 进程封装 | Swift 探针 3 组场景全部符合预期 |
+| 真机 | 24 MiB upload 4.47 s / download 1.23 s，SHA-256 双向一致，测试条目与 history 记录已清理 |
+| CI | 新 workflow 未在 GitHub runner 上执行（需远端），仅做本地 YAML 解析与依赖核对 |
+
+### 7.5 本轮未收敛
+
+- 评估清单的 P1（4 项）、P2（5 项）、P3（2 项）全部保持开放，包括 8 个原始 P2 缺陷。
+- `download()` 的整份响应载入、P2-3 的 stderr 分离、孤儿清理的 `BaseException` 与请求预算、`--speed-limit 1` 语义、文档 SSOT（`docs/PRODUCT.md:39` 仍写 1.1.0）、`icon/` / `output/` 未跟踪处置。
+- 真机失效注入（拔线）、Hardened Runtime 公证版、>100 MiB 文件、Wi-Fi 链路、设备休眠态仍未测。

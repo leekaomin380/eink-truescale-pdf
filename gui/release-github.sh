@@ -56,6 +56,18 @@ bundle_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' \
 [[ "$bundle_version" == "$VERSION" ]] \
   || { print -u2 "Info.plist 版本为 $bundle_version，与发布版本 $VERSION 不一致"; exit 2; }
 
+# 发布闸门：测试与已跟踪工作树。test.sh 覆盖排版/UI/脚本不变量，unittest 覆盖直连运行时；
+# 两者都不能省 —— 2026-11-04 曾出现单测全绿而 test.sh 有 1 项失败的情况。
+print ">>> 发布预检：单元测试、回归测试、工作树"
+[[ -x "$REPO/.build/direct/venv/bin/python" ]] \
+  || { print -u2 "缺少 .build/direct/venv/bin/python，请先运行 zsh direct/build-helper.sh"; exit 2; }
+( cd "$REPO" && "$REPO/.build/direct/venv/bin/python" -m unittest tests/test_direct_delivery.py ) \
+  || { print -u2 "单元测试未通过，拒绝发布"; exit 2; }
+( cd "$REPO" && ./test.sh ) \
+  || { print -u2 "回归测试未通过，拒绝发布"; exit 2; }
+git -C "$REPO" diff --quiet && git -C "$REPO" diff --cached --quiet \
+  || { print -u2 "工作树有未提交的已跟踪改动，拒绝发布"; exit 2; }
+
 mkdir -p "$DIST_DIR"
 [[ ! -e "$ARCHIVE" && ! -e "$CHECKSUM" ]] \
   || { print -u2 "发行文件已存在，请先确认后手动移走：$ARCHIVE"; exit 2; }

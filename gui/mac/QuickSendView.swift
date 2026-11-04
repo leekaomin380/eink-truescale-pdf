@@ -547,17 +547,11 @@ enum SelfCheck {
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = [script.path, "--check"]
             process.environment = helperEnvironment()
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            do {
-                try process.run()
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                process.waitUntilExit()
-                return (process.terminationStatus == 0, String(decoding: data, as: UTF8.self))
-            } catch {
-                return (false, error.localizedDescription)
-            }
+            let outcome = ProcessRunner.run(process, mode: .merged, timeout: 180)
+            let text = String(decoding: outcome.combined, as: UTF8.self)
+            if !outcome.launchError.isEmpty { return (false, outcome.launchError) }
+            if outcome.timedOut { return (false, "[timeout 180s] " + text) }
+            return (outcome.exitCode == 0, text)
         }.value
     }
 }
