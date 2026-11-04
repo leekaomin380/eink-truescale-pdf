@@ -95,7 +95,19 @@ cp "$MAC_DIR/wechat/wechat_extractor.js" "$APP_DIR/Contents/Resources/wechat_ext
 
 echo ">>> 复制直连工具（自带 Python 运行时）"
 DIRECT_RUNTIME="$REPO/direct/runtime-dist/quaderno-direct"
-[[ -x "$DIRECT_RUNTIME/quaderno-direct" ]] || { echo "!!! 请先运行 ./direct/build-helper.sh"; exit 1; }
+# 【此前的 bug】这里只检查运行时「存在」。2026-11-04 build-helper.sh 因缺执行位没跑成，
+# 本脚本照样成功，把旧运行时打进了 App —— 修复显示已构建、实际未生效。
+# 现在比较源文件哈希与运行时里的戳记，不一致就自己重建；重建后仍不一致则失败。
+source "$REPO/direct/source-stamp.sh"
+EXPECTED_STAMP=$(direct_source_stamp "$REPO/direct") || { echo "!!! 无法计算直连工具源码戳记"; exit 1; }
+runtime_stamp() { cat "$DIRECT_RUNTIME/.source-stamp" 2>/dev/null || true; }
+if [[ ! -x "$DIRECT_RUNTIME/quaderno-direct" || "$(runtime_stamp)" != "$EXPECTED_STAMP" ]]; then
+  echo "    运行时与源码不一致，重建直连工具"
+  /bin/zsh "$REPO/direct/build-helper.sh" > /dev/null || { echo "!!! 直连工具构建失败"; exit 1; }
+fi
+[[ -x "$DIRECT_RUNTIME/quaderno-direct" && "$(runtime_stamp)" == "$EXPECTED_STAMP" ]] \
+  || { echo "!!! 直连工具与源码不一致（戳记不符），拒绝打包"; exit 1; }
+echo "    ✅ 直连工具与源码一致（${EXPECTED_STAMP[1,12]}）"
 ditto "$DIRECT_RUNTIME" "$APP_DIR/Contents/Resources/direct"
 
 echo ">>> 编译多语言文案（zh-Hans / en / ja）"

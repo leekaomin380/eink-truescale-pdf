@@ -81,7 +81,7 @@ class TransportTests(unittest.TestCase):
             device.request = request
             result = device.upload(source)
             self.assertEqual(result['sha256'], hashlib.sha256(source.read_bytes()).hexdigest())
-            self.assertIn(('GET', '/documents/new/file', {}), calls)
+            self.assertIn(('GET', '/documents/new/file', {'transfer_size': len(b'%PDF-test-content')}), calls)
             self.assertFalse(any(method == 'DELETE' for method, _, _ in calls))
             self.assertTrue(source.exists())
 
@@ -129,6 +129,83 @@ class TransportTests(unittest.TestCase):
         device.request = lambda *a, **kw: self.fail('unexpected upload')
         with self.assertRaisesRegex(direct.DirectError, 'Received 文件夹不存在'):
             device.upload(Path('document.pdf'))
+
+
+class InterruptedUploadTests(unittest.TestCase):
+    """A failure between creating the entry and verifying it must not leave the entry behind."""
+
+    def device(self, source, fail, deleted, delete_fails=False, listed=True):
+        device = direct.Device({'public_key_pin': 'sha256//pin'}, b'', '')
+        device.authenticate = lambda: None
+        uploaded = []
+        device.resolve = lambda path: ({'entry_id': 'root'} if path == 'Document/Received' else
+                                       {'entry_id': 'new'} if uploaded and listed else None)
+        def request(method, endpoint, **kwargs):
+            if method == 'PUT' and endpoint.endswith('/file') and (method, endpoint) != fail:
+                uploaded.append(endpoint)
+            if method == 'DELETE':
+                if delete_fails:
+                    raise direct.ConnectionFailure(7)
+                deleted.append(endpoint)
+                return direct.Response(204, {}, b'')
+            if method == 'POST':
+                return direct.Response(201, {}, b'{"document_id":"new"}')
+            if (method, endpoint) == fail:
+                raise direct.ConnectionFailure(56)
+            if endpoint.endswith('/file') and method == 'GET':
+                return direct.Response(200, {}, b'corrupt' if fail == 'mismatch' else source.read_bytes())
+            return direct.Response(204, {}, b'')
+        device.request = request
+        return device
+
+    def test_failed_transfer_or_readback_deletes_the_new_entry(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / 'a.pdf'; source.write_bytes(b'%PDF-a')
+            for fail in (('PUT', '/documents/new/file'), ('GET', '/documents/new/file'), 'mismatch'):
+                deleted = []
+                with self.assertRaises(direct.DirectError):
+                    self.device(source, fail, deleted).upload(source)
+                self.assertEqual(deleted, ['/documents/new'], fail)
+            self.assertEqual(direct.pending_orphans('sha256//pin'), [])
+
+    def test_unreachable_cleanup_is_retried_before_the_next_upload_frees_the_name(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / 'a.pdf'; source.write_bytes(b'%PDF-a')
+            with self.assertRaises(direct.DirectError):
+                self.device(source, ('PUT', '/documents/new/file'), [], delete_fails=True).upload(source)
+            self.assertEqual(direct.pending_orphans('sha256//pin'), ['new'])
+            self.assertEqual(direct.pending_orphans('sha256//other-device'), [])
+            deleted = []
+            result = self.device(source, None, deleted).upload(source)
+            self.assertEqual(deleted, ['/documents/new'])  # the orphan, removed before naming
+            self.assertEqual(result['path'], 'Document/Received/a.pdf')
+            self.assertEqual(direct.pending_orphans('sha256//pin'), [])
+
+    def test_verified_content_is_kept_when_only_the_directory_check_fails(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / 'a.pdf'; source.write_bytes(b'%PDF-a')
+            deleted = []
+            with self.assertRaisesRegex(direct.DirectError, '设备目录未确认'):
+                self.device(source, None, deleted, listed=False).upload(source)
+            self.assertEqual(deleted, [])
+
+
+class TransferTimeoutTests(unittest.TestCase):
+    def test_limit_scales_with_size_and_stall_detection_is_always_on(self):
+        self.assertEqual(direct.transfer_timeout(0), 120)
+        self.assertEqual(direct.transfer_timeout(1), 121)
+        self.assertEqual(direct.transfer_timeout(100 * 1024 * 1024), 120 + 400)
+        device = direct.Device({'address': 'a', 'public_key_pin': 'sha256//p'}, b'', '')
+        seen = []
+        def fake_run(args, **kwargs):
+            seen.append((args[args.index('--max-time') + 1], args[args.index('--speed-time') + 1], kwargs['timeout']))
+            Path(args[args.index('--dump-header') + 1]).write_text('HTTP/1.1 200 OK\n')
+            Path(args[args.index('--output') + 1]).write_text('{}')
+            return type('Result', (), {'returncode': 0, 'stdout': b'200'})()
+        with patch.object(direct.subprocess, 'run', side_effect=fake_run):
+            device.request('GET', '/small')
+            device.request('GET', '/big', transfer_size=100 * 1024 * 1024)
+        self.assertEqual(seen, [('120', '90', 130), ('520', '90', 530)])
 
 
 class DiscoveryTests(unittest.TestCase):

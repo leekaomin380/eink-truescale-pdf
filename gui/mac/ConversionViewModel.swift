@@ -587,7 +587,7 @@ class ConversionViewModel: ObservableObject {
                     self.setStatus(L("抓取失败：\(e.localizedDescription)"), .err)
                 }
             case .success(let html):
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [self] in
                     self.setStatus(L("抽取正文…"), .run)
                     LocalExtraction.run(html: html, url: raw) { [weak self] outcome in
                         guard let self = self else { return }
@@ -1037,10 +1037,19 @@ class ConversionViewModel: ObservableObject {
         do { try proc.run() } catch {
             return ("", error.localizedDescription, -1)
         }
-        proc.waitUntilExit()
-
+        // 两个管道必须在等待退出之前、并发地读完：管道缓冲约 64 KB，任何一路写满后子进程会阻塞在
+        // write 上，而先 waitUntilExit 再读就会互相等待、永久卡住（book.sh 整本书的警告、
+        // typst fonts --variants 的 131 KB 输出都足以触发）。stderr 在后台读，stdout 在当前线程读。
+        let errCollector = PipeCollector()
+        let errDone = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            errCollector.data = errPipe.fileHandleForReading.readDataToEndOfFile()
+            errDone.signal()
+        }
         let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+        errDone.wait()
+        proc.waitUntilExit()
+        let errData = errCollector.data
         return (
             String(data: outData, encoding: .utf8) ?? "",
             String(data: errData, encoding: .utf8) ?? "",
@@ -1085,4 +1094,10 @@ class ConversionViewModel: ObservableObject {
 
         return lines.first(where: { $0.contains("❌") })?.replacingOccurrences(of: "❌ ", with: "") ?? L("渲染未完成")
     }
+}
+
+/// 后台读管道的结果容器。读写由 DispatchSemaphore 排序（后台线程写入后 signal，调用方 wait 后才读），
+/// 不会并发访问，故标为 @unchecked Sendable。
+private final class PipeCollector: @unchecked Sendable {
+    var data = Data()
 }

@@ -531,6 +531,17 @@ def discover_endpoints(address):
     return found or [address]
 
 
+BASE_REQUEST_SECONDS = 120
+# Conservative floor for USB Ethernet / Wi-Fi throughput when sizing transfer limits.
+MIN_TRANSFER_BYTES_PER_SECOND = 256 * 1024
+STALL_SECONDS = 90  # no byte moved for this long: the link is dead
+
+
+def transfer_timeout(size):
+    """Total curl time limit: the fixed base plus the time `size` bytes take at the floor rate."""
+    return BASE_REQUEST_SECONDS + -(-max(0, size) // MIN_TRANSFER_BYTES_PER_SECOND)
+
+
 class Response:
     def __init__(self, status, headers, content):
         self.status_code, self.headers, self.content = status, headers, content
@@ -547,13 +558,18 @@ class Device:
         self.target = settings.get('address', '')
         self.base = 'https://digitalpaper.local:8443'
 
-    def request(self, method, endpoint, *, json_body=None, source=None, allow_missing=False):
+    def request(self, method, endpoint, *, json_body=None, source=None, allow_missing=False, transfer_size=0):
         # System curl resolves USB mDNS correctly on macOS; no proxy or external runtime.
+        # transfer_size: bytes expected to move (upload / readback); scales the total time limit.
+        max_time = transfer_timeout(transfer_size)
         with tempfile.TemporaryDirectory(prefix='quaderno-http-') as directory:
             directory = Path(directory)
             headers, output = directory / 'headers', directory / 'response'
             args = ['/usr/bin/curl', '--silent', '--show-error', '--noproxy', '*',
-                    '--connect-timeout', '2', '--max-time', '120', '--request', method,
+                    '--connect-timeout', '2', '--max-time', str(max_time), '--request', method,
+                    # A link that stops moving data (e.g. Mac slept mid-transfer) fails after
+                    # STALL_SECONDS instead of waiting out a long size-scaled limit.
+                    '--speed-limit', '1', '--speed-time', str(STALL_SECONDS),
                     '--connect-to', 'digitalpaper.local:8443:' + self.target + ':8443',
                     '--insecure', '--pinnedpubkey', self.settings['public_key_pin'],
                     '--dump-header', str(headers), '--output', str(output), '--write-out', '%{http_code}',
@@ -571,7 +587,7 @@ class Device:
                 escaped = str(source).replace('\\', '\\\\').replace('"', '\\"')
                 args += ['--form', 'file=@"' + escaped + '";filename=document.pdf;type=application/pdf']
             args += [self.base + endpoint]
-            result = subprocess.run(args, input=config.encode(), capture_output=True, timeout=125)
+            result = subprocess.run(args, input=config.encode(), capture_output=True, timeout=max_time + 10)
             if result.returncode:
                 raise ConnectionFailure(result.returncode)
             status = int(result.stdout)
@@ -647,6 +663,22 @@ class Device:
             raise DirectError(tr('设备返回的登录凭据格式异常。'))
         self.cookie = value
         self.remember_endpoint()
+
+    def discard_incomplete(self, document_id):
+        """Best-effort delete of an entry whose upload did not verify; remembered if unreachable."""
+        try:
+            self.request('DELETE', '/documents/' + entry_id(document_id), allow_missing=True)
+        except (DirectError, OSError, ValueError, subprocess.TimeoutExpired):
+            remember_orphan(self.settings.get('public_key_pin', ''), document_id)
+
+    def remove_orphans(self):
+        pin = self.settings.get('public_key_pin', '')
+        for document_id in pending_orphans(pin):
+            try:
+                self.request('DELETE', '/documents/' + entry_id(document_id), allow_missing=True)
+            except (DirectError, OSError, ValueError, subprocess.TimeoutExpired):
+                continue  # still unreachable or refused: try again next time
+            forget_orphan(pin, document_id)
 
     def resolve(self, path):
         response = self.request('GET', '/resolve/entry/path/' + quote(path, safe=''), allow_missing=True)
@@ -763,27 +795,36 @@ class Device:
             if destination == 'Document/Received':
                 raise DirectError(tr('设备 Received 文件夹不存在，未上传文件。'))
             raise DirectError(tr('设备上找不到这个文件夹：{path}', path=destination))
+        # Entries left by an earlier interrupted upload would otherwise take this file's name.
+        self.remove_orphans()
         remote = destination + '/' + source.name
         if self.resolve(remote):
             remote = destination + '/' + source.stem[:100] + '_' + uuid.uuid4().hex[:8] + '.pdf'
+        content = source.read_bytes()
         created = self.request('POST', '/documents2', json_body={
             'file_name': remote.split('/')[-1], 'parent_folder_id': parent['entry_id'],
             'document_source': ''}).json()
         document_id = created['document_id']
-        self.request('PUT', '/documents/' + document_id + '/file', source=source)
-        # Start device rendering immediately after the complete upload.
-        # Success is still withheld until readback and directory verification finish.
-        display_requested = False
+        # From here until readback passes, a failure leaves an entry with missing or wrong content
+        # on the device: remove it (or remember it for the next connection) before reporting.
         try:
-            self.request('PUT', '/viewer/controls/open2',
-                         json_body={'document_id': document_id, 'page': 1})
-            display_requested = True
-        except (DirectError, OSError, subprocess.TimeoutExpired):
-            pass
-        expected = hashlib.sha256(source.read_bytes()).hexdigest()
-        actual = hashlib.sha256(self.request('GET', '/documents/' + document_id + '/file').content).hexdigest()
-        if actual != expected:
-            raise DirectError(tr('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。'))
+            self.request('PUT', '/documents/' + document_id + '/file', source=source, transfer_size=len(content))
+            # Start device rendering immediately after the complete upload.
+            # Success is still withheld until readback and directory verification finish.
+            display_requested = False
+            try:
+                self.request('PUT', '/viewer/controls/open2',
+                             json_body={'document_id': document_id, 'page': 1})
+                display_requested = True
+            except (DirectError, OSError, subprocess.TimeoutExpired):
+                pass
+            expected = hashlib.sha256(content).hexdigest()
+            readback = self.request('GET', '/documents/' + document_id + '/file', transfer_size=len(content))
+            if hashlib.sha256(readback.content).hexdigest() != expected:
+                raise DirectError(tr('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。'))
+        except BaseException:
+            self.discard_incomplete(document_id)
+            raise
         info = self.resolve(remote)
         if not info or info['entry_id'] != document_id:
             raise DirectError(tr('回读已通过，但设备目录未确认新文件。'))
@@ -795,6 +836,40 @@ class Device:
         return {'ok': True, 'message': message, 'path': remote, 'sha256': expected,
                 'display_requested': display_requested}
 
+
+
+ORPHAN_LIMIT = 20
+
+
+def load_orphans():
+    try:
+        data = json.loads((ROOT / 'orphans.json').read_text())
+        return [item for item in data if isinstance(item, dict) and 'pin' in item and 'id' in item]
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def pending_orphans(pin):
+    return [item['id'] for item in load_orphans() if item['pin'] == pin]
+
+
+def remember_orphan(pin, document_id):
+    orphans = [item for item in load_orphans() if item['id'] != document_id]
+    orphans = (orphans + [{'pin': pin, 'id': document_id}])[-ORPHAN_LIMIT:]
+    try:
+        save_private(ROOT / 'orphans.json', json.dumps(orphans).encode())
+    except OSError:
+        pass
+
+
+def forget_orphan(pin, document_id):
+    orphans = load_orphans()
+    remaining = [item for item in orphans if not (item['pin'] == pin and item['id'] == document_id)]
+    if len(remaining) != len(orphans):
+        try:
+            save_private(ROOT / 'orphans.json', json.dumps(remaining).encode())
+        except OSError:
+            pass
 
 
 HISTORY_LIMIT = 50
