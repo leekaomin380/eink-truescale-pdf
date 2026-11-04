@@ -547,8 +547,12 @@ enum SelfCheck {
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = [script.path, "--check"]
             process.environment = helperEnvironment()
-            let outcome = ProcessRunner.run(process, mode: .merged, timeout: 180)
-            let text = String(decoding: outcome.combined, as: UTF8.self)
+            // Keep both streams readable for diagnostics, but never let stderr change the
+            // exit-code judgement or be mistaken for the command's own output.
+            let outcome = ProcessRunner.run(process, mode: .separate, timeout: 180)
+            let stdout = String(decoding: outcome.stdout, as: UTF8.self)
+            let stderr = String(decoding: outcome.stderr, as: UTF8.self)
+            let text = [stdout, stderr].filter { !$0.isEmpty }.joined(separator: "\n")
             if !outcome.launchError.isEmpty { return (false, outcome.launchError) }
             if outcome.timedOut { return (false, "[timeout 180s] " + text) }
             return (outcome.exitCode == 0, text)

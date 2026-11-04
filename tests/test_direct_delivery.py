@@ -4,6 +4,8 @@ import json
 import importlib.util
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -646,7 +648,12 @@ class FileManagementTests(unittest.TestCase):
             calls.append((method, endpoint, json_body))
             if endpoint.startswith('/resolve/'):
                 return {'entry_id': 'root', 'entry_type': 'folder', 'entry_path': 'Document'}
-            return direct.Response(200, {}, (responses or {}).get(endpoint, b'{}'))
+            payload = (responses or {}).get(endpoint, b'{}')
+            # download() now asks curl to stream straight to disk; emulate that contract.
+            if kwargs.get('output_path') is not None:
+                Path(kwargs['output_path']).write_bytes(payload)
+                return direct.Response(200, {}, b'')
+            return direct.Response(200, {}, payload)
         device.request = request
         device.resolve = lambda path: request('GET', '/resolve/' + path)
         return device, calls
@@ -857,3 +864,123 @@ class PageTitleTests(unittest.TestCase):
         meta = yaml.safe_load(rendered.split('---')[1])
         self.assertEqual(meta['title'], '我的阅读')
         self.assertNotIn('pagetitle', meta)
+
+
+class FollowUpHardeningTests(unittest.TestCase):
+    """Remaining robustness items from the 2026-11-05 gap list."""
+
+    def test_transfer_timeout_is_capped_below_outer_deadline(self):
+        self.assertEqual(direct.transfer_timeout(1200 * 1024 * 1024), direct.MAX_TRANSFER_SECONDS)
+        self.assertLess(direct.MAX_TRANSFER_SECONDS, 3600)
+
+    def test_cleanup_delete_has_short_deadline_and_bounded_sweep(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            pin = 'sha256//pin'
+            direct.remember_orphan(pin, 'one')
+            direct.remember_orphan(pin, 'two')
+            seen = []
+            device = direct.Device({'public_key_pin': pin}, b'', '')
+
+            def request(method, endpoint, **kwargs):
+                seen.append(kwargs.get('time_limit'))
+                return direct.Response(204, {}, b'')
+
+            device.request = request
+            device.remove_orphans()
+            self.assertEqual(seen, [direct.CLEANUP_REQUEST_SECONDS] * 2)
+            self.assertEqual(direct.pending_orphans(pin), [])
+            direct.remember_orphan(pin, 'three')
+            seen.clear()
+            with patch.object(direct.time, 'monotonic', side_effect=[0, direct.CLEANUP_BUDGET_SECONDS + 1]):
+                device.remove_orphans()
+            self.assertEqual(seen, [])
+            self.assertEqual(direct.pending_orphans(pin), ['three'])
+
+    def test_cleanup_failure_is_recorded_not_silent(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            pin = 'sha256//pin'
+            direct.remember_orphan(pin, 'stuck')
+            device = direct.Device({'public_key_pin': pin}, b'', '')
+
+            def fail(method, endpoint, **kwargs):
+                raise direct.ConnectionFailure(7)
+
+            device.request = fail
+            device.remove_orphans()
+            record = [x for x in direct.load_orphans() if x['id'] == 'stuck']
+            self.assertEqual(len(record), 1)
+            self.assertIn('last_error', record[0])
+            self.assertIsInstance(record[0]['last_error'], str)
+
+    def test_keyboard_interrupt_does_not_issue_cleanup_request(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / 'a.pdf'
+            source.write_bytes(b'%PDF-a')
+            deleted = []
+            device = direct.Device({'public_key_pin': 'sha256//pin'}, b'', '')
+            device.authenticate = lambda: None
+            device.resolve = lambda path: {'entry_id': 'root'} if path == 'Document/Received' else None
+
+            def request(method, endpoint, **kwargs):
+                if method == 'DELETE':
+                    deleted.append(endpoint)
+                    return direct.Response(204, {}, b'')
+                if method == 'PUT' and endpoint.endswith('/file'):
+                    raise KeyboardInterrupt()
+                if method == 'POST':
+                    return direct.Response(201, {}, b'{"document_id":"new"}')
+                return direct.Response(204, {}, b'')
+
+            device.request = request
+            with self.assertRaises(KeyboardInterrupt):
+                device.upload(source)
+            self.assertEqual(deleted, [])
+
+    def test_download_streams_to_file_without_loading_body(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = b'%PDF-download' * 1000
+            dest = Path(tmp) / 'out.pdf'
+            device = direct.Device({'address': 'a', 'public_key_pin': 'sha256//p'}, b'', '')
+            seen = {}
+
+            def fake_run(args, **kwargs):
+                Path(args[args.index('--dump-header') + 1]).write_text('HTTP/1.1 200 OK\n')
+                body = Path(args[args.index('--output') + 1])
+                seen['streams_outside_tempdir'] = tmp in str(body)
+                seen['max_time'] = args[args.index('--max-time') + 1]
+                body.write_bytes(payload)
+                return type('Result', (), {'returncode': 0, 'stdout': b'200'})()
+
+            with patch.object(direct.subprocess, 'run', side_effect=fake_run):
+                result = device.download('abc123', str(dest))
+            self.assertTrue(result['ok'])
+            self.assertEqual(dest.read_bytes(), payload)
+            self.assertTrue(seen['streams_outside_tempdir'])
+            self.assertEqual(seen['max_time'], str(direct.MAX_TRANSFER_SECONDS))
+            self.assertEqual([p.name for p in Path(tmp).iterdir()], ['out.pdf'])
+
+
+@unittest.skipUnless(shutil.which('zsh') and Path('/usr/bin/shasum').exists(),
+                     'source-stamp.sh needs zsh and /usr/bin/shasum')
+class SourceStampTests(unittest.TestCase):
+    def stamp(self, directory):
+        script = Path(__file__).parents[1] / 'direct' / 'source-stamp.sh'
+        return subprocess.run(
+            ['/bin/zsh', '-c', 'source "$1"; direct_source_stamp "$2"', '_', str(script), str(directory)],
+            capture_output=True, text=True)
+
+    def test_stamp_changes_with_source_and_fails_on_missing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            for name in ('quaderno_direct.py', 'requirements-build.txt', 'build-helper.sh'):
+                (d / name).write_text(name)
+            first = self.stamp(d)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertEqual(len(first.stdout.strip()), 64)
+            (d / 'quaderno_direct.py').write_text('changed')
+            second = self.stamp(d)
+            self.assertNotEqual(first.stdout.strip(), second.stdout.strip())
+            (d / 'build-helper.sh').unlink()
+            missing = self.stamp(d)
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertEqual(missing.stdout.strip(), '')

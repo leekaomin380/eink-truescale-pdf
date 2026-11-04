@@ -535,11 +535,19 @@ BASE_REQUEST_SECONDS = 120
 # Conservative floor for USB Ethernet / Wi-Fi throughput when sizing transfer limits.
 MIN_TRANSFER_BYTES_PER_SECOND = 256 * 1024
 STALL_SECONDS = 90  # no byte moved for this long: the link is dead
+# Cap below ProcessRunner's 3600 s outer deadline: on a huge transfer the user must see a
+# specific request error before the App kills the whole helper process.
+MAX_TRANSFER_SECONDS = 3000
+# Cleanup runs on an already-failed path. A DELETE must not inherit the upload's long limit,
+# and the whole sweep must finish inside a bounded budget.
+CLEANUP_REQUEST_SECONDS = 15
+CLEANUP_BUDGET_SECONDS = 60
 
 
 def transfer_timeout(size):
-    """Total curl time limit: the fixed base plus the time `size` bytes take at the floor rate."""
-    return BASE_REQUEST_SECONDS + -(-max(0, size) // MIN_TRANSFER_BYTES_PER_SECOND)
+    """Total curl time limit: base + size at the floor rate, capped by MAX_TRANSFER_SECONDS."""
+    scaled = BASE_REQUEST_SECONDS + -(-max(0, size) // MIN_TRANSFER_BYTES_PER_SECOND)
+    return min(MAX_TRANSFER_SECONDS, scaled)
 
 
 def file_sha256(path):
@@ -568,14 +576,17 @@ class Device:
         self.base = 'https://digitalpaper.local:8443'
 
     def request(self, method, endpoint, *, json_body=None, source=None, allow_missing=False,
-                transfer_size=0, verify_sha256=None):
+                transfer_size=0, verify_sha256=None, time_limit=None, output_path=None):
         # System curl resolves USB mDNS correctly on macOS; no proxy or external runtime.
         # transfer_size: bytes expected to move (upload / readback); scales the total time limit.
         # verify_sha256: hash the curl output file in chunks instead of loading it into memory.
-        max_time = transfer_timeout(transfer_size)
+        # time_limit: override for short, failure-path requests (cleanup) or unknown-size downloads.
+        # output_path: stream a binary response straight to disk, never into the Python heap.
+        max_time = time_limit if time_limit is not None else transfer_timeout(transfer_size)
         with tempfile.TemporaryDirectory(prefix='quaderno-http-') as directory:
             directory = Path(directory)
             headers, output = directory / 'headers', directory / 'response'
+            body = str(output_path) if output_path is not None else str(output)
             args = ['/usr/bin/curl', '--silent', '--show-error', '--noproxy', '*',
                     '--connect-timeout', '2', '--max-time', str(max_time), '--request', method,
                     # A link that stops moving data (e.g. Mac slept mid-transfer) fails after
@@ -583,7 +594,7 @@ class Device:
                     '--speed-limit', '1', '--speed-time', str(STALL_SECONDS),
                     '--connect-to', 'digitalpaper.local:8443:' + self.target + ':8443',
                     '--insecure', '--pinnedpubkey', self.settings['public_key_pin'],
-                    '--dump-header', str(headers), '--output', str(output), '--write-out', '%{http_code}',
+                    '--dump-header', str(headers), '--output', body, '--write-out', '%{http_code}',
                     '--config', '-']
             config = ''
             if self.cookie:
@@ -614,8 +625,10 @@ class Device:
             if verify_sha256 is not None:
                 # curl already wrote the body to disk; verify it there and return no body bytes.
                 # A full readback of a 1 GB PDF must not allocate 1 GB of Python heap.
-                if file_sha256(output) != verify_sha256:
+                if file_sha256(Path(body)) != verify_sha256:
                     raise DirectError(tr('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。'))
+                return Response(status, header_map, b'')
+            if output_path is not None:
                 return Response(status, header_map, b'')
             return Response(status, header_map, output.read_bytes())
 
@@ -681,19 +694,27 @@ class Device:
         self.remember_endpoint()
 
     def discard_incomplete(self, document_id):
-        """Best-effort delete of an entry whose upload did not verify; remembered if unreachable."""
+        """Best-effort delete of an unverified entry. A short explicit deadline keeps a failed
+        upload from turning into a second long stall; the failure reason is persisted."""
         try:
-            self.request('DELETE', '/documents/' + entry_id(document_id), allow_missing=True)
-        except (DirectError, OSError, ValueError, subprocess.TimeoutExpired):
-            remember_orphan(self.settings.get('public_key_pin', ''), document_id)
+            self.request('DELETE', '/documents/' + entry_id(document_id),
+                         allow_missing=True, time_limit=CLEANUP_REQUEST_SECONDS)
+        except (DirectError, OSError, ValueError, subprocess.TimeoutExpired) as error:
+            remember_orphan(self.settings.get('public_key_pin', ''), document_id, str(error))
 
     def remove_orphans(self):
         pin = self.settings.get('public_key_pin', '')
+        deadline = time.monotonic() + CLEANUP_BUDGET_SECONDS
         for document_id in pending_orphans(pin):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break  # bounded sweep: never 20 x 120 s in front of a real delivery
             try:
-                self.request('DELETE', '/documents/' + entry_id(document_id), allow_missing=True)
-            except (DirectError, OSError, ValueError, subprocess.TimeoutExpired):
-                continue  # still unreachable or refused: try again next time
+                self.request('DELETE', '/documents/' + entry_id(document_id), allow_missing=True,
+                             time_limit=min(CLEANUP_REQUEST_SECONDS, max(1, int(remaining))))
+            except (DirectError, OSError, ValueError, subprocess.TimeoutExpired) as error:
+                mark_orphan_failure(pin, document_id, str(error))
+                continue  # still unreachable or refused: recorded, retried next connection
             forget_orphan(pin, document_id)
 
     def resolve(self, path):
@@ -780,10 +801,16 @@ class Device:
         if not destination or not Path(destination).is_absolute():
             raise DirectError(tr('请选择要保存到的位置。'))
         destination = Path(destination)
-        content = self.request('GET', '/documents/' + entry_id(document_id) + '/file').content
         temporary = destination.with_name('.' + destination.name + '.download')
-        temporary.write_bytes(content)
-        os.replace(temporary, destination)
+        # Size is unknown without an extra metadata request, so use the capped ceiling rather
+        # than the 120 s metadata baseline. curl streams straight into the temporary file:
+        # a 1 GB document never passes through Response.content.
+        try:
+            self.request('GET', '/documents/' + entry_id(document_id) + '/file',
+                         time_limit=MAX_TRANSFER_SECONDS, output_path=temporary)
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
         return {'ok': True, 'message': tr('已下载到 {path}', path=destination), 'path': str(destination)}
 
     def delete(self, item_id, kind, name):
@@ -839,7 +866,8 @@ class Device:
             # request() hashes curl's output file in chunks and returns no body bytes.
             self.request('GET', '/documents/' + document_id + '/file',
                          transfer_size=size, verify_sha256=expected)
-        except BaseException:
+        except Exception:
+            # KeyboardInterrupt / SystemExit must not issue another HTTPS request on their way out.
             self.discard_incomplete(document_id)
             raise
         info = self.resolve(remote)
@@ -860,9 +888,9 @@ ORPHAN_LIMIT = 20
 
 def load_orphans():
     try:
-        data = json.loads((ROOT / 'orphans.json').read_text())
+        data = json.loads((ROOT / 'orphans.json').read_text(encoding='utf-8'))
         return [item for item in data if isinstance(item, dict) and 'pin' in item and 'id' in item]
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, UnicodeError):
         return []
 
 
@@ -870,9 +898,24 @@ def pending_orphans(pin):
     return [item['id'] for item in load_orphans() if item['pin'] == pin]
 
 
-def remember_orphan(pin, document_id):
+def remember_orphan(pin, document_id, error=None):
+    entry = {'pin': pin, 'id': document_id}
+    if error:
+        entry['last_error'] = error[:200]
     orphans = [item for item in load_orphans() if item['id'] != document_id]
-    orphans = (orphans + [{'pin': pin, 'id': document_id}])[-ORPHAN_LIMIT:]
+    orphans = (orphans + [entry])[-ORPHAN_LIMIT:]
+    try:
+        save_private(ROOT / 'orphans.json', json.dumps(orphans).encode())
+    except OSError:
+        pass
+
+
+def mark_orphan_failure(pin, document_id, error):
+    """Keep the last cleanup failure visible instead of silently continuing."""
+    orphans = load_orphans()
+    for item in orphans:
+        if item['pin'] == pin and item['id'] == document_id:
+            item['last_error'] = error[:200]
     try:
         save_private(ROOT / 'orphans.json', json.dumps(orphans).encode())
     except OSError:

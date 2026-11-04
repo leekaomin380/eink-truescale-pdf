@@ -18,21 +18,32 @@ enum DirectDelivery {
             process.executableURL = resources.appendingPathComponent("direct/quaderno-direct")
             process.arguments = arguments
             process.environment = helperEnvironment().merging(extra) { _, new in new }
-            // `.merged` keeps the legacy single-pipe JSON contract; only the deadline is new.
-            let outcome = ProcessRunner.run(process, mode: .merged, timeout: 3600)
-            let data = outcome.combined
-            let output = String(decoding: data, as: UTF8.self)
+            // stderr is drained separately: a PyInstaller hint or DeprecationWarning must not
+            // corrupt the JSON-over-stdout contract (CFR §3 P2-3).
+            let outcome = ProcessRunner.run(process, mode: .separate, timeout: 3600)
+            let output = String(decoding: outcome.stdout, as: UTF8.self)
+            let stderr = String(decoding: outcome.stderr, as: UTF8.self)
+            let details = [output, stderr].filter { !$0.isEmpty }.joined(separator: "\n")
             if !outcome.launchError.isEmpty {
                 return Result(success: false, message: L("无法运行直连工具"), details: outcome.launchError)
             }
             if outcome.timedOut {
                 return Result(success: false, message: L("直连失败，请检查设备连接"),
-                              details: output + "\n[timeout 3600s]")
+                              details: details + "\n[timeout 3600s]")
             }
-            let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            // The helper normally prints exactly one JSON object. A device file name may itself
+            // contain a newline, so parse the whole stdout first; only if a helper prepends
+            // progress lines do we fall back to the last standalone JSON line.
+            var json = (try? JSONSerialization.jsonObject(with: outcome.stdout)) as? [String: Any]
+            if json == nil {
+                json = output.split(separator: "\n").reversed().compactMap { line -> [String: Any]? in
+                    guard let bytes = String(line).data(using: .utf8) else { return nil }
+                    return (try? JSONSerialization.jsonObject(with: bytes)) as? [String: Any]
+                }.first
+            }
             return Result(success: outcome.exitCode == 0 && json?["ok"] as? Bool == true,
                           message: json?["message"] as? String ?? L("直连失败，请检查设备连接"),
-                          details: output)
+                          details: details)
         }.value
     }
 }

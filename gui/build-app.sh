@@ -104,7 +104,14 @@ EXPECTED_STAMP=$(direct_source_stamp "$REPO/direct") || { echo "!!! 无法计算
 runtime_stamp() { cat "$DIRECT_RUNTIME/.source-stamp" 2>/dev/null || true; }
 if [[ ! -x "$DIRECT_RUNTIME/quaderno-direct" || "$(runtime_stamp)" != "$EXPECTED_STAMP" ]]; then
   echo "    运行时与源码不一致，重建直连工具"
-  /bin/zsh "$REPO/direct/build-helper.sh" > /dev/null || { echo "!!! 直连工具构建失败"; exit 1; }
+  # Keep PyInstaller's diagnostics: hiding them here is exactly how the 2026-11-04 stale
+  # runtime incident went unnoticed. On failure print the tail and point to the full log.
+  BUILD_LOG="${TMPDIR:-/tmp}/truescale-direct-build.log"
+  if ! /bin/zsh "$REPO/direct/build-helper.sh" > "$BUILD_LOG" 2>&1; then
+    echo "!!! 直连工具构建失败（完整诊断：$BUILD_LOG）"
+    tail -n 30 "$BUILD_LOG" >&2
+    exit 1
+  fi
 fi
 [[ -x "$DIRECT_RUNTIME/quaderno-direct" && "$(runtime_stamp)" == "$EXPECTED_STAMP" ]] \
   || { echo "!!! 直连工具与源码不一致（戳记不符），拒绝打包"; exit 1; }

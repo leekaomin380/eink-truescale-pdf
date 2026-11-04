@@ -297,3 +297,44 @@
 - 评估清单的 P1（4 项）、P2（5 项）、P3（2 项）全部保持开放，包括 8 个原始 P2 缺陷。
 - `download()` 的整份响应载入、P2-3 的 stderr 分离、孤儿清理的 `BaseException` 与请求预算、`--speed-limit 1` 语义、文档 SSOT（`docs/PRODUCT.md:39` 仍写 1.1.0）、`icon/` / `output/` 未跟踪处置。
 - 真机失效注入（拔线）、Hardened Runtime 公证版、>100 MiB 文件、Wi-Fi 链路、设备休眠态仍未测。
+
+---
+
+## 8. 缺口清单续做：清理语义、流式下载、超时上界与 stderr 隔离（2026-11-05 07:30 后）
+
+- **范围**：承接第 3 节缺口清单的 S1 项，设备处于已连接状态（FUJITSU QUADERNO A5，USB ECM，`en5` IPv6 link-local）。**不含**并发架构改造（P2-5 主线程 `tcdrain`、P2-6 30 s 锁）——排队语义需用户确认，故保持开放。
+- **关键假设**：① `MAX_TRANSFER_SECONDS = 3000` 刻意低于 Swift 侧 3600 s 外层硬上限，使请求级错误先于进程被杀抵达用户；② `--speed-limit 1` 阈值未改，因「链路慢」与「设备渲染阻塞」的判定边界未定义；③ 不触碰设备既有 735 条用户数据，真机验证只用自有探针文件并即时删除。
+
+### 8.1 落地项
+
+| 项 | 改动 | 对应缺口 |
+|---|---|---|
+| 清理路径异常语义 | `upload()` 的 `except BaseException` → `except Exception`；`discard_incomplete()` 的 DELETE 用 `time_limit=15 s`；`remove_orphans()` 用 60 s 总预算 + 每次 15 s 上限，失败不再静默 `continue`，而是把 `last_error` 写回 `orphans.json`；`load_orphans()` 指定 UTF-8 编码 | P0-1 / P1-1 |
+| 流式下载 | `request(..., output_path=...)` 让 curl 直接写目标临时文件；`download()` 用该通道 + `os.replace` + `finally` 清理，响应体不再进入 `Response.content`；未知大小时用 3000 s 上限而非 120 s 元数据基线 | P0-3 |
+| 超时上界 | `transfer_timeout()` 加 `min(MAX_TRANSFER_SECONDS, ...)`，1.2 GiB 从 4920 s 收敛到 3000 s | P1-2 的 cap 部分 |
+| stderr 隔离 | `DirectDelivery` / `QuickSendView` 由 `.merged` 改 `.separate`；`DirectDelivery` 只解析 stdout（整体 JSON 优先，失败时退化为最后一行 JSON），stderr 仅进 `details` | P0-2 / P2-3 |
+| 构建诊断与戳记断言 | `build-app.sh` 重建不再丢弃 PyInstaller 输出，失败时打印尾部 30 行并给出完整日志路径；新增 `SourceStampTests` 断言戳记随源码变化、缺文件必失败（`skipUnless(zsh)` 保证 Ubuntu CI 可跳过） | P1-4 |
+
+### 8.2 验证矩阵
+
+| 层 | 结果 |
+|---|---|
+| Python 单测 | `Ran 69 tests / OK`（新增 6 项：cap、清理短超时与预算、失败记录、KeyboardInterrupt 不清理、流式下载、戳记闸门；同步修正 `FileManagementTests` 的 download 桩） |
+| 回归套件 | `全部通过 · 74 项断言` |
+| 构建 / 签名 | 两次 `./gui/build-app.sh` `EXIT=0`，零 warning / 零 error；首次因源码变更自动重建运行时 `9074490394b1`，二次跳过；`codesign --verify --deep --strict` 通过 |
+| stderr 误报 A/B | 同一输入（stderr 警告 + stdout JSON）：基线 `.merged` 逻辑 → `LEGACY_SUCCESS=false`；当前逻辑 → `SUCCESS=true`。三种 stdout 形态（单 JSON / 进度行+JSON / 含 U+2028 的 JSON 字符串）全部 `SUCCESS=true` |
+| 真机端到端 | 24 MiB：upload 4.97 s、download 1.20 s / 19.96 MiB/s；**128 MiB（134,217,695 B）**：upload 16.04 s、download 5.53 s / 23.15 MiB/s。两者 SHA-256 双向一致、`transfer_timeout(128 MiB)=632 s`、条目已 delete |
+| 状态核对 | 设备 Received 735 条前后不变、无探针残留；`orphans.json` 未产生；`history.jsonl` 47 条无探针记录（备份 `/tmp/truescale-history-backup-r2-20261105-073749.jsonl`）；`check` 通过 |
+
+### 8.3 新增观察（诊断层陷阱，非产品缺陷）
+
+设备 Received 中存在文件名内嵌 **U+2028 LINE SEPARATOR** 的文档。`browse` 输出是**单个合法 JSON**，但 Python `str.splitlines()` 会把 U+2028 当行分隔符切成 3 段，导致「反向逐行找最后一个 JSON」的诊断脚本返回 0 条。已改用整体 `json.loads` 复核为 735 条。Swift 侧 `split(separator: "\n")` 不切 U+2028，但本轮仍把 `DirectDelivery` 调整为**整体解析优先**，属防御性加固，不是已复现回归的修复。
+
+### 8.4 本轮未收敛
+
+- P0-4：P2-5 主线程 `tcdrain`、P2-6 30 s 并发锁（架构改动，待确认排队语义）。
+- P1-2 剩余：`--speed-limit 1` 只判完全无数据；两层超时（Python 3000 s / Swift 3600 s）的错误消息归因未做真机注入。
+- 上一轮离线探测的三处输入缺口仍在：0 字节 PDF 判成功、180 字符文件名原样上传、同名重复改 `_8hex.pdf`；依赖缺失仍被 `main()` 归为「无法连接设备」。
+- `orphans.json` 按 pin 隔离 + `ORPHAN_LIMIT=20` 静默截断 + 无时间戳；设备目录索引延迟 3–4 s 未做 UI 补偿。
+- 真机拔线/断电失效注入、Hardened Runtime 公证版、Wi-Fi 链路、>128 MiB 文件、设备休眠态、真实 `book.sh` 大输出、CI 远端执行、文档 SSOT（`PRODUCT.md:39` 仍 1.1.0）仍未验证。
+- `icon/`、`output/` 两个历史遗留未跟踪目录未纳入提交。本地提交，未 push、未自合。
