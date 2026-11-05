@@ -385,3 +385,61 @@
 - **S2 仍在**：`--speed-limit 1` 只判完全无数据；`orphans.json` 按 pin 隔离 + 20 条静默截断 + 无时间戳；非 UTF-8 输入、兜底重复投递；设备页延迟刷新的 UI 呈现与快捷键 / Finder 投递链路（`deliver.sh`）未接 `noteDelivered()`。
 - **S3**：`test.sh` 74 项断言中「行为不变量 vs 实现快照」未分类；`icon/`、`output/` 未处置。
 - 构建前需先把旧 `gui/*.app` 移出仓库目录，否则本会话的批量删除护栏会拦截 `build-app.sh` 的 `rm -rf`（旧产物已备份至 `/tmp/truescale-prebuild-app-20261105-080409.app`）。
+
+## 10. 连接故障归因、剩余待办与验证边界（2026-11-05 11:05 后）
+
+> 状态索引：本节收敛 §9.4 中的三项 S2（`--speed-limit 1`、`orphans.json` 生命周期、`deliver.sh` 未接索引补偿）。§9.4 其余未收敛项仍有效。
+
+### 10.1 现场故障：用户报告「当前无法连接投递」
+
+| 观测项 | 实测值 |
+|---|---|
+| `quaderno-direct check` | `{"ok": false, "message": "设备地址无法连接…"}`（rc=1） |
+| USB 总线 | `ioreg` 存在 `FMVDP51`，`idProduct=5719`（0x1657 网络模式），ECM 驱动已匹配（`AppleUserECM`） |
+| 网络接口 | `en5` 不存在；`networksetup` 仍保留 FMVDP51 服务配置 |
+| 链路状态 | `IOLinkStatus = 0`、`IOLinkSpeed = 0`、`IOActiveMedium = ""` |
+| mDNS | `_dp_fujitsu._tcp` 无广播；`Android.local` / `digitalpaper.local` 均无解析 |
+| 端点缓存 | `endpoint-cache.json` → `[fe80::845b:ceff:fefc:6a91%en5]`（接口已消失） |
+
+**根因 / Root Cause**：`usb_link_down()` 仅把 `AVALID set + ACTIVE clear` 判为链路故障。`IOLinkStatus = 0` 表示驱动已附着但**完全没有有效 medium**，是一个独立状态，被漏判。后果链：`usb_link_stuck_now() = False` → `recover_usb_link()` 不执行软件重新枚举 → `discover_endpoints()` 不抛 `UsbLinkDown` → 回落到主机名 `Android.local` → curl 失败被归类为「设备地址无法连接」。错误归因指向地址配置，实际故障在 USB 链路层。
+
+**恢复证据 / Recovery Evidence**：直接调用 `reenumerate_quaderno()`（软件 replug，无需 root）被接受；2 s 后 `en5 status: active`，`check` 连续三次通过，端点仍是缓存中的 link-local 地址。设备数据未被触碰。
+
+### 10.2 本轮落地
+
+| 组 | 实现 | 对应缺口 |
+|---|---|---|
+| 链路状态分层 / Link State | 抽出 `network_link_status()`；新增 `usb_link_idle()` / `usb_link_idle_now()` 识别 `IOLinkStatus = 0`；`usb_link_down()` 保持原语义，既有测试对 status=0 的「不判 stuck」断言不变 | 本次故障 |
+| 自愈路径 / Self-healing | `recover_usb_link()` 对 idle 状态先做 4×0.5 s 有界观察，服务出现则不 replug（避免打断正常插入），持续无广播才 `reenumerate_quaderno()`；`discover_endpoints()` 在「无广播 + 无 LAN 候选 + idle」时抛 `UsbLinkDown`，保留 stuck 状态的无条件快速失败（防止误连同名 LAN 主机） | 本次故障 / P2-4 |
+| 跨进程索引补偿 | `QuickSendMonitor.refresh()` 读取 `history.jsonl` 的 mtime+size 指纹；变化时取最新 `via=direct` 成功记录调用 `DeviceFilesModel.shared.noteDelivered()`。覆盖 `deliver.sh` / 快捷键 / Finder 等不经过 `DirectDelivery` 的 CLI 投递，收敛到 history 这一已有 choke point | §9.4 S2 |
+| 孤儿记录生命周期 | 新增 `created_at` / `attempts` / `abandoned`；**取消静默截断**（`ORPHAN_LIMIT=500` 仅作溢出告警，超限写 `orphans-overflow.json` 且保留新条目）；`ORPHAN_MAX_ATTEMPTS=10`；`prune_expired_orphans()` 跨 pin 按 30 天 TTL 归档到 `orphans-archive.json`，解决换设备后旧记录永不回收；legacy 无时间戳记录不丢弃 | §9.4 S2 |
+| 停滞判定 / Stall Detection | `--speed-limit` 由 `1` 改为 `MIN_LINK_BYTES_PER_SECOND = 32 KiB/s`（256 KiB/s 时限缩放下限的 1/8），`--speed-time` 保持 90 s。现在「90 s 平均速率严重降速」也判失败，而非仅「完全零字节」 | §9.4 S2 / 待确认项 ① |
+
+### 10.3 验证矩阵
+
+| 层 | 结果 |
+|---|---|
+| Python 单测 | **84 项 / OK**（新增 7 项：idle 检测、idle 无地址报错、idle 观察窗、link 恢复幂等、速度阈值关系、孤儿生命周期 4 项）；既有 77 项无回归 |
+| 回归套件 | **74/74 通过**；`zsh -n` 四个脚本通过 |
+| 构建 / 签名 | `EXIT=0`，零 warning / 零 error；戳记因源码变更自动重建 `f12e0360c465`；`codesign --verify --deep --strict` 通过 |
+| 真机端到端 | 24 MiB：upload 4.63 s、download 1.36 s / 17.65 MiB/s；**128 MiB**：upload 16.69 s、download 5.59 s / 22.90 MiB/s；SHA-256 双向一致。新 32 KiB/s 阈值未误杀大文件 |
+| 状态核对 | Received **735 条前后不变**、无探针残留、`orphans.json` 未产生；`history.jsonl` 50 → 48（备份 `/tmp/truescale-history-backup-r4-20261105-111630.jsonl`） |
+| 健康链路判定 | 恢复后 `IOLinkStatus = 3` → `link_down=False`、`link_idle=False`，新判定不误判健康链路 |
+| 非破坏性链路注入 | 软件重新枚举后 `T+0` 设备暂时脱总线（status=None、en5 inactive），`check` 2.78 s 自行成功；`T+2` 出现 `IOLinkStatus=0` **但 en5 active**，第二次 `check` 0.99 s 成功且未触发二次 replug |
+
+**关键结论**：`IOLinkStatus = 0` 是故障的**必要非充分条件**——实测重新枚举后的正常过渡态也会出现 0，但服务广播已恢复。因此自动恢复必须同时要求「mDNS 无广播」，宽限观察窗是必需的，不能对 status=0 直接 replug。该结论同时约束了 §10.2 的实现。
+
+### 10.4 断言分类与 CI 边界
+
+- `test.sh` 静态有 **49 个 `ok`/`no` 调用点**（运行时因循环展开输出 74 项断言）。按前置 14 行粗分类：**31 项源码文本 / 产物快照型**、**16 项命令或产物行为型**、**2 项 codesign 校验型**。结论：多数断言属于实现快照，纳入远端 CI 会持续产生假阳性；当前 `python-tests.yml` 只跑可移植 Python 不变量的取舍成立。
+- `SourceStampTests` 带 `@skipUnless(zsh + /usr/bin/shasum)`，Ubuntu runner 会跳过，workflow 命令 `python -m unittest tests/test_direct_delivery.py -v` 与本地 84 项等价执行一致。
+- **远端运行报告无法生成**：只读查询 `gh -R leekaomin380/eink-truescale-pdf workflow list` 显示远端仅有 `Product page`（pages.yml），最近 6 次运行均为站点部署；`python-tests.yml` 尚未 push，且本会话所有提交按约定不 push。`gh` 已认证但无 push 授权；Docker daemon 未运行（`/Users/km/.colima/default/docker.sock` 不存在），无法做 Ubuntu 容器等价执行。
+
+### 10.5 关键假设与未收敛
+
+1. 32 KiB/s 阈值按 1/8 时限缩放下限设定，属工程判断，**需用户复核**；误杀风险是「设备端渲染阻塞导致 90 s 平均速率低于该值」，当前 24/128 MiB 真机样本未触发。
+2. Python 3000 s / Swift 3600 s 两层 cap 数值未改；排队跨进程撞锁的归因顺序仍开放。
+3. 未执行物理破坏性注入（拔线 / 断电 / 限速）与真机串口卡死注入；UI 层长耗时子进程超时提示未人工观测；设备页跨进程刷新的实际呈现未人工观测。
+4. Wi-Fi、>128 MiB、设备休眠态、Hardened Runtime 公证版、真实 `book.sh` 大输出、远端 CI 执行仍未验。
+5. `icon/`、`output/` 未处置；幂等语义「内容相同跳过」仍待产品确认。
+6. 构建护栏：除 `gui/*.app` 外，PyInstaller 的 `direct/runtime-dist/quaderno-direct`（119 文件）也会触发本会话批量删除护栏；构建前需将两者移出仓库目录。共享构建脚本未因环境约束改动。

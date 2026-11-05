@@ -17,11 +17,22 @@ requiring them to read every commit.
   as a device connection failure.
 - The device file manager compensates for the firmware's 3–4 s directory index delay with
   bounded (0/3/6 s) refresh after changes.
+- A USB link left at `IOLinkStatus = 0` (ECM driver attached, no valid medium, no `en5`,
+  no mDNS service) is now detected separately from a stuck link. `prepare_usb` performs a
+  bounded observation before a software re-enumeration, and discovery reports a link fault
+  instead of a misleading "device address unreachable" error.
+- External CLI deliveries (`deliver.sh`, hotkeys, Finder) now trigger the device file list
+  refresh via `history.jsonl` write fingerprints; no separate IPC channel is needed.
+- Orphan cleanup records are timestamped, retried at most 10 times, archived after 30 days
+  across device pins, and never silently truncated at the record limit.
+- The curl stall check uses a 32 KiB/s effective floor (90 s window) instead of 1 B/s.
 
 ### Verification
-77 Python unit tests, 74 regression assertions, zero-warning build, strict codesign, and
-on-device probes for empty input, long names, idempotency and concurrent delivery. All
-probe entries and history records were removed; see `docs/audit/CFR-2026-11-04-robustness.md` §9.
+84 Python unit tests, 74 regression assertions, zero-warning build, strict codesign, and
+on-device probes for empty input, long names, idempotency, concurrent delivery, 24 MiB and
+128 MiB end-to-end SHA-256 round-trips, plus a non-destructive USB link-injection/recovery
+observation. All probe entries and history records were removed; see
+`docs/audit/CFR-2026-11-04-robustness.md` §9–§10.
 
 ## [1.2.2] — 2026-11-02
 

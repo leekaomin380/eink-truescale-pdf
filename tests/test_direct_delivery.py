@@ -1,5 +1,6 @@
 """Offline invariants: clipboard naming, source preservation, no overwrite, pinned transport."""
 import contextlib
+from datetime import datetime, timedelta
 import hashlib
 import inspect
 import io
@@ -279,6 +280,8 @@ class TransferTimeoutTests(unittest.TestCase):
         seen = []
         def fake_run(args, **kwargs):
             seen.append((args[args.index('--max-time') + 1], args[args.index('--speed-time') + 1], kwargs['timeout']))
+            self.assertEqual(args[args.index('--speed-limit') + 1],
+                             str(direct.MIN_LINK_BYTES_PER_SECOND))
             Path(args[args.index('--dump-header') + 1]).write_text('HTTP/1.1 200 OK\n')
             Path(args[args.index('--output') + 1]).write_text('{}')
             return type('Result', (), {'returncode': 0, 'stdout': b'200'})()
@@ -286,6 +289,8 @@ class TransferTimeoutTests(unittest.TestCase):
             device.request('GET', '/small')
             device.request('GET', '/big', transfer_size=100 * 1024 * 1024)
         self.assertEqual(seen, [('120', '90', 130), ('520', '90', 530)])
+        self.assertGreater(direct.MIN_LINK_BYTES_PER_SECOND, 1)
+        self.assertLess(direct.MIN_LINK_BYTES_PER_SECOND, direct.MIN_TRANSFER_BYTES_PER_SECOND)
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -348,7 +353,8 @@ class DiscoveryTests(unittest.TestCase):
                 return lan if arguments[0] == '-G' else service_output
             with patch.object(direct, 'dns_sd_output', side_effect=dns_sd), \
                  patch.object(direct, 'quaderno_on_usb', return_value=on_usb), \
-                 patch.object(direct, 'usb_link_stuck_now', return_value=False):
+                 patch.object(direct, 'usb_link_stuck_now', return_value=False), \
+                 patch.object(direct, 'usb_link_idle_now', return_value=False):
                 self.assertEqual(direct.discover_endpoints('Android.local'), ['192.168.31.40'])
 
     def test_stuck_usb_link_fails_fast_with_its_own_message(self):
@@ -357,7 +363,18 @@ class DiscoveryTests(unittest.TestCase):
             return lan if arguments[0] == '-G' else ''
         with patch.object(direct, 'dns_sd_output', side_effect=dns_sd), \
              patch.object(direct, 'quaderno_on_usb', return_value=True), \
-             patch.object(direct, 'usb_link_stuck_now', return_value=True):
+             patch.object(direct, 'usb_link_stuck_now', return_value=True), \
+             patch.object(direct, 'usb_link_idle_now', return_value=False):
+            with self.assertRaises(direct.UsbLinkDown):
+                direct.discover_endpoints('Android.local')
+
+    def test_idle_usb_link_without_any_address_reports_link_failure(self):
+        def dns_sd(arguments, duration=0.8):
+            return ''
+        with patch.object(direct, 'dns_sd_output', side_effect=dns_sd), \
+             patch.object(direct, 'quaderno_on_usb', return_value=True), \
+             patch.object(direct, 'usb_link_stuck_now', return_value=False), \
+             patch.object(direct, 'usb_link_idle_now', return_value=True):
             with self.assertRaises(direct.UsbLinkDown):
                 direct.discover_endpoints('Android.local')
 
@@ -783,12 +800,22 @@ class UsbLinkTests(unittest.TestCase):
         self.assertFalse(direct.usb_link_down(self.NETWORK.format(status=1).replace('5719', '5718')))
         self.assertFalse(direct.usb_link_down(other))
 
+    def test_idle_link_is_detected_separately_from_a_stuck_link(self):
+        self.assertTrue(direct.usb_link_idle(self.NETWORK.format(status=0)))
+        self.assertFalse(direct.usb_link_idle(self.NETWORK.format(status=1)))
+        self.assertFalse(direct.usb_link_idle(self.NETWORK.format(status=3)))
+        self.assertFalse(direct.usb_link_idle(self.NETWORK.replace(
+            '  |   | |   "IOLinkStatus" = {status}\n', '')))
+        self.assertFalse(direct.usb_link_idle('+-o Dock\n  "idVendor" = 1452\n  "IOLinkStatus" = 0\n'))
+
     def test_recovery_reenumerates_only_a_stuck_link_and_stops_once_advertised(self):
         advertised = "10:00:00 Add 2 5 local. _dp_fujitsu._tcp. Digital Paper FMVDP51"
         with patch.object(direct, 'usb_link_stuck_now', return_value=False), \
+             patch.object(direct, 'usb_link_idle_now', return_value=False), \
              patch.object(direct, 'reenumerate_quaderno', side_effect=AssertionError('healthy link replugged')):
             self.assertFalse(REAL_RECOVER_USB_LINK())
         with patch.object(direct, 'usb_link_stuck_now', return_value=True), \
+             patch.object(direct, 'usb_link_idle_now', return_value=False), \
              patch.object(direct, 'reenumerate_quaderno', return_value=True) as reenumerate, \
              patch.object(direct, 'switch_to_network_mode', return_value=False), \
              patch.object(direct, 'dns_sd_output', return_value=advertised) as browse, \
@@ -797,8 +824,26 @@ class UsbLinkTests(unittest.TestCase):
         reenumerate.assert_called_once_with()
         self.assertEqual(browse.call_count, 1)
         with patch.object(direct, 'usb_link_stuck_now', return_value=True), \
+             patch.object(direct, 'usb_link_idle_now', return_value=False), \
              patch.object(direct, 'reenumerate_quaderno', side_effect=OSError('IOKit unavailable')):
             self.assertFalse(REAL_RECOVER_USB_LINK())
+
+    def test_idle_link_replugs_only_after_the_link_fails_to_come_up(self):
+        advertised = "10:00:00 Add 2 5 local. _dp_fujitsu._tcp. Digital Paper FMVDP51"
+        with patch.object(direct, 'usb_link_stuck_now', return_value=False), \
+             patch.object(direct, 'usb_link_idle_now', return_value=True), \
+             patch.object(direct, 'dns_sd_output', return_value=advertised), \
+             patch.object(direct, 'reenumerate_quaderno', side_effect=AssertionError('normal plug-in replugged')), \
+             patch.object(direct.time, 'sleep'):
+            self.assertFalse(REAL_RECOVER_USB_LINK())
+        with patch.object(direct, 'usb_link_stuck_now', return_value=False), \
+             patch.object(direct, 'usb_link_idle_now', return_value=True), \
+             patch.object(direct, 'dns_sd_output', return_value=''), \
+             patch.object(direct, 'reenumerate_quaderno', return_value=True) as reenumerate, \
+             patch.object(direct, 'switch_to_network_mode', return_value=False), \
+             patch.object(direct.time, 'sleep'):
+            self.assertTrue(REAL_RECOVER_USB_LINK(wait=0))
+        reenumerate.assert_called_once_with()
 
     def test_connecting_switches_and_recovers_before_authenticating(self):
         order = []
@@ -1126,3 +1171,70 @@ class QueuedDeliveryTests(unittest.TestCase):
             self.assertEqual(errors, [])
             self.assertEqual(order, ['first:start', 'first:end', 'second:start', 'second:end'])
             self.assertIn('正在等待', stderr.getvalue())
+
+
+class OrphanLifecycleTests(unittest.TestCase):
+    """Orphan records must stay auditable: no silent truncation, bounded retries, TTL recovery."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name) / 'Direct'
+        guard = patch.object(direct, 'ROOT', self.root)
+        guard.start()
+        self.addCleanup(guard.stop)
+        self.pin = 'sha256//pin'
+
+    def test_new_records_are_timestamped_and_over_limit_is_recorded_not_dropped(self):
+        direct.remember_orphan(self.pin, 'a', 'boom')
+        record = direct.load_orphans()[0]
+        self.assertIn('created_at', record)
+        self.assertEqual(record['attempts'], 0)
+        self.assertEqual(record['last_error'], 'boom')
+        with patch.object(direct, 'ORPHAN_LIMIT', 3):
+            for index in range(5):
+                direct.remember_orphan(self.pin, 'x%d' % index)
+        ids = [item['id'] for item in direct.load_orphans()]
+        self.assertEqual(len(ids), 6)
+        self.assertIn('a', ids)
+        self.assertIn('x4', ids)
+        overflow = json.loads((self.root / 'orphans-overflow.json').read_text(encoding='utf-8'))
+        self.assertGreaterEqual(overflow['count'], 1)
+        self.assertIn('last_at', overflow)
+
+    def test_retries_are_bounded_and_expired_records_leave_the_active_set(self):
+        direct.remember_orphan(self.pin, 'stuck')
+        device = direct.Device({'public_key_pin': self.pin}, b'', '')
+
+        def fail(*args, **kwargs):
+            raise direct.ConnectionFailure(7)
+
+        device.request = fail
+        for _ in range(direct.ORPHAN_MAX_ATTEMPTS):
+            device.remove_orphans()
+        record = [item for item in direct.load_orphans() if item['id'] == 'stuck'][0]
+        self.assertEqual(record['attempts'], direct.ORPHAN_MAX_ATTEMPTS)
+        self.assertTrue(record['abandoned'])
+        self.assertEqual(direct.pending_orphans(self.pin), [])
+
+        record['created_at'] = (datetime.now().astimezone()
+                               - timedelta(days=31)).isoformat(timespec='seconds')
+        direct.save_orphans(direct.load_orphans()[:0] + [record])
+        self.assertEqual(direct.prune_expired_orphans(), 1)
+        self.assertEqual(direct.load_orphans(), [])
+        self.assertTrue((self.root / 'orphans-archive.json').exists())
+
+    def test_legacy_records_without_timestamp_are_never_dropped(self):
+        self.root.mkdir(parents=True, exist_ok=True)
+        direct.save_orphans([{'pin': self.pin, 'id': 'legacy'}])
+        self.assertEqual(direct.prune_expired_orphans(), 0)
+        self.assertEqual(direct.pending_orphans(self.pin), ['legacy'])
+
+    def test_other_device_records_are_not_touched_by_the_current_sweep(self):
+        direct.remember_orphan(self.pin, 'mine')
+        direct.remember_orphan('sha256//other', 'theirs')
+        device = direct.Device({'public_key_pin': self.pin}, b'', '')
+        device.request = lambda *a, **k: direct.Response(204, {}, b'')
+        device.remove_orphans()
+        self.assertEqual(direct.pending_orphans(self.pin), [])
+        self.assertEqual(direct.pending_orphans('sha256//other'), ['theirs'])

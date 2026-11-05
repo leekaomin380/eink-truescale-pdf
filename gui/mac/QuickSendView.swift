@@ -142,6 +142,28 @@ final class QuickSendMonitor: ObservableObject {
         }
         let records = loadHistory()
         if records.map(\.id) != history.map(\.id) { history = records }
+        noteExternalDelivery(records)
+    }
+
+    /// deliver.sh / 快捷键 / Finder 等外部进程直接调用直连工具，不经过 App 的 DirectDelivery，
+    /// 因此设备页收不到 noteDelivered()。history.jsonl 是所有 CLI 投递的收敛点：
+    /// 写入指纹变化时取最新一条成功记录，触发一次有界索引追赶刷新。
+    private var lastHistoryStamp: String?
+    private var lastNotifiedID: String?
+
+    private func noteExternalDelivery(_ records: [DeliveryRecord]) {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: historyURL.path)
+        guard let attributes,
+              let modified = attributes[.modificationDate] as? Date,
+              let size = attributes[.size] as? NSNumber else { return }
+        let stamp = "\(modified.timeIntervalSinceReferenceDate)|\(size)"
+        let previous = lastHistoryStamp
+        lastHistoryStamp = stamp
+        guard previous != nil, previous != stamp,
+              let newest = records.first(where: { !$0.failed && $0.via == "direct" }),
+              newest.id != lastNotifiedID else { return }
+        lastNotifiedID = newest.id
+        DeviceFilesModel.shared.noteDelivered(name: newest.name)
     }
 
     /// 事件驱动，无需轮询；首次使用时 macOS 会请求「本地网络」权限。

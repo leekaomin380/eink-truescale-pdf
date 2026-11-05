@@ -326,21 +326,36 @@ NETWORK_MODE_PRODUCT = 0x1657
 IFM_AVALID, IFM_ACTIVE = 0x1, 0x2  # IOLinkStatus bits (IOKit/network/IONetworkMedium.h)
 
 
+def network_link_status(ioreg_output):
+    """IOLinkStatus of the 0x1657 QUADERNO, or None when no ECM driver is attached."""
+    for block in ('\n' + ioreg_output).split('\n+-o ')[1:]:
+        if (f'"idVendor" = {FUJITSU_USB_VENDOR}' in block and
+                f'"idProduct" = {NETWORK_MODE_PRODUCT}' in block):
+            match = re.search(r'"IOLinkStatus" = (\d+)', block)
+            return int(match.group(1)) if match else None
+    return None
+
+
 def usb_link_down(ioreg_output):
     """True when the QUADERNO is a USB network device whose Ethernet link reports inactive.
 
     Observed 2026-11-04: when the Mac sleeps, en5 goes link_off; after the Mac wakes the device
     stays enumerated (0x1657) but never raises the link again, even with its screen awake.
     """
-    for block in ('\n' + ioreg_output).split('\n+-o ')[1:]:
-        if (f'"idVendor" = {FUJITSU_USB_VENDOR}' in block and
-                f'"idProduct" = {NETWORK_MODE_PRODUCT}' in block):
-            match = re.search(r'"IOLinkStatus" = (\d+)', block)
-            if not match:
-                return False  # no network driver attached yet: nothing to judge
-            status = int(match.group(1))
-            return bool(status & IFM_AVALID) and not status & IFM_ACTIVE
-    return False
+    status = network_link_status(ioreg_output)
+    # AVALID set + ACTIVE clear means the driver has a valid medium but no carrier.
+    return status is not None and bool(status & IFM_AVALID) and not status & IFM_ACTIVE
+
+
+def usb_link_idle(ioreg_output):
+    """True when the ECM driver is attached but reports no valid medium at all.
+
+    Observed 2026-11-05: after a long idle the device stays 0x1657 with
+    IOLinkStatus = 0, IOLinkSpeed = 0, no en5 interface and no mDNS service.
+    A software re-enumeration restores the link within ~2 s. Status 0 is NOT
+    "link down" in the AVALID sense, so it needs its own detection path.
+    """
+    return network_link_status(ioreg_output) == 0
 
 
 def reenumerate_quaderno():
@@ -411,19 +426,36 @@ def reenumerate_quaderno():
     return requested
 
 
-def usb_link_stuck_now():
+def ioreg_devices():
     try:
-        output = subprocess.run(['/usr/sbin/ioreg', '-r', '-c', 'IOUSBHostDevice', '-l'],
-                                capture_output=True, text=True, timeout=5).stdout
+        return subprocess.run(['/usr/sbin/ioreg', '-r', '-c', 'IOUSBHostDevice', '-l'],
+                              capture_output=True, text=True, timeout=5).stdout
     except (OSError, subprocess.TimeoutExpired):
-        return False
-    return usb_link_down(output)
+        return ''
+
+
+def usb_link_stuck_now():
+    return usb_link_down(ioreg_devices())
+
+
+def usb_link_idle_now():
+    return usb_link_idle(ioreg_devices())
 
 
 def recover_usb_link(wait=12):
-    """Re-enumerate a QUADERNO whose USB link is stuck down. True when a recovery was attempted."""
-    if not usb_link_stuck_now():
+    """Re-enumerate a QUADERNO whose USB link is down or idle. True when a recovery was attempted."""
+    stuck = usb_link_stuck_now()
+    idle = usb_link_idle_now()
+    if not (stuck or idle):
         return False
+    if idle and not stuck:
+        # A freshly attached ECM driver reports IOLinkStatus 0 while it negotiates.
+        # Only replug when the service is still absent after a bounded observation,
+        # otherwise a normal plug-in would be interrupted by our own recovery.
+        for _ in range(4):
+            if advertising_interfaces(dns_sd_output(['-B', '_dp_fujitsu._tcp', 'local.'], duration=0.5)):
+                return False
+            time.sleep(0.5)
     try:
         if not reenumerate_quaderno():
             return False
@@ -539,17 +571,27 @@ def discover_endpoints(address):
     if not advertising_interfaces(service_output):
         if quaderno_on_usb() is False:
             raise UsbDisconnected()
-        # Still on USB but the link is down (recovery already ran in prepare_usb):
-        # say so instead of timing out against a same-named LAN host.
+        # Still on USB but with no usable link (recovery already ran in prepare_usb).
+        # Report the real fault instead of timing out against a same-named LAN host.
         if usb_link_stuck_now():
             raise UsbLinkDown()
+        # Status 0 alone is weaker evidence: keep the LAN candidate when one exists,
+        # so a Wi-Fi delivery is never blocked by an idle USB attachment.
+        if not found and usb_link_idle_now():
+            service_output = dns_sd_output(['-B', '_dp_fujitsu._tcp', 'local.'], duration=1)
+            if not advertising_interfaces(service_output):
+                raise UsbLinkDown()
     return found or [address]
 
 
 BASE_REQUEST_SECONDS = 120
 # Conservative floor for USB Ethernet / Wi-Fi throughput when sizing transfer limits.
 MIN_TRANSFER_BYTES_PER_SECOND = 256 * 1024
-STALL_SECONDS = 90  # no byte moved for this long: the link is dead
+STALL_SECONDS = 90  # averaging window for the stall check
+# A dead link moves ~0 B/s, but a link degraded by two orders of magnitude is also unusable
+# for a 100 MiB PDF (it would run into the size-scaled limit). One eighth of the sizing floor
+# (256 KiB/s) leaves room for device-side rendering pauses while still failing a crawling link.
+MIN_LINK_BYTES_PER_SECOND = 32 * 1024
 # Cap below ProcessRunner's 3600 s outer deadline: on a huge transfer the user must see a
 # specific request error before the App kills the whole helper process.
 MAX_TRANSFER_SECONDS = 3000
@@ -622,8 +664,9 @@ class Device:
             args = ['/usr/bin/curl', '--silent', '--show-error', '--noproxy', '*',
                     '--connect-timeout', '2', '--max-time', str(max_time), '--request', method,
                     # A link that stops moving data (e.g. Mac slept mid-transfer) fails after
-                    # STALL_SECONDS instead of waiting out a long size-scaled limit.
-                    '--speed-limit', '1', '--speed-time', str(STALL_SECONDS),
+                    # Fail when the average rate over STALL_SECONDS drops below an
+                    # effective floor, not only when the link moves literally zero bytes.
+                    '--speed-limit', str(MIN_LINK_BYTES_PER_SECOND), '--speed-time', str(STALL_SECONDS),
                     '--connect-to', 'digitalpaper.local:8443:' + self.target + ':8443',
                     '--insecure', '--pinnedpubkey', self.settings['public_key_pin'],
                     '--dump-header', str(headers), '--output', body, '--write-out', '%{http_code}',
@@ -736,6 +779,7 @@ class Device:
 
     def remove_orphans(self):
         pin = self.settings.get('public_key_pin', '')
+        prune_expired_orphans()
         deadline = time.monotonic() + CLEANUP_BUDGET_SECONDS
         for document_id in pending_orphans(pin):
             remaining = deadline - time.monotonic()
@@ -953,7 +997,9 @@ class Device:
 
 
 
-ORPHAN_LIMIT = 20
+ORPHAN_LIMIT = 500  # overflow warning threshold, NOT a silent truncation of device entries
+ORPHAN_TTL_SECONDS = 30 * 24 * 3600
+ORPHAN_MAX_ATTEMPTS = 10
 
 
 def load_orphans():
@@ -964,42 +1010,95 @@ def load_orphans():
         return []
 
 
+def save_orphans(orphans):
+    try:
+        save_private(ROOT / 'orphans.json', json.dumps(orphans, ensure_ascii=False).encode())
+    except OSError:
+        pass
+
+
+def orphan_age_seconds(item):
+    """Age of a record. Legacy records without a timestamp are treated as new, never dropped."""
+    try:
+        return max(0.0, time.time() - datetime.fromisoformat(item['created_at']).timestamp())
+    except (KeyError, TypeError, ValueError, OverflowError, OSError):
+        return 0.0
+
+
+def record_orphan_overflow(entry):
+    """Inspectable audit record instead of silently dropping an orphan at the limit."""
+    path = ROOT / 'orphans-overflow.json'
+    try:
+        existing = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError, TypeError):
+        existing = {'count': 0, 'recent': []}
+    existing['count'] = int(existing.get('count', 0)) + 1
+    existing['recent'] = (existing.get('recent', []) + [entry])[-10:]
+    existing['last_at'] = datetime.now().astimezone().isoformat(timespec='seconds')
+    try:
+        save_private(path, json.dumps(existing, ensure_ascii=False).encode())
+    except OSError:
+        pass
+
+
 def pending_orphans(pin):
-    return [item['id'] for item in load_orphans() if item['pin'] == pin]
+    return [item['id'] for item in load_orphans()
+            if item['pin'] == pin and not item.get('abandoned')]
 
 
 def remember_orphan(pin, document_id, error=None):
-    entry = {'pin': pin, 'id': document_id}
+    entry = {'pin': pin, 'id': document_id,
+             'created_at': datetime.now().astimezone().isoformat(timespec='seconds'),
+             'attempts': 0}
     if error:
         entry['last_error'] = error[:200]
-    orphans = [item for item in load_orphans() if item['id'] != document_id]
-    orphans = (orphans + [entry])[-ORPHAN_LIMIT:]
-    try:
-        save_private(ROOT / 'orphans.json', json.dumps(orphans).encode())
-    except OSError:
-        pass
+    orphans = [item for item in load_orphans()
+               if not (item['id'] == document_id and item['pin'] == pin)]
+    if len(orphans) >= ORPHAN_LIMIT:
+        record_orphan_overflow({'reason': 'over_limit', 'id': document_id, 'pin': pin})
+    # Keep every new entry: dropping one would leave an unverified device document untracked.
+    save_orphans(orphans + [entry])
+
+
+def prune_expired_orphans():
+    """Cross-device cleanup: TTL-expired records leave the active retry set but stay archived.
+
+    Orphans are isolated by device pin, so a record for a device that is no longer paired
+    would otherwise never be revisited. Expiry is judged without contacting any device.
+    """
+    orphans = load_orphans()
+    kept = [item for item in orphans if orphan_age_seconds(item) < ORPHAN_TTL_SECONDS]
+    expired = [item for item in orphans if orphan_age_seconds(item) >= ORPHAN_TTL_SECONDS]
+    if expired:
+        try:
+            path = ROOT / 'orphans-archive.json'
+            previous = json.loads(path.read_text(encoding='utf-8')) if path.exists() else []
+            save_private(path, json.dumps((previous + expired)[-ORPHAN_LIMIT:], ensure_ascii=False).encode())
+        except (OSError, ValueError, TypeError):
+            pass
+        save_orphans(kept)
+    return len(expired)
 
 
 def mark_orphan_failure(pin, document_id, error):
-    """Keep the last cleanup failure visible instead of silently continuing."""
+    """Keep the failure visible; abandon a record that cannot be recovered after bounded retries."""
     orphans = load_orphans()
     for item in orphans:
         if item['pin'] == pin and item['id'] == document_id:
+            item['attempts'] = int(item.get('attempts') or 0) + 1
             item['last_error'] = error[:200]
-    try:
-        save_private(ROOT / 'orphans.json', json.dumps(orphans).encode())
-    except OSError:
-        pass
+            if (item['attempts'] >= ORPHAN_MAX_ATTEMPTS or
+                    orphan_age_seconds(item) >= ORPHAN_TTL_SECONDS):
+                item['abandoned'] = True
+                item['abandoned_at'] = datetime.now().astimezone().isoformat(timespec='seconds')
+    save_orphans(orphans)
 
 
 def forget_orphan(pin, document_id):
     orphans = load_orphans()
     remaining = [item for item in orphans if not (item['pin'] == pin and item['id'] == document_id)]
     if len(remaining) != len(orphans):
-        try:
-            save_private(ROOT / 'orphans.json', json.dumps(remaining).encode())
-        except OSError:
-            pass
+        save_orphans(remaining)
 
 
 HISTORY_LIMIT = 50
