@@ -1,16 +1,39 @@
 import Foundation
 
+/// FIFO gate for App-side helper calls. Waiting happens *before* a process is started, so a
+/// queued delivery neither hits the cross-process lock nor consumes its 3600 s hard deadline.
+/// Device authentication has mutable session state; two helpers cannot safely overlap.
+private actor DeliveryQueue {
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var busy = false
+
+    func acquire() async {
+        guard busy else { busy = true; return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func release() {
+        guard !waiters.isEmpty else { busy = false; return }
+        waiters.removeFirst().resume()  // the slot passes directly to the next waiter
+    }
+}
+
 /// Shared transport for manual App delivery and connection diagnostics.
 /// Credentials remain outside the bundle; the helper verifies the paired device's key.
 enum DirectDelivery {
-    struct Result {
+    struct Result: Sendable {
         let success: Bool
         let message: String
         let details: String
     }
 
+    private static let queue = DeliveryQueue()
+
     static func run(_ arguments: [String], environment extra: [String: String] = [:]) async -> Result {
-        await Task.detached(priority: .userInitiated) {
+        await queue.acquire()
+        // defer covers cancellation / early exit too: a forgotten release would wedge the queue.
+        defer { Task { await queue.release() } }
+        return await Task.detached(priority: .userInitiated) {
             guard let resources = Bundle.main.resourceURL else {
                 return Result(success: false, message: L("缺少直连工具，请重新安装 App"), details: "")
             }

@@ -1,12 +1,18 @@
 """Offline invariants: clipboard naming, source preservation, no overwrite, pinned transport."""
+import contextlib
 import hashlib
+import inspect
+import io
 import json
 import importlib.util
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -71,6 +77,8 @@ class TransportTests(unittest.TestCase):
             source.write_bytes(b'%PDF-test-content')
             device = direct.Device({}, b'', '')
             device.authenticate = lambda: None
+            # This case exercises naming only; duplicate detection has its own tests below.
+            device.matches_content = lambda entry, expected: False
             device.resolve = lambda path: ({'entry_id': 'root'} if path == 'Document/Received' else
                 {'entry_id': 'old'} if path.endswith('/同名.pdf') else {'entry_id': 'new'})
             calls = []
@@ -984,3 +992,137 @@ class SourceStampTests(unittest.TestCase):
             missing = self.stamp(d)
             self.assertNotEqual(missing.returncode, 0)
             self.assertEqual(missing.stdout.strip(), '')
+
+
+class InputBoundaryTests(unittest.TestCase):
+    """Gaps found by the 2026-11-05 offline probe: empty input, long names, idempotency."""
+
+    def device(self):
+        device = direct.Device({'public_key_pin': 'sha256//pin'}, b'', '')
+        device.authenticate = lambda: None
+        device.remove_orphans = lambda: None
+        return device
+
+    def test_zero_byte_pdf_is_rejected_before_any_device_request(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / 'empty.pdf'
+            source.write_bytes(b'')
+            device = self.device()
+            device.resolve = lambda path: {'entry_id': 'root'}
+            calls = []
+            device.request = lambda *args, **kwargs: calls.append(args)
+            with self.assertRaisesRegex(direct.DirectError, 'PDF 文件为空'):
+                device.upload(source)
+            self.assertEqual(calls, [])
+
+    def test_remote_name_is_bounded_and_folds_control_characters(self):
+        long_name = direct.remote_file_name(Path('/tmp/' + 'L' * 180 + '.pdf'))
+        self.assertEqual(len(long_name), direct.MAX_REMOTE_NAME)
+        self.assertTrue(long_name.endswith('.pdf'))
+        folded = direct.remote_file_name(Path('/tmp/a\nb:c.pdf'))
+        self.assertNotIn('\n', folded)
+        self.assertNotIn(':', folded)
+        self.assertEqual(folded, 'a_b_c.pdf')
+
+    def test_upload_posts_the_bounded_name(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / ('L' * 180 + '.pdf')
+            source.write_bytes(b'%PDF-long')
+            bounded = direct.remote_file_name(source)
+            device = self.device()
+            answers = iter([{'entry_id': 'root'}, None, {'entry_id': 'new'}])
+            device.resolve = lambda path: next(answers)
+            posted = []
+            def request(method, endpoint, **kwargs):
+                if method == 'POST':
+                    posted.append(kwargs['json_body']['file_name'])
+                    return direct.Response(201, {}, b'{"document_id":"new"}')
+                return direct.Response(200, {}, b'')
+            device.request = request
+            result = device.upload(source)
+            self.assertEqual(posted, [bounded])
+            self.assertEqual(result['path'], 'Document/Received/' + bounded)
+
+    def test_identical_repeat_upload_is_skipped_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / 'same.pdf'
+            source.write_bytes(b'%PDF-same')
+            device = self.device()
+            device.resolve = lambda path: {'entry_id': 'root' if path == 'Document/Received' else 'old'}
+            writes = []
+            def request(method, endpoint, **kwargs):
+                writes.append(method)
+                if kwargs.get('output_path') is not None:
+                    Path(kwargs['output_path']).write_bytes(source.read_bytes())
+                return direct.Response(200, {}, b'')
+            device.request = request
+            result = device.upload(source)
+            self.assertTrue(result['skipped'])
+            self.assertEqual(result['path'], 'Document/Received/same.pdf')
+            self.assertEqual(writes, ['GET'])  # readback only: no POST / PUT / DELETE
+
+    def test_different_content_with_the_same_name_gets_a_deterministic_suffix(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            source = Path(tmp) / 'same.pdf'
+            source.write_bytes(b'%PDF-new')
+            expected = direct.file_sha256(source)
+            answers = iter([{'entry_id': 'root'}, {'entry_id': 'old'}, None, {'entry_id': 'new'}])
+            device = self.device()
+            device.resolve = lambda path: next(answers)
+            posted = []
+            def request(method, endpoint, **kwargs):
+                if kwargs.get('output_path') is not None:
+                    Path(kwargs['output_path']).write_bytes(b'%PDF-old')
+                    return direct.Response(200, {}, b'')
+                if method == 'POST':
+                    posted.append(kwargs['json_body']['file_name'])
+                    return direct.Response(201, {}, b'{"document_id":"new"}')
+                return direct.Response(200, {}, b'')
+            device.request = request
+            device.upload(source)
+            self.assertEqual(posted, ['same_' + expected[:8] + '.pdf'])
+
+    def test_missing_local_dependency_is_not_reported_as_a_device_failure(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            out = io.StringIO()
+            with patch.object(sys, 'argv', ['quaderno-direct', 'check']), \
+                 patch.object(direct, 'prepare_usb', lambda: None), \
+                 patch.object(direct, 'load_device',
+                              side_effect=FileNotFoundError(2, 'No such file', '/usr/bin/curl')), \
+                 contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+                direct.main()
+            payload = json.loads(out.getvalue().strip())
+            self.assertFalse(payload['ok'])
+            self.assertIn('本机缺少直连所需的工具或文件', payload['message'])
+            self.assertIn('/usr/bin/curl', payload['message'])
+
+
+class QueuedDeliveryTests(unittest.TestCase):
+    def test_lock_wait_is_aligned_with_a_full_transaction(self):
+        self.assertEqual(inspect.signature(direct.connection_lock).parameters['timeout'].default,
+                         direct.MAX_TRANSFER_SECONDS)
+        self.assertEqual(direct.LOCK_WAIT_SECONDS, direct.MAX_TRANSFER_SECONDS)
+
+    def test_second_transaction_waits_instead_of_failing(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            order, errors = [], []
+            def worker(label, hold):
+                try:
+                    with direct.connection_lock(timeout=3):
+                        order.append(label + ':start')
+                        time.sleep(hold)
+                        order.append(label + ':end')
+                except Exception as error:  # surface thread failures in the assertion below
+                    errors.append(repr(error))
+            first = threading.Thread(target=worker, args=('first', 0.4))
+            first.start()
+            time.sleep(0.05)
+            second = threading.Thread(target=worker, args=('second', 0))
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                second.start()
+                first.join()
+                second.join()
+            self.assertEqual(errors, [])
+            self.assertEqual(order, ['first:start', 'first:end', 'second:start', 'second:end'])
+            self.assertIn('正在等待', stderr.getvalue())

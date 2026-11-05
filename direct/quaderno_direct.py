@@ -109,6 +109,21 @@ MESSAGES = {
     '另一项设备投递正在进行，请稍后重试。': (
         'Another delivery to the device is in progress. Try again shortly.',
         '別の送信が進行中です。しばらくしてから再試行してください。'),
+    '正在等待另一项设备投递完成…': (
+        'Waiting for another device delivery to finish…',
+        '別の端末への送信が完了するのを待っています…'),
+    'PDF 文件为空，未上传。': (
+        'The PDF is empty; nothing was uploaded.',
+        'PDF ファイルが空のため、送信しませんでした。'),
+    '设备上已有内容相同的文件，未重复投递。': (
+        'An identical file already exists on the device; not delivered again.',
+        '同じ内容のファイルが端末に既に存在するため、再送信しませんでした。'),
+    '本机缺少直连所需的工具或文件：{detail}': (
+        'A required local tool or file is missing: {detail}',
+        'ローカルの必須ツールまたはファイルが見つかりません：{detail}'),
+    '直连处理超时，请重试或检查设备连接。': (
+        'The direct connection timed out. Retry or check the device connection.',
+        '直接接続がタイムアウトしました。再試行するか接続を確認してください。'),
     '快捷键投递排版配置无效，请在 App 中检查排版设置。': (
         'The hotkey-send layout settings are invalid. Check the layout in the app.',
         'ショートカット送信のレイアウト設定が無効です。App でレイアウトを確認してください。'),
@@ -538,6 +553,13 @@ STALL_SECONDS = 90  # no byte moved for this long: the link is dead
 # Cap below ProcessRunner's 3600 s outer deadline: on a huge transfer the user must see a
 # specific request error before the App kills the whole helper process.
 MAX_TRANSFER_SECONDS = 3000
+# App-side deliveries queue in a FIFO actor; this is the cross-process fallback for the
+# official app / CLI. Align the wait with one full transaction instead of dropping a
+# clipboard delivery after 30 s. The 3600 s ProcessRunner deadline still bounds a helper.
+LOCK_WAIT_SECONDS = MAX_TRANSFER_SECONDS
+# Device file names are bounded even though macOS allows 255 characters. Keep room for the
+# deterministic content suffix used on a collision (8 hex chars + underscore).
+MAX_REMOTE_NAME = 100
 # Cleanup runs on an already-failed path. A DELETE must not inherit the upload's long limit,
 # and the whole sweep must finish inside a bounded budget.
 CLEANUP_REQUEST_SECONDS = 15
@@ -557,6 +579,16 @@ def file_sha256(path):
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def remote_file_name(source):
+    """Bound and sanitize the device-side name; macOS names can exceed the device's limit.
+
+    U+2028 and other non-control Unicode are kept (the device already holds such names),
+    but path separators, C0 controls and characters the device treats specially are folded.
+    """
+    stem = re.sub(r'[\x00-\x1f/\\:*?"<>|]', '_', source.stem).strip(' ._')
+    return (stem[:MAX_REMOTE_NAME - 4] or 'document') + '.pdf'
 
 
 class Response:
@@ -830,6 +862,30 @@ class Device:
                      json_body={'parent_folder_id': entry_id(folder_id)})
         return {'ok': True, 'message': tr('已移动：{name}', name=name)}
 
+    def matches_content(self, entry, expected):
+        """Only skip a repeat delivery when the device entry has byte-identical content.
+
+        A failed comparison is deliberately conservative: create a new entry rather than
+        reporting a false success. The response is streamed to a temporary file, so a
+        duplicate check on a large PDF does not allocate a second copy in memory.
+        """
+        document_id = entry.get('entry_id')
+        if not document_id or not re.fullmatch(r'[A-Za-z0-9_-]+', str(document_id)):
+            return False
+        with tempfile.TemporaryDirectory(prefix='quaderno-dedup-') as directory:
+            probe = Path(directory) / 'probe'
+            try:
+                self.request('GET', '/documents/' + document_id + '/file',
+                             output_path=probe, time_limit=MAX_TRANSFER_SECONDS)
+                return file_sha256(probe) == expected
+            except (DirectError, OSError, ValueError, subprocess.TimeoutExpired):
+                return False
+
+    def duplicate_result(self, remote, expected):
+        return {'ok': True, 'skipped': True, 'path': remote, 'sha256': expected,
+                'display_requested': False,
+                'message': tr('设备上已有内容相同的文件，未重复投递。')}
+
     def upload(self, source, destination='Document/Received'):
         if not self.cookie:
             self.authenticate()
@@ -840,12 +896,26 @@ class Device:
             raise DirectError(tr('设备上找不到这个文件夹：{path}', path=destination))
         # Entries left by an earlier interrupted upload would otherwise take this file's name.
         self.remove_orphans()
-        remote = destination + '/' + source.name
-        if self.resolve(remote):
-            remote = destination + '/' + source.stem[:100] + '_' + uuid.uuid4().hex[:8] + '.pdf'
         # Size and hash come from stat/streaming, never from holding the whole PDF in memory.
         size = source.stat().st_size
+        if size == 0:
+            raise DirectError(tr('PDF 文件为空，未上传。'))
         expected = file_sha256(source)
+        base_name = remote_file_name(source)
+        remote = destination + '/' + base_name
+        existing = self.resolve(remote)
+        if existing and self.matches_content(existing, expected):
+            return self.duplicate_result(remote, expected)
+        if existing:
+            # Deterministic content suffix: repeating the same file can never produce a
+            # fresh random copy. A different file with the same base name gets its own name.
+            stem = base_name[:-4][:MAX_REMOTE_NAME - 13]
+            deterministic = stem + '_' + expected[:8] + '.pdf'
+            candidate = self.resolve(destination + '/' + deterministic)
+            if candidate and self.matches_content(candidate, expected):
+                return self.duplicate_result(destination + '/' + deterministic, expected)
+            remote = destination + '/' + (stem + '_' + uuid.uuid4().hex[:8] + '.pdf'
+                                          if candidate else deterministic)
         created = self.request('POST', '/documents2', json_body={
             'file_name': remote.split('/')[-1], 'parent_folder_id': parent['entry_id'],
             'document_source': ''}).json()
@@ -1211,12 +1281,15 @@ def prepare_markdown(text):
 
 
 @contextmanager
-def connection_lock(timeout=30):
+def connection_lock(timeout=LOCK_WAIT_SECONDS):
     # Device authentication has mutable nonce/session state shared by App and Ctrl+1.
-    # Serialize complete transactions, not only the upload portion.
+    # Serialize complete transactions, not only the upload portion. App-side calls already
+    # queue in DirectDelivery; this is the cross-process fallback and now *waits* for a
+    # full transaction instead of dropping a clipboard delivery after 30 s.
     ROOT.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(ROOT / 'transfer.lock', os.O_CREAT | os.O_RDWR, 0o600)
     acquired = False
+    notified = False
     deadline = time.monotonic() + timeout
     try:
         while not acquired:
@@ -1226,6 +1299,10 @@ def connection_lock(timeout=30):
             except BlockingIOError:
                 if time.monotonic() >= deadline:
                     raise DirectError(tr('另一项设备投递正在进行，请稍后重试。'))
+                if not notified:
+                    # stdout is a strict JSON channel for the App; progress goes to stderr.
+                    print(tr('正在等待另一项设备投递完成…'), file=sys.stderr, flush=True)
+                    notified = True
                 time.sleep(0.1)
         yield
     finally:
@@ -1439,7 +1516,12 @@ def main():
                     raise
         print(json.dumps(result, ensure_ascii=False))
     except Exception as error:
-        if isinstance(error, (OSError, subprocess.TimeoutExpired)):
+        if isinstance(error, subprocess.TimeoutExpired):
+            message = tr('直连处理超时，请重试或检查设备连接。')
+        elif isinstance(error, FileNotFoundError):
+            detail = str(getattr(error, 'filename', None) or error)
+            message = tr('本机缺少直连所需的工具或文件：{detail}', detail=detail)
+        elif isinstance(error, OSError):
             message = tr('无法连接设备，请检查 USB / Wi-Fi、设备唤醒状态及设备地址。')
         elif isinstance(error, DirectError):
             message = str(error)

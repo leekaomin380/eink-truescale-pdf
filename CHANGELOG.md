@@ -5,6 +5,24 @@ version tags have been cut yet — everything below is `Unreleased`, seeded
 retrospectively from the project's git history to give newcomers a map without
 requiring them to read every commit.
 
+## [Unreleased] — 2026-11-04/05 robustness hardening
+
+### Fixed
+- Concurrent deliveries now queue: a FIFO gate in the App serializes helper calls, and the
+  cross-process lock waits for a full transaction instead of failing after 30 s.
+- USB serial-mode probing and `tcdrain` moved off the main actor; the drain is bounded to
+  2 s and a failed switch is retried with backoff instead of leaving an 80 s dead window.
+- Empty PDFs are rejected; device file names are sanitized and bounded to 100 characters;
+  byte-identical repeat uploads are skipped; a missing local tool is no longer reported
+  as a device connection failure.
+- The device file manager compensates for the firmware's 3–4 s directory index delay with
+  bounded (0/3/6 s) refresh after changes.
+
+### Verification
+77 Python unit tests, 74 regression assertions, zero-warning build, strict codesign, and
+on-device probes for empty input, long names, idempotency and concurrent delivery. All
+probe entries and history records were removed; see `docs/audit/CFR-2026-11-04-robustness.md` §9.
+
 ## [1.2.2] — 2026-11-02
 
 ### Changed

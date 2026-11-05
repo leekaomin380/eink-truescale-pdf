@@ -765,6 +765,7 @@ class ConversionViewModel: ObservableObject {
             if result.success {
                 try? FileManager.default.removeItem(at: copyURL)
                 setStatus(result.message, .ok)
+                DeviceFilesModel.shared.noteDelivered(name: copyURL.lastPathComponent)
             } else {
                 setStatus(result.message + L("（本地投递副本已保留）"), .err)
             }

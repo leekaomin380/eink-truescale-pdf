@@ -338,3 +338,50 @@
 - `orphans.json` 按 pin 隔离 + `ORPHAN_LIMIT=20` 静默截断 + 无时间戳；设备目录索引延迟 3–4 s 未做 UI 补偿。
 - 真机拔线/断电失效注入、Hardened Runtime 公证版、Wi-Fi 链路、>128 MiB 文件、设备休眠态、真实 `book.sh` 大输出、CI 远端执行、文档 SSOT（`PRODUCT.md:39` 仍 1.1.0）仍未验证。
 - `icon/`、`output/` 两个历史遗留未跟踪目录未纳入提交。本地提交，未 push、未自合。
+
+> 状态索引：以下 §8.4 条目已于 §9 收敛 —— P2-5 / P2-6 并发架构、异常输入三缺口、依赖错误分类、设备目录索引延迟 UI 补偿、文档 SSOT（`PRODUCT.md:39`）。其余条目（`--speed-limit` 阈值、`orphans.json` 生命周期、失效注入、CI 远端执行、`icon/` / `output/`）仍开放。
+
+## 9. 排队等待与输入边界（2026-11-05，用户确认「可以改为排队等待」后执行）
+
+### 9.1 落地项
+
+| 项 | 改动 | 对应缺口 |
+|---|---|---|
+| App 侧 FIFO 队列 | 新增 `DeliveryQueue` actor（`CheckedContinuation` 非阻塞等待 + 槽位直接移交），`DirectDelivery.run` 先 `acquire()` 再启动 helper，用 `defer { Task { await release() } }` 保证取消 / 早退也放行。排队不计入 3600 s 进程硬超时 | P0-4 / P2-6 |
+| 跨进程锁排队 | `connection_lock()` 默认 `timeout` 由 30 s 改为 `LOCK_WAIT_SECONDS = MAX_TRANSFER_SECONDS = 3000`；排队时向 **stderr** 输出一次中文/英/日提示（stdout 仍是严格 JSON 通道）；超时文案沿用既有条目 | P0-4 / P2-6 |
+| 串口切换线程模型 | `QuickSendMonitor.refresh()` 的 IOKit 扫描与切换整体移到 `DispatchQueue.global(.utility)`，主线程只接收结果；`tcdrain` 改为 `dup` fd + 后台线程 + `DispatchSemaphore` 2 s 有界 join，静态 `DrainState` 防止卡死时重复起线程 | P0-4 / P2-5 |
+| 切换失败重试 | 失败不写入 `switchedPort`，按 3/6/12/24/30 s 指数退避重试；设备拔出时清空状态 | P1 / P2-4 |
+| 空输入 | `upload()` 在 `stat()` 后拒绝 0 字节 PDF，先于任何设备请求 | P1-1 |
+| 名称边界 | 新增 `remote_file_name()`：折叠 C0 控制字符与设备特殊字符、保留 U+2028 等 Unicode、统一截断到 `MAX_REMOTE_NAME = 100`（含 `.pdf`）；原先只有同名冲突分支才截断 | P1-1 |
+| 重复请求幂等 | 同名冲突时用 `GET /documents/{id}/file` 流式落盘比对 SHA-256：内容一致直接返回 `skipped=True`，不写设备；不一致用确定性 `stem_<sha8>.pdf`，仅当该名也被占用才追加 uuid。比对失败一律走新建，不误报成功 | P1-1 |
+| 错误分类 | `main()` 把 `TimeoutExpired` / `FileNotFoundError` 从 `OSError` 大类中分离，分别给出超时与「本机缺少工具或文件」提示（含路径），连接类 `OSError` 保持原文案 | P1-2 |
+| 目录索引补偿 | `DeviceFilesModel` 新增 `visible()` / `expectedNames()` / `refreshUntilVisible()`：改动后 0/3/6 s 有界追赶刷新，按名称前 40 字符前缀匹配（兼容截断与内容后缀）；`ConversionViewModel` 投递成功后调用 `noteDelivered()` | P1-4 |
+| 文档 SSOT | `PRODUCT.md:39` 直连版基线 1.1.0 → 1.2.2（与 `Info.plist` / `CHANGELOG` 一致）；`CHANGELOG` 增加 Unreleased 段；`TODO.md` 勾选四项已收敛工作 | P2-3 |
+
+### 9.2 验证矩阵
+
+| 层 | 结果 |
+|---|---|
+| Python 单测 | **77 项 / OK**（新增 8 项：空文件、名称边界、长名上传、幂等跳过、确定性后缀、依赖分类、锁上限、双线程排队；同步修正 `TransportTests` 的冲突桩以隔离新逻辑） |
+| 回归套件 | **74/74 通过**；`zsh -n` 三个脚本通过 |
+| 构建 / 签名 | **两次** `./gui/build-app.sh` 均 `EXIT=0`，零 warning / 零 error；首次因源码变更自动重建运行时 `8a5f571cbf43`，二次戳记复用并跳过；两次 `codesign --verify --deep --strict` 通过；`check` 通过（`en5` IPv6 link-local，root_entries 12） |
+| App 队列探针 | 三个并发 `DirectDelivery.run` 调用：helper 日志严格 `start A/end A/start B/end B/start C/end C`，`ALL_OK=true`；最终 defer 版 `ELAPSED=1.34s`（单个 0.4 s × 3，串行） |
+| 排队提示解析 | helper 同时输出两行 stderr（含中文排队提示）与一行 stdout JSON：当前 `DirectDelivery` `SUCCESS=true`、`MESSAGE` 正确、stderr 仅进 `details` |
+| 真机输入边界 | 0 字节 PDF → `ok=false`「PDF 文件为空，未上传。」（0.35 s，无设备写入）；202 字符文件名 → 设备侧 100 字符、SHA-256 一致（3.05 s）；同一 2 MiB 文件第二次上传 → `skipped=true`「设备上已有内容相同的文件，未重复投递。」（0.63 s vs 首次 2.29 s） |
+| 真机并发排队 | 两个 CLI 进程同一瞬间各投递 4 MiB：**两者 `ok=true`**，一个 stderr 出现「正在等待另一项设备投递完成…」，wall 5.28 s（串行），无 30 s 直接失败 |
+| 状态核对 | 设备 Received **735 条前后不变**、无探针残留；`orphans.json` 未产生；`history.jsonl` 50 → 45（备份 `/tmp/truescale-history-backup-r3-20261105-080613.jsonl`） |
+
+### 9.3 关键假设
+
+1. 排队发生在 **App 层**，进程级 3600 s 硬超时只约束单次事务；因此 `LOCK_WAIT_SECONDS` 可对齐 3000 s 而不与外层上限冲突。跨进程（官方 App / 手工 CLI）撞锁时最坏仍可能先触发外层上限，归因顺序未改，列为待确认。
+2. 幂等语义取「**内容相同则跳过**」，不做覆盖、不写 history；不同内容同名文件保留为确定性副本。若产品语义应为「覆盖」或「总是生成版本副本」，需另定。
+3. 名称上限取 100 **字符**（非字节），保留 U+2028 等已有设备文件名字符；未做固件 NAME_MAX 字节级实测。
+4. `tcdrain` 卡死时后台线程可能长期占用，静态槽位会拒绝后续 drain 直至其结束；此为真机串口卡死注入才能收敛的边界。
+5. 未执行破坏性失效注入（拔线 / 断电 / 限速），未改 `--speed-limit`、两层 cap 数值、`icon/` / `output/` 处置。
+
+### 9.4 本轮未收敛
+
+- **S1 未验**：真机串口卡死 / 拔线 / 断电 / 限速失效注入；Hardened Runtime 公证版；Wi-Fi 链路、>128 MiB、设备休眠态、真实 `book.sh` 大输出、CI workflow 远端执行。
+- **S2 仍在**：`--speed-limit 1` 只判完全无数据；`orphans.json` 按 pin 隔离 + 20 条静默截断 + 无时间戳；非 UTF-8 输入、兜底重复投递；设备页延迟刷新的 UI 呈现与快捷键 / Finder 投递链路（`deliver.sh`）未接 `noteDelivered()`。
+- **S3**：`test.sh` 74 项断言中「行为不变量 vs 实现快照」未分类；`icon/`、`output/` 未处置。
+- 构建前需先把旧 `gui/*.app` 移出仓库目录，否则本会话的批量删除护栏会拦截 `build-app.sh` 的 `rm -rf`（旧产物已备份至 `/tmp/truescale-prebuild-app-20261105-080409.app`）。

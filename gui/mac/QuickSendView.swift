@@ -99,18 +99,46 @@ final class QuickSendMonitor: ObservableObject {
 
     /// 已尝试切换过的串口；同一次插入只切换一次，拔掉后清空。
     private var switchedPort: String?
+    /// 串口扫描与 tcdrain 都在后台执行；同一时刻只允许一个切换任务在途。
+    private var serialSwitchInFlight = false
+    private var switchFailures = 0
+    private var switchNotBefore: Date = .distantPast
 
     func refresh() {
         let model = QuadernoUSB.connectedModel()
         if model != usbModel { usbModel = model }
         // 插上后设备先以串口模式出现，需要主机发切换命令才会变成网卡（以前由 QUADERNO PC App 代做）。
-        if let port = QuadernoUSB.serialModePort() {
-            if port != switchedPort {
-                switchedPort = port
-                QuadernoUSB.switchToNetworkMode(port: port)
+        // IOKit 扫描和 tcdrain 都可能阻塞数十秒：整条串口路径移出主 actor，界面不再被拖住。
+        // 切换失败不记住端口，按 3/6/12/24/30 s 退避重试，避免 18:05 实测的 80 s 停留窗口。
+        if !serialSwitchInFlight && Date() >= switchNotBefore {
+            serialSwitchInFlight = true
+            let knownPort = switchedPort
+            let deviceGone = (model == nil)
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let port = QuadernoUSB.serialModePort()
+                let shouldSwitch = port != nil && port != knownPort
+                let switched = shouldSwitch ? QuadernoUSB.switchToNetworkMode(port: port!) : true
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.serialSwitchInFlight = false
+                    if shouldSwitch {
+                        if switched {
+                            self.switchedPort = port
+                            self.switchFailures = 0
+                            self.switchNotBefore = .distantPast
+                        } else {
+                            self.switchFailures += 1
+                            let backoff = 3 * pow(2, Double(min(self.switchFailures - 1, 3)))
+                            self.switchNotBefore = Date().addingTimeInterval(min(30, backoff))
+                        }
+                    }
+                    if port == nil && deviceGone {
+                        self.switchedPort = nil
+                        self.switchFailures = 0
+                        self.switchNotBefore = .distantPast
+                    }
+                }
             }
-        } else if model == nil {
-            switchedPort = nil
         }
         let records = loadHistory()
         if records.map(\.id) != history.map(\.id) { history = records }
@@ -154,6 +182,23 @@ final class QuickSendMonitor: ObservableObject {
 }
 
 enum QuadernoUSB {
+    /// Guards the single bounded drain slot below (Swift 6 concurrency-safe holder).
+    private final class DrainState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var pending = false
+        func tryBegin() -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            guard !pending else { return false }
+            pending = true
+            return true
+        }
+        func end() {
+            lock.lock(); defer { lock.unlock() }
+            pending = false
+        }
+    }
+    private static let drain = DrainState()
+
     /// Fujitsu（0x04c5）FMVDP 系列在 USB 总线上时返回型号，例如 FMVDP51。
     static func connectedModel() -> String? {
         var iterator: io_iterator_t = 0
@@ -214,8 +259,21 @@ enum QuadernoUSB {
         guard tcsetattr(descriptor, TCSANOW, &attributes) == 0 else { return false }
         let sequence: [UInt8] = [0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x04]
         let written = sequence.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
-        tcdrain(descriptor)
-        return written == sequence.count
+        guard written == sequence.count else { return false }
+        // O_NONBLOCK does not apply to tcdrain: a device that stops reading can block it
+        // indefinitely (P2-5). Drain on a duplicated descriptor and join with a 2 s deadline;
+        // the original fd may close while the helper thread still holds its duplicate.
+        guard drain.tryBegin() else { return false }  // an earlier drain is still stuck
+        let drainDescriptor = dup(descriptor)
+        guard drainDescriptor >= 0 else { drain.end(); return false }
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            tcdrain(drainDescriptor)
+            close(drainDescriptor)
+            finished.signal()
+            QuadernoUSB.drain.end()
+        }
+        return finished.wait(timeout: .now() + 2) == .success
     }
 
     static func displayName(for model: String) -> String {

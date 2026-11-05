@@ -90,7 +90,44 @@ final class DeviceFilesModel: ObservableObject {
         }
     }
 
-    /// 依次执行改动设备的操作，全部结束后刷新一次；消息汇总成功与失败。
+    /// 设备固件对新建条目的目录索引有 3–4 s 异步延迟（真机实测：GET /file 已可用，
+    /// entries2 仍是旧列表）。改动后做有界追赶刷新，直到预期名称出现，最多 9 s。
+    private func visible(_ expected: Set<String>) -> Bool {
+        expected.allSatisfy { name in
+            let prefix = String(name.prefix(40))  // helper may truncate or add a content suffix
+            return entries.contains { $0.name.hasPrefix(prefix) }
+        }
+    }
+
+    private func expectedNames(_ batches: [[String]]) -> Set<String> {
+        var names: Set<String> = []
+        for arguments in batches {
+            if arguments.first == "upload",
+               let index = arguments.firstIndex(of: "--file"), index + 1 < arguments.count {
+                names.insert((arguments[index + 1] as NSString).lastPathComponent)
+            } else if arguments.first == "mkdir",
+                      let index = arguments.firstIndex(of: "--name"), index + 1 < arguments.count {
+                names.insert(arguments[index + 1])
+            }
+        }
+        return names
+    }
+
+    private func refreshUntilVisible(_ expected: Set<String>, keepMessage: Bool) async {
+        for delay in [0.0, 3.0, 6.0] {
+            if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+            await load(keepMessage: keepMessage)
+            if visible(expected) { return }
+        }
+    }
+
+    /// 主窗口 / 快捷键投递成功后调用；设备页已打开过时才补偿刷新。
+    func noteDelivered(name: String) {
+        guard loaded, !name.isEmpty else { return }
+        Task { await refreshUntilVisible([name], keepMessage: false) }
+    }
+
+    /// 依次执行改动设备的操作，全部结束后刷新；消息汇总成功与失败。
     @discardableResult
     func perform(_ batches: [[String]], environment: [String: String] = [:]) async -> Bool {
         var failures: [String] = []
@@ -101,10 +138,11 @@ final class DeviceFilesModel: ObservableObject {
         }
         if failures.isEmpty {
             report(batches.count == 1 ? last : L("已完成 \(batches.count) 项"), error: false)
+            await refreshUntilVisible(expectedNames(batches), keepMessage: true)
         } else {
             report(L("\(failures.count) 项失败：") + (failures.first ?? ""), error: true)
+            await load(keepMessage: true)
         }
-        await load(keepMessage: true)
         return failures.isEmpty
     }
 
