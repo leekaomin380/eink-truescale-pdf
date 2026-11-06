@@ -23,6 +23,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import sys
 import tempfile
+import traceback
 import unicodedata
 from urllib.parse import quote, urlparse
 import uuid
@@ -626,10 +627,14 @@ def file_sha256(path):
 def remote_file_name(source):
     """Bound and sanitize the device-side name; macOS names can exceed the device's limit.
 
-    U+2028 and other non-control Unicode are kept (the device already holds such names),
-    but path separators, C0 controls and characters the device treats specially are folded.
+    C0/C1 controls, path separators and the device's reserved characters are folded,
+    along with U+007F-U+00FF. The device echoes that Latin-1 range as a raw single
+    byte instead of UTF-8 (U+00B7 MIDDLE DOT -> 0xB7), which makes its JSON replies
+    undecodable as strict UTF-8 and aborts delivery after the entry was created.
+    Multi-byte scripts (CJK, kana, hangul, ...) are UTF-8 round-tripped by the device
+    and are deliberately kept.
     """
-    stem = re.sub(r'[\x00-\x1f/\\:*?"<>|]', '_', source.stem).strip(' ._')
+    stem = re.sub(r'[\x00-\x1f\x7f-\xff/\\:*?"<>|]', '_', source.stem).strip(' ._')
     return (stem[:MAX_REMOTE_NAME - 4] or 'document') + '.pdf'
 
 
@@ -638,7 +643,13 @@ class Response:
         self.status_code, self.headers, self.content = status, headers, content
 
     def json(self):
-        return json.loads(self.content)
+        try:
+            return json.loads(self.content)
+        except UnicodeDecodeError:
+            # Historical device entries may still carry a raw Latin-1 byte. Keep the
+            # rest of the reply usable rather than failing the whole request; the
+            # replacement character only affects display names, never entry ids.
+            return json.loads(self.content.decode('utf-8', errors='replace'))
 
 
 class Device:
@@ -689,7 +700,9 @@ class Device:
                 raise ConnectionFailure(result.returncode)
             status = int(result.stdout)
             header_map = {}
-            for line in headers.read_text().splitlines():
+            # curl writes device headers byte-for-byte; a legacy Latin-1 file name in
+            # Content-Disposition must not turn a successful transfer into a failure.
+            for line in headers.read_text(encoding='utf-8', errors='replace').splitlines():
                 if ':' in line:
                     key, value = line.split(':', 1)
                     header_map[key.lower()] = value.strip()
@@ -944,10 +957,14 @@ class Device:
         size = source.stat().st_size
         if size == 0:
             raise DirectError(tr('PDF 文件为空，未上传。'))
-        expected = file_sha256(source)
         base_name = remote_file_name(source)
         remote = destination + '/' + base_name
-        existing = self.resolve(remote)
+        # The digest is a local streaming read; overlap it with the name lookup so
+        # hashing costs no wall time. The device still sees one request at a time.
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            digest = executor.submit(file_sha256, source)
+            existing = self.resolve(remote)
+            expected = digest.result()
         if existing and self.matches_content(existing, expected):
             return self.duplicate_result(remote, expected)
         if existing:
@@ -968,14 +985,17 @@ class Device:
         # on the device: remove it (or remember it for the next connection) before reporting.
         try:
             self.request('PUT', '/documents/' + document_id + '/file', source=source, transfer_size=size)
-            # Start device rendering immediately after the complete upload.
-            # Success is still withheld until readback and directory verification finish.
+            # Earliest point at which the document can appear on screen. Success is
+            # still withheld until readback and directory verification finish.
             display_requested = False
             try:
                 self.request('PUT', '/viewer/controls/open2',
                              json_body={'document_id': document_id, 'page': 1})
                 display_requested = True
-            except (DirectError, OSError, subprocess.TimeoutExpired):
+            except Exception:
+                # A display request is best-effort. Its failure — including an
+                # undecodable reply — must never delete an already-uploaded document
+                # that the device has just been asked to open.
                 pass
             # request() hashes curl's output file in chunks and returns no body bytes.
             self.request('GET', '/documents/' + document_id + '/file',
@@ -1110,10 +1130,15 @@ def record_delivery(name, display_requested, via='direct', document_id=None, rem
                     'document_id': document_id, 'remote': remote})
 
 
-def record_failure(name, message, kept=None):
+def record_failure(name, message, kept=None, detail=None):
     """A failed delivery, with the local PDF kept for retry (shown with 重试 / 在 Finder 中显示)."""
-    append_history({'status': 'failed', 'name': name, 'message': message,
-                    'kept': kept if kept and Path(kept).exists() else None})
+    entry = {'status': 'failed', 'name': name, 'message': message,
+             'kept': kept if kept and Path(kept).exists() else None}
+    if detail:
+        # The user-facing message is localized and deliberately short; keep the
+        # original traceback so the next occurrence is diagnosable without a repro.
+        entry['detail'] = detail
+    append_history(entry)
 
 
 def append_history(entry):
@@ -1515,8 +1540,60 @@ def render_and_upload(args):
                 else:
                     result = device.upload(output)
             except Exception as error:
-                record_failure(output.name, str(error), kept=str(output))
+                record_failure(output.name, str(error), kept=str(output),
+                               detail=traceback.format_exc()[-2000:])
                 raise DirectError(tr('{error}；PDF 已保留：{path}', error=error, path=output)) from error
+    output.unlink(missing_ok=True)
+    result['layout_source'] = mode
+    return result
+
+
+BOOK_RENDER_TIMEOUT = 900  # a full book may take minutes; every subprocess stays bounded
+
+
+def book_upload(args):
+    """EPUB -> PDF -> device, with the handshake overlapped with book typesetting.
+
+    The Finder/EPUB path used to run book.sh, then start a second helper process
+    that authenticated before uploading. One process now does both, and the
+    authentication (2 RTTs, sometimes mDNS re-enumeration) is hidden inside the
+    render. No device-side concurrency is introduced: the render is local only.
+    """
+    source = Path(args.file).resolve()
+    directory = Path(args.directory).resolve()
+    output = directory / (source.stem + '.pdf')
+    script = Path(args.book_script).resolve()
+    command = [str(script), str(source), '-o', str(output)]
+    profile, mode = load_clipboard_layout()
+    if profile:
+        command += ['--size', profile['bodySize'], '--margin', profile['margin'],
+                    '--leading', profile['leading'], '--lang', profile['docLang'],
+                    '--font', profile['latinFont'] + ',' + profile['cjkFont'],
+                    '--page', profile['pageW'], profile['pageH'],
+                    '--time' if profile['printTime'] else '--no-time']
+    # One helper startup; overlap fresh authentication with local book rendering.
+    # Keep the complete transaction serialized against other App / hotkey deliveries.
+    with connection_lock():
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            connection = executor.submit(connect_device)
+            rendered = subprocess.run(command, cwd='/tmp', capture_output=True,
+                                      timeout=BOOK_RENDER_TIMEOUT)
+            if rendered.returncode or not output.is_file() or output.stat().st_size == 0:
+                detail = rendered.stderr or rendered.stdout
+                raise DirectError(tr('渲染失败：{detail}',
+                                     detail=detail.decode(errors='replace')[-160:]))
+            try:
+                try:
+                    device = connection.result()
+                except DeviceUnreachable as error:
+                    result = hand_off_or_raise(output, error)
+                else:
+                    result = device.upload(output)
+            except Exception as error:
+                # Leave the PDF on disk: history's `kept` must stay valid for Retry.
+                record_failure(output.name, str(error), kept=str(output),
+                               detail=traceback.format_exc()[-2000:])
+                raise
     output.unlink(missing_ok=True)
     result['layout_source'] = mode
     return result
@@ -1524,7 +1601,7 @@ def render_and_upload(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'text',
+    parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'book-upload', 'text',
                                            'browse', 'open-doc', 'download', 'delete', 'mkdir', 'move', 'usb-switch',
                                            'screenshot', 'layout'])
     parser.add_argument('--address', default='Android.local')
@@ -1535,6 +1612,7 @@ def main():
     parser.add_argument('--pandoc')
     parser.add_argument('--typst')
     parser.add_argument('--template')
+    parser.add_argument('--book-script', help='book.sh path for the book-upload action')
     parser.add_argument('--format', default='markdown')
     parser.add_argument('--font', action='append', default=[])
     parser.add_argument('--page-width', default='157.1mm')
@@ -1571,6 +1649,10 @@ def main():
             return
         if args.action == 'render-upload':
             result = render_and_upload(args)
+            print(json.dumps(result, ensure_ascii=False))
+            return
+        if args.action == 'book-upload':
+            result = book_upload(args)
             print(json.dumps(result, ensure_ascii=False))
             return
         with connection_lock():
@@ -1611,7 +1693,8 @@ def main():
                     else:
                         result = device.upload(source, folder)
                 except Exception as error:
-                    record_failure(source.name, str(error), kept=str(source))
+                    record_failure(source.name, str(error), kept=str(source),
+                                   detail=traceback.format_exc()[-2000:])
                     raise
         print(json.dumps(result, ensure_ascii=False))
     except Exception as error:

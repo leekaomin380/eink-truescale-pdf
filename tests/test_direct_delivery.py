@@ -1238,3 +1238,123 @@ class OrphanLifecycleTests(unittest.TestCase):
         device.remove_orphans()
         self.assertEqual(direct.pending_orphans(self.pin), [])
         self.assertEqual(direct.pending_orphans('sha256//other'), ['theirs'])
+
+
+class DeviceEncodingTests(unittest.TestCase):
+    """The device echoes U+007F-U+00FF as a raw single byte, not UTF-8."""
+
+    def test_latin1_range_is_folded_but_multibyte_scripts_are_kept(self):
+        name = direct.remote_file_name(
+            Path('/tmp/认知天性 (彼得·C·布朗  亨利·L·罗迪格三世) (z-library.sk, 1lib.sk).pdf'))
+        self.assertNotIn('\u00b7', name)
+        self.assertIn('认知天性', name)
+        self.assertTrue(all(not ('\x7f' <= c <= '\xff') for c in name))
+        kana = direct.remote_file_name(Path('/tmp/読み物·ノート.pdf'))
+        self.assertIn('読み物', kana)
+        self.assertNotIn('\u00b7', kana)
+
+    def test_json_reply_with_raw_latin1_byte_is_still_parsable(self):
+        payload = b'{"entry_id":"abc","entry_name":"A' + b'\xb7' + b'B"}'
+        parsed = direct.Response(200, {}, payload).json()
+        self.assertEqual(parsed['entry_id'], 'abc')
+        self.assertIn('\ufffd', parsed['entry_name'])
+
+    def test_response_header_with_raw_latin1_byte_does_not_fail_request(self):
+        device = direct.Device({'address': 'Android.local', 'public_key_pin': 'sha256//expected'}, b'', '')
+        def fake_run(args, **kwargs):
+            Path(args[args.index('--dump-header') + 1]).write_bytes(
+                b'HTTP/1.1 200 OK\r\nContent-Disposition: attachment; filename="a\xb7b.pdf"\r\n\r\n')
+            Path(args[args.index('--output') + 1]).write_bytes(b'{}')
+            return type('Result', (), {'returncode': 0, 'stdout': b'200'})()
+        with patch.object(direct.subprocess, 'run', side_effect=fake_run):
+            response = device.request('GET', '/documents/abc/file')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {})
+
+    def test_failed_display_request_never_deletes_the_uploaded_document(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'a.pdf'
+            source.write_bytes(b'%PDF-a')
+            device = direct.Device({}, b'', '')
+            device.authenticate = lambda: None
+            seen = []
+            def resolve(path):
+                seen.append(path)
+                if path == 'Document/Received':
+                    return {'entry_id': 'root', 'entry_type': 'folder'}
+                return {'entry_id': 'new'} if len(seen) > 2 else None
+            device.resolve = resolve
+            deleted = []
+            def request(method, endpoint, **kwargs):
+                if endpoint == '/viewer/controls/open2':
+                    raise UnicodeDecodeError('utf-8', b'\xb7', 396, 397, 'invalid start byte')
+                if method == 'DELETE':
+                    deleted.append(endpoint)
+                    return direct.Response(204, {}, b'')
+                if method == 'POST':
+                    return direct.Response(201, {}, b'{"document_id":"new"}')
+                return direct.Response(200, {}, source.read_bytes())
+            device.request = request
+            result = device.upload(source)
+            self.assertTrue(result['ok'])
+            self.assertFalse(result['display_requested'])
+            self.assertEqual(deleted, [])
+
+
+class BookUploadTests(unittest.TestCase):
+    """book-upload: one helper process, handshake overlapped with typesetting."""
+
+    def args_for(self, root):
+        source = root / 'book.epub'
+        source.write_bytes(b'epub')
+        directory = root / 'work'
+        directory.mkdir()
+        script = root / 'book.sh'
+        script.write_text('#!/bin/sh\n')
+        return (type('Args', (), {'file': str(source), 'directory': str(directory),
+                                 'book_script': str(script)})(), directory / 'book.pdf')
+
+    def test_authentication_overlaps_book_rendering(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, output = self.args_for(Path(tmp))
+            started, released, overlaps = threading.Event(), threading.Event(), []
+            class FakeDevice:
+                def upload(self, path):
+                    return {'ok': True, 'message': 'ok'}
+            def fake_connect():
+                started.set()
+                overlaps.append(released.wait(5))
+                return FakeDevice()
+            def fake_run(cmd, **kwargs):
+                overlaps.append(started.wait(5))
+                output.write_bytes(b'%PDF-book')
+                released.set()
+                return type('Result', (), {'returncode': 0, 'stdout': b'', 'stderr': b''})()
+            with patch.object(direct, 'connect_device', fake_connect), \
+                 patch.object(direct, 'load_clipboard_layout', lambda: (None, 'factory')), \
+                 patch.object(direct.subprocess, 'run', side_effect=fake_run):
+                result = direct.book_upload(args)
+            self.assertTrue(result['ok'])
+            self.assertEqual(len(overlaps), 2)
+            self.assertTrue(all(overlaps), 'authentication and rendering must overlap')
+            self.assertFalse(output.exists(), 'a delivered staging PDF is removed')
+
+    def test_failed_upload_keeps_the_rendered_pdf_and_records_detail(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            args, output = self.args_for(Path(tmp))
+            class FailingDevice:
+                def upload(self, path):
+                    raise direct.DirectError('device refused the document')
+            def fake_run(cmd, **kwargs):
+                output.write_bytes(b'%PDF-book')
+                return type('Result', (), {'returncode': 0, 'stdout': b'', 'stderr': b''})()
+            with patch.object(direct, 'connect_device', FailingDevice), \
+                 patch.object(direct, 'load_clipboard_layout', lambda: (None, 'factory')), \
+                 patch.object(direct.subprocess, 'run', side_effect=fake_run):
+                with self.assertRaises(direct.DirectError):
+                    direct.book_upload(args)
+            self.assertTrue(output.exists(), 'Retry needs the PDF to remain on disk')
+            history = json.loads((direct.ROOT / 'history.jsonl').read_text().splitlines()[-1])
+            self.assertEqual(history['status'], 'failed')
+            self.assertEqual(Path(history['kept']), output.resolve())
+            self.assertIn('Traceback', history['detail'])

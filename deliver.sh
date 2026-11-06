@@ -82,26 +82,13 @@ render_upload() {
   RESULT=$("$DIRECT_HELPER" "${args[@]}")
   RESULT_CODE=$?
 }
-# EPUB：用 book.sh 排版（分章、目录、书签），排版参数沿用「⌃1 与 Finder 投递的排版」，再原样上传。
+# EPUB：单次 helper 进程完成排版与投递。设备认证与 book.sh 排版并行，
+# 失败时产物保留在 JOBDIR，让「最近投递」里的重试路径保持有效。
 book_upload() {
-  local file="$1" out="$JOBDIR/${1:t:r}.pdf" layout value
-  local -a bargs=(--size "$BODY_SIZE" --margin "$PAGE_MARGIN" --leading "$LEADING" --lang "$DOC_LANG"
-    --font "${(j:,:)FONTS}" --page "$PAGE_W" "$PAGE_H")
-  layout=$("$DIRECT_HELPER" layout 2>/dev/null)
-  if [[ -n "$layout" && "$layout" != "{}" ]]; then
-    field() { printf '%s' "$layout" | /usr/bin/plutil -extract "$1" raw -o - - 2>/dev/null; }
-    bargs=(--size "$(field bodySize)" --margin "$(field margin)" --leading "$(field leading)"
-      --lang "$(field docLang)" --font "$(field latinFont),$(field cjkFont)"
-      --page "$(field pageW)" "$(field pageH)")
-    [[ "$(field printTime)" == true ]] && bargs+=(--time) || bargs+=(--no-time)
-  fi
-  if ! "$SCRIPT_DIR/book.sh" "$file" -o "$out" "${bargs[@]}" >/dev/null 2>"$JOBDIR/book.log"; then
-    RESULT="$(tail -n 1 "$JOBDIR/book.log")"; RESULT_CODE=1
-    rm -f "$out" "$JOBDIR/book.log"
-    return
-  fi
-  RESULT=$("$DIRECT_HELPER" upload --file "$out"); RESULT_CODE=$?
-  rm -f "$out" "$JOBDIR/book.log"
+  local file="$1"
+  RESULT=$("$DIRECT_HELPER" book-upload --file "$file" --directory "$JOBDIR" \
+      --book-script "$SCRIPT_DIR/book.sh")
+  RESULT_CODE=$?
 }
 result_message() {
   printf '%s' "$RESULT" | /usr/bin/plutil -extract message raw -o - - 2>/dev/null || print -r -- "$1"
