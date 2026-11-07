@@ -1399,6 +1399,24 @@ class ClipboardNormalizationTests(unittest.TestCase):
         # The first row stays data; an empty header row is not a fabricated header.
         self.assertTrue(out.lstrip().startswith('|  |  |  |'))
 
+    def test_tsv_inside_fenced_code_block_is_preserved(self):
+        text = ('示例脚本：\n\n```python\n'
+                'def f(a, b):\n\treturn a\t+ b\n\tprint(a)\tprint(b)\n'
+                '```\n\n正文结束。\n')
+        out, info = direct.normalize_clipboard(text)
+        self.assertEqual(out, text)
+        self.assertFalse(info['applied'])
+        self.assertEqual(info['table_count'], 0)
+
+    def test_html_replacement_skips_fenced_code_lines(self):
+        html = ('<table><tr><th>指标</th><th>值</th></tr>'
+                '<tr><td>镜头</td><td>53 段</td></tr></table>')
+        text = ('```text\n指标 值\n镜头 53 段\n```\n\n正文。\n')
+        out, info = direct.normalize_clipboard(text, html)
+        self.assertEqual(out, text)
+        self.assertFalse(info['applied'])
+        self.assertTrue(info['unmapped'])
+
     def test_inconsistent_tsv_column_counts_are_left_as_prose(self):
         text = 'A\tB\nC\tD\tE\nF\tG\n'
         out, info = direct.normalize_clipboard(text)

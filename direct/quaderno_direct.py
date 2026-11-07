@@ -1483,17 +1483,35 @@ def _pipe_table(grid, header):
     return '\n'.join(lines)
 
 
+def _fenced_lines(lines):
+    """Indices inside fenced code blocks: tabs there are code, never table cells."""
+    inside, fence, marked = False, '', set()
+    for index, line in enumerate(lines):
+        match = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if match:
+            mark = match.group(1)[0]
+            if not inside:
+                inside, fence = True, mark
+            elif mark == fence:
+                inside = False
+            marked.add(index)
+        elif inside:
+            marked.add(index)
+    return marked
+
+
 def _tsv_to_tables(text):
     """S2: consistent tab-separated runs -> headerless pipe tables. Otherwise no-op."""
     lines = text.split('\n')
+    fenced = _fenced_lines(lines)
     matches = []
     i = 0
     while i < len(lines):
-        if '\t' not in lines[i]:
+        if '\t' not in lines[i] or i in fenced:
             i += 1
             continue
         start, widths = i, []
-        while i < len(lines) and '\t' in lines[i]:
+        while i < len(lines) and '\t' in lines[i] and i not in fenced:
             widths.append(lines[i].count('\t') + 1)
             i += 1
         if len(widths) >= 2 and widths[0] >= 2 and all(w == widths[0] for w in widths):
@@ -1523,6 +1541,7 @@ def _replace_html_tables(text, source):
         header = bool(grid) and all(cell.get('header') for cell in rows[0])
         grids.append((grid, header))
     lines = text.split('\n')
+    fenced = _fenced_lines(lines)
     replacements, used, unmapped = [], set(), list(extractor.unmapped)
     expanded_applied = 0
     for grid, header in grids:
@@ -1530,12 +1549,13 @@ def _replace_html_tables(text, source):
         if not flat:
             continue
         anchor, tail = flat[0], flat[-1]
-        starts = [i for i, line in enumerate(lines) if anchor in line and i not in used]
+        starts = [i for i, line in enumerate(lines)
+                  if anchor in line and i not in used and i not in fenced]
         if len(starts) != 1:
             unmapped.append('表格定位歧义：' + anchor[:24])
             continue
         start = starts[0]
-        ends = [i for i in range(start, len(lines)) if tail in lines[i]]
+        ends = [i for i in range(start, len(lines)) if tail in lines[i] and i not in fenced]
         if not ends:
             unmapped.append('表格尾行未定位：' + tail[:24])
             continue
