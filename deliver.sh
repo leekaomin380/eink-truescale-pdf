@@ -26,7 +26,7 @@ fail() { print -ru2 -- "$1"; notify "$(t "TrueScale · 投递失败")" "$1"; exi
 [[ -f "$TEMPLATE" ]] || fail "$(t "缺少排版模板")" 10
 cd "$WORKDIR" || fail "$(t "无法进入渲染目录")" 10
 JOBDIR=$(mktemp -d "$WORKDIR/quaderno_delivery.XXXXXX") || fail "$(t "无法创建临时目录")" 10
-trap 'rm -rf "$JOBDIR/fonts"; rm -f "$JOBDIR/input.md" "$JOBDIR/render.md" "$JOBDIR/render.log"; rmdir "$JOBDIR" 2>/dev/null || true' EXIT
+trap 'rm -rf "$JOBDIR/fonts"; rm -f "$JOBDIR/input.md" "$JOBDIR/input.html" "$JOBDIR/render.md" "$JOBDIR/render.log"; rmdir "$JOBDIR" 2>/dev/null || true' EXIT
 FONTARGS=(); for font in "${FONTS[@]}"; do FONTARGS+=(-V "mainfont=$font"); done
 LAYOUTARGS=(-V "pagewidth=$PAGE_W" -V "pageheight=$PAGE_H" -V "pagemargin=$PAGE_MARGIN" -V "bodysize=$BODY_SIZE" -V "leading=$LEADING")
 
@@ -79,6 +79,8 @@ render_upload() {
   for font in "${FONTS[@]}"; do args+=(--font "$font"); done
   [[ -d "$JOBDIR/fonts" ]] && args+=(--font-directory "$JOBDIR/fonts")
   [[ -n "${2:-}" ]] && args+=(--title "$2")
+  # ⌃1 的富文本剪贴板风味只作为旁路输入；是否采用由 helper 的结构判定决定。
+  [[ -n "${3:-}" && -f "${3:-}" ]] && args+=(--clipboard-html "$3")
   RESULT=$("$DIRECT_HELPER" "${args[@]}")
   RESULT_CODE=$?
 }
@@ -153,12 +155,19 @@ export QUADERNO_SOURCE=clipboard
 # App 调起的 pbpaste 读到的是空内容且不会弹出授权（2026-11-02 实测）。命令行与快捷指令仍用 pbpaste。
 if [[ "${1:-}" == "--clipboard-file" && -n "${2:-}" ]]; then
   cat -- "$2" > "$JOBDIR/input.md"
+  if [[ "${3:-}" == "--clipboard-html" && -n "${4:-}" && -f "${4:-}" ]]; then
+    cat -- "$4" > "$JOBDIR/input.html"
+  fi
 else
   pbpaste > "$JOBDIR/input.md"
 fi
 [[ -n "$(tr -d '[:space:]' < "$JOBDIR/input.md")" ]] || fail "$(t "剪贴板为空，已取消")" 1
 # Single process: authenticate while rendering, then upload, open and verify.
-render_upload "$JOBDIR/input.md"
+if [[ -f "$JOBDIR/input.html" ]]; then
+  render_upload "$JOBDIR/input.md" "" "$JOBDIR/input.html"
+else
+  render_upload "$JOBDIR/input.md"
+fi
 MESSAGE=$(result_message "$(t "投递失败，请查看设备连接")")
 if (( RESULT_CODE != 0 )); then
   print -ru2 -- "$RESULT"

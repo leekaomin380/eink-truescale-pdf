@@ -5,14 +5,32 @@
   #block(inset: (left: 1.5em, top: -0.4em))[#it.description]
 ]
 
+// 表格：沿用本模板既有的灰阶细线（horizontalrule / 页脚 luma(100)）与
+// terms.item 的「粗体词 + 缩进描述」语汇，不引入色块、重底纹或新字号档。
+// stroke 由 none 改为细线：无边框时跨页表格的行边界不可辨（见 2026-11-07
+// 设备回读记录 #49 / #50）。0.35pt / luma(170) 为待确认假设 A4，需在 1:1
+// 真机上复核；若确认改动，应同步 config.sh 的单一几何基准。
+// 关闭 justify 与 hyphenate：CJK 字距展开与拉丁断词会把单元格内容撑到相邻列。
 #set table(
   inset: 6pt,
-  stroke: none
+  stroke: 0.35pt + luma(170)
 )
+#show table: set par(justify: false)
+#show table: set text(hyphenate: false)
+// 只加粗 pandoc 明确输出的 table.header。不用 table.cell.where(y: 0)：
+// 无表头表格（TSV 归一化产物）第一行是数据，加粗它会伪造表头层级。
+#show table.header: set text(weight: "bold")
 
 #show figure.where(
   kind: table
 ): set figure.caption(position: $if(table-caption-position)$$table-caption-position$$else$top$endif$)
+
+// pandoc 的 typst writer 把表格包进 #figure(...)。figure 默认 breakable: false，
+// 长表因此被压进一页：单元格内容被挤压截断、相邻行重叠（设备回读记录 #50
+// 第 3 页「行 5–8 合并」即此机制）。放开表格 figure 的分页后，Typst 按行分页
+// 并在每页重复 table.header；行是最小不可分割单元，页边界不会落在单元格内。
+// 只作用于 kind: table，图片 figure 与普通文本不受影响。
+#show figure.where(kind: table): set block(breakable: true)
 
 #show figure.where(
   kind: image

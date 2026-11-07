@@ -9,6 +9,8 @@ import fcntl
 import functools
 import glob
 import termios
+import html as html_lib
+from html.parser import HTMLParser
 from contextlib import contextmanager
 import base64
 import hashlib
@@ -1126,8 +1128,12 @@ HISTORY_LIMIT = 50
 
 def record_delivery(name, display_requested, via='direct', document_id=None, remote=None):
     """Append a verified delivery for the App's「最近投递」. Never fails the delivery itself."""
-    append_history({'status': 'ok', 'name': name, 'opened': display_requested, 'via': via,
-                    'document_id': document_id, 'remote': remote})
+    entry = {'status': 'ok', 'name': name, 'opened': display_requested, 'via': via,
+             'document_id': document_id, 'remote': remote}
+    # L1/L2 observability: structural quantities only, never the clipboard text.
+    if _PENDING_META:
+        entry['normalization'] = dict(_PENDING_META)
+    append_history(entry)
 
 
 def record_failure(name, message, kept=None, detail=None):
@@ -1350,9 +1356,245 @@ def clean_title(text):
     text = re.sub(r'\[([^]]+)\]\([^)]*\)', r'\1', text)
     text = re.sub(r'^[\s#>*+\-\d.)、]+', '', text)
     text = re.sub(r'[`*_~]', '', text)
+    # Layout separators become spaces before control-character removal. Dropping a
+    # tab outright concatenated adjacent cells: history entry #19's TSV header was
+    # printed as one 32-character run with no boundaries at all.
+    text = re.sub(r'[\t\r\n]', ' ', text)
     text = ''.join(c for c in text if not unicodedata.category(c).startswith('C'))
     text = re.sub(r'[/\\:*?"<>|]', '_', text)
     return re.sub(r'\s+', ' ', text).strip(' ._')[:32]
+
+
+# ---------------------------------------------------------------------------
+# L1 · Clipboard Normalization -> Structural Intermediate Representation (SIR)
+# ---------------------------------------------------------------------------
+# Only structural evidence changes the input: an explicit <table>, or a run of
+# consecutive lines with one consistent tab count. Plain prose and existing GFM
+# pipe tables pass through untouched. This layer emits structure only; all visual
+# decisions belong to table-layout.lua and deliver.typ (L2).
+MAX_NORMALIZE_HTML = 2_000_000
+MAX_NORMALIZE_CELLS = 4000
+_SKIP_HTML_TAGS = frozenset({'script', 'style', 'svg', 'head', 'meta', 'link',
+                             'noscript', 'iframe', 'canvas', 'button', 'form',
+                             'input', 'select', 'textarea'})
+
+
+class _TableExtractor(HTMLParser):
+    """Extract <table> grids from the rich pasteboard flavor; never rebuild the page."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.grids = []
+        self.span_expanded = 0
+        self.unmapped = []
+        self._table = None
+        self._row = None
+        self._cell = None
+        self._skip = 0
+        self._cells = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in _SKIP_HTML_TAGS:
+            self._skip += 1
+            return
+        if self._skip:
+            return
+        attrs = dict(attrs)
+        if tag == 'table':
+            self._table, self._rowspan_seen = [], False
+        elif tag == 'tr' and self._table is not None:
+            self._row = []
+        elif tag in ('td', 'th') and self._row is not None:
+            try:
+                colspan = max(1, min(20, int(attrs.get('colspan', 1))))
+            except (TypeError, ValueError):
+                colspan = 1
+            try:
+                rowspan = int(attrs.get('rowspan', 1))
+            except (TypeError, ValueError):
+                rowspan = 1
+            if rowspan > 1:
+                # A row span cannot be expressed in GFM without repeating or dropping
+                # text. Register it instead of silently merging cells.
+                self._rowspan_seen = True
+            self._cell = {'text': [], 'colspan': colspan, 'header': tag == 'th'}
+            self._cells += 1
+            if self._cells > MAX_NORMALIZE_CELLS:
+                raise ValueError('clipboard table exceeds cell budget')
+        elif tag == 'br' and self._cell is not None:
+            self._cell['text'].append(' ')
+
+    def handle_endtag(self, tag):
+        if tag in _SKIP_HTML_TAGS:
+            self._skip = max(0, self._skip - 1)
+            return
+        if self._skip or self._table is None:
+            return
+        if tag in ('td', 'th') and self._cell is not None:
+            self._row.append(self._cell)
+            self._cell = None
+        elif tag == 'tr' and self._row is not None:
+            self._table.append(self._row)
+            self._row = None
+        elif tag == 'table':
+            self.grids.append((self._table, self._rowspan_seen))
+            self._table = None
+
+    def handle_data(self, data):
+        if self._skip or self._cell is None:
+            return
+        self._cell['text'].append(data)
+
+
+def _clean_cell(value):
+    """Collapse layout whitespace and protect the pipe delimiter, keeping every glyph."""
+    value = re.sub(r'\s+', ' ', html_lib.unescape(value)).strip()
+    return value.replace('|', r'\|')
+
+
+def _grid_from_html(rows):
+    grid = []
+    expanded = 0
+    for row in rows:
+        line = []
+        for cell in row:
+            line.append(_clean_cell(''.join(cell['text'])))
+            for _ in range(cell['colspan'] - 1):
+                # An explicit empty placeholder keeps the column count honest without
+                # repeating the cell's text (which would duplicate visible content).
+                line.append('')
+                expanded += 1
+        grid.append(line)
+    width = max((len(r) for r in grid), default=0)
+    for line in grid:
+        line.extend([''] * (width - len(line)))
+    return grid, expanded
+
+
+def _pipe_table(grid, header):
+    """GFM pipe table. An empty header row makes pandoc emit no table.header."""
+    if not grid or not grid[0]:
+        return ''
+    cols = len(grid[0])
+    row = lambda cells: '| ' + ' | '.join(cells) + ' |'
+    lines = [row(grid[0]) if header else row([''] * cols),
+             '| ' + ' | '.join('---' for _ in range(cols)) + ' |']
+    lines += [row(line) for line in (grid[1:] if header else grid)]
+    return '\n'.join(lines)
+
+
+def _tsv_to_tables(text):
+    """S2: consistent tab-separated runs -> headerless pipe tables. Otherwise no-op."""
+    lines = text.split('\n')
+    matches = []
+    i = 0
+    while i < len(lines):
+        if '\t' not in lines[i]:
+            i += 1
+            continue
+        start, widths = i, []
+        while i < len(lines) and '\t' in lines[i]:
+            widths.append(lines[i].count('\t') + 1)
+            i += 1
+        if len(widths) >= 2 and widths[0] >= 2 and all(w == widths[0] for w in widths):
+            grid = [[_clean_cell(c) for c in line.split('\t')] for line in lines[start:i]]
+            matches.append((start, i, _pipe_table(grid, header=False)))
+        # Inconsistent column counts are left as prose; never force a table.
+    for start, end, table in reversed(matches):
+        lines[start:end] = ['', table, '']
+    return '\n'.join(lines), len(matches)
+
+
+def _replace_html_tables(text, source):
+    """S1: replace only the line range a located <table> collapsed into."""
+    extractor = _TableExtractor()
+    try:
+        extractor.feed(source[:MAX_NORMALIZE_HTML])
+    except (ValueError, AssertionError) as error:
+        return text, 0, ['HTML 表格超出解析预算：' + str(error)], 0
+    grids = []
+    expanded = 0
+    for rows, rowspan_seen in extractor.grids:
+        if rowspan_seen or not rows:
+            extractor.unmapped.append('rowspan 表格未展开，保留原文')
+            continue
+        grid, count = _grid_from_html(rows)
+        expanded += count
+        header = bool(grid) and all(cell.get('header') for cell in rows[0])
+        grids.append((grid, header))
+    lines = text.split('\n')
+    replacements, used, unmapped = [], set(), list(extractor.unmapped)
+    expanded_applied = 0
+    for grid, header in grids:
+        flat = [cell.replace(r'\|', '|') for row in grid for cell in row if cell]
+        if not flat:
+            continue
+        anchor, tail = flat[0], flat[-1]
+        starts = [i for i, line in enumerate(lines) if anchor in line and i not in used]
+        if len(starts) != 1:
+            unmapped.append('表格定位歧义：' + anchor[:24])
+            continue
+        start = starts[0]
+        ends = [i for i in range(start, len(lines)) if tail in lines[i]]
+        if not ends:
+            unmapped.append('表格尾行未定位：' + tail[:24])
+            continue
+        end = ends[-1]
+        if end - start > len(grid) * 4 or any(i in used for i in range(start, end + 1)):
+            unmapped.append('表格区间过大或重叠：' + anchor[:24])
+            continue
+        replacements.append((start, end + 1, _pipe_table(grid, header)))
+        used.update(range(start, end + 1))
+        expanded_applied += expanded
+    for start, end, table in sorted(replacements, reverse=True):
+        lines[start:end] = ['', table, '']
+    return '\n'.join(lines), len(replacements), unmapped, expanded_applied
+
+
+def _table_stats(markdown):
+    """Structural quantities for L2 and for the delivery record (no content stored)."""
+    lines = markdown.splitlines()
+    count = max_cols = rows = 0
+    for index, line in enumerate(lines):
+        if not re.match(r'^\s*\|.*\|\s*$', line):
+            continue
+        if index + 1 >= len(lines) or not re.match(r'^\s*\|[\s:|-]+\|\s*$', lines[index + 1]):
+            continue
+        count += 1
+        # Escaped pipes inside cells are content, not column separators.
+        max_cols = max(max_cols, line.replace(r'\|', '').count('|') - 1)
+        cursor = index + 2
+        body = 0
+        while cursor < len(lines) and re.match(r'^\s*\|.*\|\s*$', lines[cursor]):
+            body += 1
+            cursor += 1
+        rows += body
+    return count, max_cols, rows
+
+
+def normalize_clipboard(text, rich_text=None):
+    """Return (markdown, SIR metadata). Conservative: any doubt means passthrough."""
+    info = {'flavor': 'plain', 'applied': False, 'table_count': 0,
+            'max_cols': 0, 'row_count': 0, 'unmapped': [], 'span_expanded': 0}
+    # S3: an existing GFM pipe table is already the target representation.
+    if re.search(r'^\s*\|.*\|\s*$\n^\s*\|[\s:|-]+\|\s*$', text, re.M):
+        info['flavor'] = 'markdown'
+    else:
+        normalized, tsv_count = _tsv_to_tables(text)
+        if tsv_count:
+            text, info['applied'], info['flavor'] = normalized, True, 'tsv'
+        elif rich_text:
+            normalized, count, unmapped, spans = _replace_html_tables(text, rich_text)
+            if count:
+                text, info['applied'], info['flavor'] = normalized, True, 'html'
+                info['unmapped'], info['span_expanded'] = unmapped, spans
+            else:
+                info['unmapped'] = unmapped
+    info['table_count'], info['max_cols'], info['row_count'] = _table_stats(text)
+    return text, info
+
+
+_PENDING_META = {}
 
 
 def prepare_markdown(text):
@@ -1498,10 +1740,35 @@ def can_use_restricted_fonts(text):
     return all(any(low <= ord(char) <= high for low, high in ranges) for char in text)
 
 
+def _millimetres(value):
+    match = re.match(r'^([\d.]+)\s*mm$', str(value).strip())
+    return float(match.group(1)) if match else None
+
+
+def _points(value):
+    match = re.match(r'^([\d.]+)\s*pt$', str(value).strip())
+    return float(match.group(1)) if match else None
+
+
 def render_and_upload(args):
     directory = Path(args.directory).resolve()
     mode = apply_clipboard_layout(args, directory)
     text = Path(args.input).resolve().read_text()
+    rich_text = None
+    html_path = getattr(args, 'clipboard_html', None)
+    if html_path and Path(html_path).is_file():
+        try:
+            rich_text = Path(html_path).read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            rich_text = None
+    # L1 runs at the single choke point of every text delivery. A normalization
+    # failure must never turn a readable clipboard into a failed delivery.
+    try:
+        text, sir = normalize_clipboard(text, rich_text)
+    except Exception as error:
+        sir = {'flavor': 'plain', 'applied': False, 'unmapped': ['归一化回退：' + str(error)]}
+    _PENDING_META.clear()
+    _PENDING_META.update(sir)
     title, markdown = prepare_markdown(text)
     rendered = directory / 'render.md'
     rendered.write_text(markdown)
@@ -1511,6 +1778,15 @@ def render_and_upload(args):
     output = directory / (stem + '.pdf')
     command = [args.pandoc, str(rendered), '-f', args.format, '--template=' + args.template,
                '-o', str(output), '--pdf-engine=' + args.typst]
+    # L2 consumes the AST plus the current geometry; it never sees the source flavor.
+    table_filter = Path(args.template).parent / 'table-layout.lua'
+    if table_filter.is_file():
+        command += ['--lua-filter=' + str(table_filter)]
+        width, margin = _millimetres(args.page_width), _millimetres(args.margin)
+        if width and margin:
+            command += ['-M', 'typarea_mm=' + format(width - 2 * margin, '.2f')]
+        if _points(args.size):
+            command += ['-M', 'body_size_pt=' + format(_points(args.size), '.2f')]
     if args.print_time:
         command += ['-V', 'printtime=' + datetime.now().strftime('%Y-%m-%d %H:%M')]
     command += ['-M', 'lang=' + args.doc_lang]
@@ -1607,6 +1883,8 @@ def main():
     parser.add_argument('--address', default='Android.local')
     parser.add_argument('--file')
     parser.add_argument('--input')
+    parser.add_argument('--clipboard-html', dest='clipboard_html',
+                        help='rich pasteboard flavor (public.html) for ⌃1 table reconstruction')
     parser.add_argument('--markdown')
     parser.add_argument('--directory')
     parser.add_argument('--pandoc')

@@ -184,17 +184,30 @@ final class GlobalHotkeys: ObservableObject {
     func perform(_ action: HotkeyAction) {
         guard let script = Bundle.main.url(forResource: "deliver", withExtension: "sh") else { return }
         var arguments = [script.path] + action.scriptArguments
-        var clipboardFile: URL?
+        var clipboardFiles: [URL] = []
         if action == .deliver {
             // 剪贴板必须由本进程读：macOS 15.4 起程序读取通用剪贴板要经用户授权（首次弹出系统提示，
             // 可在「系统设置 → 隐私与安全性 → 粘贴」中改为始终允许）；子进程的 pbpaste 只会读到空内容。
             // 读不到时仍交给脚本，由它报告「剪贴板为空」。
-            let text = NSPasteboard.general.string(forType: .string) ?? ""
-            let file = FileManager.default.temporaryDirectory
-                .appendingPathComponent("truescale-clipboard-\(UUID().uuidString).md")
+            let pasteboard = NSPasteboard.general
+            let text = pasteboard.string(forType: .string) ?? ""
+            let base = FileManager.default.temporaryDirectory
+                .appendingPathComponent("truescale-clipboard-\(UUID().uuidString)")
+            let file = base.appendingPathExtension("md")
             if (try? text.write(to: file, atomically: true, encoding: .utf8)) != nil {
-                clipboardFile = file
+                clipboardFiles.append(file)
                 arguments += ["--clipboard-file", file.path]
+                // 富文本风味只作旁路输入，不替换纯文本正文：helper 只有在能定位
+                // 明确的 <table> 结构时才用它重建表格，其余正文逐字保留。
+                let htmlType = NSPasteboard.PasteboardType("public.html")
+                if let data = pasteboard.data(forType: htmlType),
+                   let html = String(data: data, encoding: .utf8), !html.isEmpty,
+                   (try? html.write(to: base.appendingPathExtension("html"),
+                                    atomically: true, encoding: .utf8)) != nil {
+                    let htmlFile = base.appendingPathExtension("html")
+                    clipboardFiles.append(htmlFile)
+                    arguments += ["--clipboard-html", htmlFile.path]
+                }
             }
         }
         running += 1
@@ -204,7 +217,7 @@ final class GlobalHotkeys: ObservableObject {
             process.arguments = arguments
             process.environment = helperEnvironment()
             _ = ProcessRunner.run(process, mode: .none, timeout: 3600)
-            if let clipboardFile { try? FileManager.default.removeItem(at: clipboardFile) }
+            for clipboardFile in clipboardFiles { try? FileManager.default.removeItem(at: clipboardFile) }
             DispatchQueue.main.async { self.running -= 1 }
         }
     }

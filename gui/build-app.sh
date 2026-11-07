@@ -134,6 +134,7 @@ cp "$REPO/book.sh" "$APP_DIR/Contents/Resources/book.sh"
 chmod +x "$APP_DIR/Contents/Resources/book.sh"
 cp "$REPO/deliver.typ" "$APP_DIR/Contents/Resources/deliver.typ"
 cp "$REPO/book-filter.lua" "$APP_DIR/Contents/Resources/book-filter.lua"
+cp "$REPO/table-layout.lua" "$APP_DIR/Contents/Resources/table-layout.lua"
 
 # ---------------------------------------------------------------------------
 # 打包渲染引擎，使 .app 在【没有 Homebrew】的机器上也能工作。

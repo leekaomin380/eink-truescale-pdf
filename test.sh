@@ -727,6 +727,90 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 剪贴板导入的表格排版异常（2026-11-07）：L1 归一化 / L2 版式策略 / 降级判定
+# 断言只覆盖「规则与结果」，不锁定实现路径；纯文本零回归是硬护栏。
+sec "剪贴板归一化与表格版式"
+
+grep -qF 'table-layout.lua' "$DIR/gui/build-app.sh" \
+  && ok "L2 过滤器被打包进 .app" || no "L2 过滤器未被打包"
+grep -qF 'figure.where(kind: table): set block(breakable: true)' "$DIR/deliver.typ" \
+  && ok "表格 figure 允许跨页（长表不再被压缩进单页）" || no "表格 figure 仍不可分页"
+grep -qF 'public.html' "$DIR/gui/mac/GlobalHotkeys.swift" \
+  && ok "⌃1 读取富文本剪贴板风味" || no "⌃1 未读取 public.html"
+grep -qF -- '--clipboard-html' "$DIR/deliver.sh" \
+  && ok "deliver.sh 透传富文本旁路" || no "deliver.sh 未透传富文本旁路"
+
+FMT_L2="markdown-citations+tex_math_single_backslash+tex_math_double_backslash"
+LAYOUT_L2=(-V mainfont="Times New Roman" -V mainfont="Songti SC" -V pagewidth=157.1mm
+  -V pageheight=209.5mm -V pagemargin=14mm -V bodysize=10.5pt -V leading=0.85em -M lang=zh)
+FILTER_L2=(--lua-filter="$DIR/table-layout.lua" -M typarea_mm=129.10 -M body_size_pt=10.50)
+
+cat > "$WORK/l2_plain.md" <<'EOF'
+普通段落，**加粗文字** 与 `inline code`。公式 \( \text{Li}^+ \) 与 $PATH @mention。
+
+1. 第一项
+2. 第二项
+EOF
+render_l2() { pandoc "$1" -f "$FMT_L2" --template="$DIR/deliver.typ" "${FILTER_L2[@]}" "${LAYOUT_L2[@]}" -o "$2" --pdf-engine=typst >/dev/null 2>"$WORK/l2_err"; }
+
+if render_l2 "$WORK/l2_plain.md" "$WORK/l2_plain.pdf" &&
+   pandoc "$WORK/l2_plain.md" -f "$FMT_L2" --template="$DIR/deliver.typ" "${LAYOUT_L2[@]}" -o "$WORK/l2_plain_nofilter.pdf" --pdf-engine=typst >/dev/null 2>&1; then
+  pdftotext -layout "$WORK/l2_plain.pdf" - | sed '/^[[:space:]]*$/d' > "$WORK/l2_t1"
+  pdftotext -layout "$WORK/l2_plain_nofilter.pdf" - | sed '/^[[:space:]]*$/d' > "$WORK/l2_t2"
+  diff -q "$WORK/l2_t1" "$WORK/l2_t2" >/dev/null \
+    && ok "普通文本与公式在 L2 规则下逐字一致（零回归）" \
+    || no "普通文本被 L2 规则改写"
+else
+  no "L2 纯文本渲染失败：$(tail -1 "$WORK/l2_err" 2>/dev/null)"
+fi
+
+cat > "$WORK/l2_wide.md" <<'EOF'
+| # | 反馈 | 结构性改动 | 工程落点 |
+|:---|:---|:---|:---|
+| 1 | 车床过多 | 素材池补 4 类（制度档案 / 人物课堂 / 中国地域空镜 / 数据图解）；单素材全局 ≤1 次 | 视频素材来源.json 增 category；plan.py 加配额断言 |
+| 2 | 屡现印度人 | 增 geo_context + 段落地域白名单；中国学制段只用中国内地实景 | plan.py 加 gate |
+EOF
+WIDE_TYPST=$(pandoc "$WORK/l2_wide.md" -f "$FMT_L2" "${FILTER_L2[@]}" -t typst 2>/dev/null)
+print -r -- "$WIDE_TYPST" | grep -qE 'columns: \([0-9.]+%, [0-9.]+%, [0-9.]+%, [0-9.]+%\)' \
+  && ok "4 列表格采用按内容比例的列宽（非等分）" || no "列宽仍为等分或未生效"
+WIDTHS=$(print -r -- "$WIDE_TYPST" | grep -oE '[0-9.]+%' | tr -d '%' | sort -u | wc -l | tr -d ' ')
+(( WIDTHS > 1 )) && ok "列宽向量确实存在差异" || no "列宽退化成等分"
+
+cat > "$WORK/l2_degrade.md" <<'EOF'
+| 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|
+| 甲 | 乙 | 丙 | 丁 | 戊 | 己 | 庚 |
+EOF
+DEGRADE_TYPST=$(pandoc "$WORK/l2_degrade.md" -f "$FMT_L2" "${FILTER_L2[@]}" -t typst 2>/dev/null)
+print -r -- "$DEGRADE_TYPST" | grep -q '^/ ' \
+  && ok "7 列表格降级为定义列表（复用 terms.item 语汇）" || no "超列数表格未降级"
+print -r -- "$DEGRADE_TYPST" | grep -q '#table' \
+  && no "降级后仍保留表格节点" || ok "降级后不再输出表格节点"
+
+python3 - "$WORK/l2_long.md" <<'PY'
+import sys
+from pathlib import Path
+lines = ['| # | 反馈 | 结构性改动 | 工程落点 |', '|:---|:---|:---|:---|']
+lines += ['| %d | 反馈项 %d | 素材池补 %d 类（制度档案 / 人物课堂 / 数据图解）；单素材全局 ≤1 次 | plan.py 加配额断言与渲染准入校验 |' % (i, i, i) for i in range(1, 31)]
+Path(sys.argv[1]).write_text('\n'.join(lines) + '\n', encoding='utf-8')
+PY
+if render_l2 "$WORK/l2_long.md" "$WORK/l2_long.pdf"; then
+  LPAGES=$(pdfinfo "$WORK/l2_long.pdf" 2>/dev/null | awk '/Pages/{print $2}')
+  (( LPAGES > 1 )) && ok "30 行长表按页分页（未为单页完整而缩放）" || no "长表仍被压进单页（${LPAGES} 页）"
+  LHEADERS=0
+  for (( p=1; p<=LPAGES; p++ )); do
+    pdftotext -f $p -l $p -layout "$WORK/l2_long.pdf" - 2>/dev/null | grep -q '结构性改动' && (( LHEADERS++ ))
+  done
+  (( LHEADERS == LPAGES )) && ok "跨页每页重复表头（${LPAGES}/${LPAGES}）" || no "表头重复缺失（${LHEADERS}/${LPAGES}）"
+  LROWS=$(pdftotext -layout "$WORK/l2_long.pdf" - 2>/dev/null | grep -oE '^\s*[0-9]+\s' | tr -d ' ' | sort -n | uniq | wc -l | tr -d ' ')
+  (( LROWS == 30 )) && ok "行关系完整（30/30 行，无合并无拆行）" || no "行关系丢失（${LROWS}/30）"
+  LSIZES=$(page_sizes "$WORK/l2_long.pdf" | wc -l | tr -d ' ')
+  (( LSIZES == 1 )) && ok "长表所有页尺寸统一（I1）" || no "长表出现混合页尺寸"
+else
+  no "长表渲染失败：$(tail -1 "$WORK/l2_err" 2>/dev/null)"
+fi
+
+# ---------------------------------------------------------------------------
 print -r -- ""; print -r -- "────────────────────────"
 if (( FAIL == 0 )); then
   print -r -- "全部通过 · ${PASS} 项断言 ✅"

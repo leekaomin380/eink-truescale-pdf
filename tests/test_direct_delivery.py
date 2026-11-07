@@ -1358,3 +1358,160 @@ class BookUploadTests(unittest.TestCase):
             self.assertEqual(history['status'], 'failed')
             self.assertEqual(Path(history['kept']), output.resolve())
             self.assertIn('Traceback', history['detail'])
+
+
+class ClipboardNormalizationTests(unittest.TestCase):
+    """L1: only structural evidence may rewrite the clipboard; prose is byte-identical."""
+
+    def setUp(self):
+        direct._PENDING_META.clear()
+
+    @staticmethod
+    def glyphs(value):
+        return ''.join(value.split())
+
+    def test_plain_text_and_formula_delimiters_are_byte_identical(self):
+        text = ('普通段落，**加粗** 与 `inline code`。\n\n---\n\n## 小标题\n\n'
+                '公式 \\(\\text{Li}^+\\) 与 \\[\\Delta_{net}\\] 以及 '
+                '\\\\(\\\\text{Na}^+\\\\) 和 $PATH @mention。\n')
+        out, info = direct.normalize_clipboard(text)
+        self.assertEqual(out, text)
+        self.assertEqual(info['flavor'], 'plain')
+        self.assertFalse(info['applied'])
+
+    def test_existing_gfm_table_passes_through_with_structural_stats(self):
+        text = '| 指标 | 实测值 | 后果 |\n|:---|:---|:---|\n| 镜头构成 | 53 段 | 高重复 |\n'
+        out, info = direct.normalize_clipboard(text)
+        self.assertEqual(out, text)
+        self.assertEqual(info['flavor'], 'markdown')
+        self.assertEqual((info['table_count'], info['max_cols'], info['row_count']), (1, 3, 1))
+
+    def test_tsv_becomes_headerless_table_without_inventing_a_header(self):
+        text = ('术语 / 词汇 (Term)\t国际音标 (IPA)\t核心含义\n'
+                '阿赖耶识\t/aː.la.ja/\t含藏诸法种子\n'
+                '末那识\t/ma.na/\t恒审思量\n')
+        out, info = direct.normalize_clipboard(text)
+        self.assertEqual(info['flavor'], 'tsv')
+        self.assertTrue(info['applied'])
+        self.assertEqual((info['max_cols'], info['row_count']), (3, 3))
+        self.assertEqual(self.glyphs(out.replace('|', '').replace('---', '')),
+                         self.glyphs(text))
+        # The first row stays data; an empty header row is not a fabricated header.
+        self.assertTrue(out.lstrip().startswith('|  |  |  |'))
+
+    def test_inconsistent_tsv_column_counts_are_left_as_prose(self):
+        text = 'A\tB\nC\tD\tE\nF\tG\n'
+        out, info = direct.normalize_clipboard(text)
+        self.assertEqual(out, text)
+        self.assertFalse(info['applied'])
+
+    def test_html_table_replaces_only_the_collapsed_line_range(self):
+        html = ('<html><body><p>导言</p><table><thead><tr><th>指标</th><th>实测值</th>'
+                '</tr></thead><tbody><tr><td>镜头构成</td><td>53 段：media 30</td></tr>'
+                '<tr><td>素材池</td><td>22 项中 13 项</td></tr></tbody></table>'
+                '<script>SCRIPT_SHOULD_NOT_EXECUTE</script><p>尾注</p></body></html>')
+        text = '导言\n\n指标 实测值\n镜头构成 53 段：media 30\n素材池 22 项中 13 项\n\n尾注\n'
+        out, info = direct.normalize_clipboard(text, html)
+        self.assertEqual(info['flavor'], 'html')
+        self.assertTrue(info['applied'])
+        self.assertIn('导言', out)
+        self.assertIn('尾注', out)
+        self.assertNotIn('SCRIPT_SHOULD_NOT_EXECUTE', out)
+        self.assertIn('| 指标 | 实测值 |', out)
+        self.assertIn('| 镜头构成 | 53 段：media 30 |', out)
+        self.assertEqual(info['row_count'], 2)
+
+    def test_colspan_expands_without_duplicating_visible_text(self):
+        html = ('<table><tr><th>A|B</th><th>C</th></tr>'
+                '<tr><td colspan="2">合并值</td></tr></table>')
+        out, info = direct.normalize_clipboard('A|B C\n合并值\n', html)
+        self.assertEqual(info['flavor'], 'html')
+        self.assertEqual(info['span_expanded'], 1)
+        self.assertIn(r'A\|B', out)
+        self.assertEqual(out.count('合并值'), 1)
+        self.assertEqual(info['max_cols'], 2)   # escaped pipe is not a column
+
+    def test_rowspan_is_registered_as_unmapped_instead_of_being_merged(self):
+        html = ('<table><tr><th>A</th><th>B</th></tr>'
+                '<tr><td rowspan="2">跨行</td><td>x</td></tr><tr><td>y</td></tr></table>')
+        text = 'A B\n跨行 x\ny\n'
+        out, info = direct.normalize_clipboard(text, html)
+        self.assertEqual(out, text)
+        self.assertFalse(info['applied'])
+        self.assertTrue(any('rowspan' in item for item in info['unmapped']))
+
+    def test_unlocatable_html_table_falls_back_to_plain_text(self):
+        html = '<table><tr><th>完全不存在的锚点</th></tr><tr><td>x</td></tr></table>'
+        text = '一段与表格无关的正文。\n'
+        out, info = direct.normalize_clipboard(text, html)
+        self.assertEqual(out, text)
+        self.assertFalse(info['applied'])
+        self.assertTrue(info['unmapped'])
+
+    def test_clean_title_keeps_tab_separators_as_spaces(self):
+        header = '术语 / 词汇 (Term)\t国际音标 (IPA)\t核心含义与佛教语境解析'
+        title = direct.clean_title(header)
+        self.assertIn('国际音标', title)
+        # History #19 concatenated the cells because tabs were deleted as control chars.
+        self.assertNotIn('(Term)国际音标', title)
+
+    def test_geometry_helpers(self):
+        self.assertEqual(direct._millimetres('157.1mm'), 157.1)
+        self.assertEqual(direct._points('10.5pt'), 10.5)
+        self.assertIsNone(direct._millimetres('letter'))
+
+    def test_render_command_attaches_the_layout_filter_and_geometry(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            root = Path(tmp)
+            directory = root / 'work'
+            directory.mkdir()
+            (directory / 'table-layout.lua').write_text('-- filter\n', encoding='utf-8')
+            (directory / 'deliver.typ').write_text('$body$\n', encoding='utf-8')
+            source = root / 'input.md'
+            source.write_text('普通正文。\n', encoding='utf-8')
+            html = root / 'input.html'
+            html.write_text('<table><tr><th>A</th><th>B</th></tr>'
+                            '<tr><td>x</td><td>y</td></tr></table>', encoding='utf-8')
+            args = type('Args', (), {
+                'directory': str(directory), 'input': str(source), 'clipboard_html': str(html),
+                'pandoc': 'pandoc', 'typst': 'typst', 'template': str(directory / 'deliver.typ'),
+                'format': 'markdown', 'print_time': False, 'doc_lang': 'zh',
+                'font': ['Times New Roman', 'Songti SC'], 'page_width': '157.1mm',
+                'page_height': '209.5mm', 'margin': '14mm', 'size': '10.5pt',
+                'leading': '0.85em', 'font_directory': None, 'title': ''})()
+            captured = {}
+
+            class FakeDevice:
+                def upload(self, path):
+                    return {'ok': True, 'message': 'ok'}
+
+            def fake_run(cmd, **kwargs):
+                captured['cmd'] = cmd
+                (directory / 'render.pdf').write_bytes(b'%PDF')
+                named = Path(cmd[cmd.index('-o') + 1])
+                named.write_bytes(b'%PDF')
+                return type('Result', (), {'returncode': 0, 'stdout': b'', 'stderr': b''})()
+
+            with patch.object(direct, 'connect_device', FakeDevice), \
+                 patch.object(direct, 'load_clipboard_layout', lambda: (None, 'factory')), \
+                 patch.object(direct.subprocess, 'run', side_effect=fake_run):
+                direct.render_and_upload(args)
+            cmd = captured['cmd']
+            self.assertTrue(any(item.startswith('--lua-filter=') for item in cmd))
+            self.assertIn('-M', cmd)
+            self.assertIn('typarea_mm=129.10', cmd)
+            self.assertIn('body_size_pt=10.50', cmd)
+            self.assertEqual(direct._PENDING_META['flavor'], 'plain')
+
+    def test_delivery_record_carries_structural_metadata_only(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(direct, 'ROOT', Path(tmp) / 'Direct'):
+            direct._PENDING_META.update({'flavor': 'tsv', 'table_count': 1,
+                                         'max_cols': 3, 'row_count': 3, 'applied': True,
+                                         'unmapped': [], 'span_expanded': 0})
+            direct.record_delivery('sample.pdf', True, document_id='id-1')
+            entry = json.loads((direct.ROOT / 'history.jsonl').read_text().splitlines()[-1])
+            self.assertEqual(entry['normalization']['flavor'], 'tsv')
+            self.assertEqual(entry['normalization']['max_cols'], 3)
+            self.assertNotIn('input', entry)
+            self.assertNotIn('text', entry)
+
