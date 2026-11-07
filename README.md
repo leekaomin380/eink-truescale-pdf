@@ -4,6 +4,9 @@
 > Apple Silicon Mac, macOS 14 or later. Unzip, drag to Applications, open — a setup guide
 > takes it from there. ([Details](#install))
 
+> **Product page:** https://leekaomin380.github.io/eink-truescale-pdf/ (中文 / English / 日本語) —
+> full feature list, version history and FAQ. **Version history:** [CHANGELOG.md](CHANGELOG.md).
+
 The macOS app in this repository (`eink-truescale-pdf`) is **TrueScale for QUADERNO**: an
 independent, open-source tool for Fujitsu QUADERNO, not affiliated with Fujitsu.
 

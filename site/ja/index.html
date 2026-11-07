@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrueScale for QUADERNO — QUADERNO に実寸 PDF を送る Mac アプリ（EPUB・Markdown・⌃1）</title>
+<meta name="description" content="FUJITSU QUADERNO 用の無料オープンソース Mac アプリ。テキストをコピーして ⌃1、または Finder で PDF／EPUB を右クリック。画面の実寸で組版し、USB／Wi-Fi で直接送信、SHA-256 で読み戻して照合します。">
+<meta name="keywords" content="QUADERNO, FUJITSU QUADERNO A5, FMVDP51, QUADERNO PDF ぼやける, QUADERNO 実寸 PDF, QUADERNO ファイル転送 Mac, QUADERNO EPUB PDF 変換, 電子ペーパー 組版, WeChat 記事, ⌃1, macOS">
+<meta name="author" content="leekaomin">
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+<meta name="theme-color" content="#f6f4ee">
+<link rel="canonical" href="https://leekaomin380.github.io/eink-truescale-pdf/ja/">
+<link rel="alternate" hreflang="en" href="https://leekaomin380.github.io/eink-truescale-pdf/">
+<link rel="alternate" hreflang="zh-Hans" href="https://leekaomin380.github.io/eink-truescale-pdf/zh/">
+<link rel="alternate" hreflang="zh-CN" href="https://leekaomin380.github.io/eink-truescale-pdf/zh/">
+<link rel="alternate" hreflang="ja" href="https://leekaomin380.github.io/eink-truescale-pdf/ja/">
+<link rel="alternate" hreflang="x-default" href="https://leekaomin380.github.io/eink-truescale-pdf/">
+<link rel="icon" href="../assets/favicon.png">
+<link rel="stylesheet" href="../assets/site.css">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TrueScale for QUADERNO">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="zh_CN">
+<meta property="og:title" content="TrueScale for QUADERNO — QUADERNO に実寸 PDF を送る Mac アプリ（EPUB・Markdown・⌃1）">
+<meta property="og:description" content="手の中のページのための組版。コピーして ⌃1 を押すと、QUADERNO に表示されます。">
+<meta property="og:url" content="https://leekaomin380.github.io/eink-truescale-pdf/ja/">
+<meta property="og:image" content="https://leekaomin380.github.io/eink-truescale-pdf/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TrueScale for QUADERNO —— 実寸で組版された QUADERNO A5 のページ">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TrueScale for QUADERNO — QUADERNO に実寸 PDF を送る Mac アプリ（EPUB・Markdown・⌃1）">
+<meta name="twitter:description" content="手の中のページのための組版。コピーして ⌃1 を押すと、QUADERNO に表示されます。">
+<meta name="twitter:image" content="https://leekaomin380.github.io/eink-truescale-pdf/assets/og-card.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://leekaomin380.github.io/eink-truescale-pdf/#website",
+      "url": "https://leekaomin380.github.io/eink-truescale-pdf/",
+      "name": "TrueScale for QUADERNO",
+      "inLanguage": [
+        "en",
+        "zh-Hans",
+        "ja"
+      ],
+      "publisher": {
+        "@type": "Person",
+        "name": "leekaomin",
+        "email": "leekaomin@foxmail.com"
+      }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://leekaomin380.github.io/eink-truescale-pdf/#app",
+      "name": "TrueScale for QUADERNO",
+      "url": "https://leekaomin380.github.io/eink-truescale-pdf/ja/",
+      "description": "FUJITSU QUADERNO の画面実寸でテキスト・Markdown・PDF・EPUB・WeChat 記事を組版し、USB または Wi-Fi で直接送信する、無料オープンソースの macOS アプリ。",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "E-ink / e-paper document tools",
+      "operatingSystem": "macOS 14 or later (Apple Silicon)",
+      "softwareVersion": "1.2.2",
+      "dateModified": "2026-11-07",
+      "isAccessibleForFree": true,
+      "inLanguage": [
+        "en",
+        "zh-Hans",
+        "ja"
+      ],
+      "license": "https://github.com/leekaomin380/eink-truescale-pdf/blob/master/LICENSE",
+      "downloadUrl": "https://github.com/leekaomin380/eink-truescale-pdf/releases/latest",
+      "installUrl": "https://github.com/leekaomin380/eink-truescale-pdf/releases/latest",
+      "image": "https://leekaomin380.github.io/eink-truescale-pdf/assets/icon.png",
+      "screenshot": "https://leekaomin380.github.io/eink-truescale-pdf/assets/device-page.png",
+      "featureList": [
+        "実寸組版",
+        "送れるもの",
+        "表組みとリッチテキスト",
+        "直接送信と照合",
+        "ファイルとスクリーンショット",
+        "アプリと作業形態"
+      ],
+      "author": {
+        "@type": "Person",
+        "name": "leekaomin",
+        "email": "leekaomin@foxmail.com"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock"
+      },
+      "sameAs": [
+        "https://github.com/leekaomin380/eink-truescale-pdf",
+        "https://github.com/leekaomin380/eink-truescale-pdf/releases",
+        "https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md"
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://leekaomin380.github.io/eink-truescale-pdf/ja/#faq",
+      "inLanguage": "ja",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "QUADERNO で PDF がぼやけるのはなぜですか？どう直せますか？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "多くの場合、A4 / Letter のページが 10.3 インチ画面に縮小され、再サンプリングで線がにじむのが原因です。TrueScale は QUADERNO A5 の実測表示領域（156.97 × 209.30 mm）に合わせてページを作るため、端末は拡大縮小せず 227 ppi をそのまま表示します。キャリブレーションページでどの電子ペーパーでも 1:1 を確認できます。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "QUADERNO PC App を開かずに Mac から QUADERNO へファイルを送れますか？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "はい。TrueScale は USB またはローカルネットワーク上の HTTPS で端末と直接通信し、公式 App から一度取り込んだペアリングを再利用します。以後は公式クライアントを起動する必要はありません。アップロード開始前に直結できず、公式 App が起動している場合のみ、その印刷キューに降级します。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "対応する入力は？EPUB、WeChat 記事、AI の回答に含まれる表も送れますか？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "クリップボードのプレーンテキスト・Markdown・リッチ HTML、Finder の PDF・EPUB・MOBI・FB2・HTML・TXT、WeChat（微信公众号）記事のリンク、App への直接入力に対応します。AI の回答に含まれる表は HTML・TSV・GFM パイプ表から正規化し、列幅と揃えを保持します。WeChat 記事の抽出は Mac 上で完結します。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "QUADERNO A5（FMVDP51）の表示領域と解像度は？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "対角 10.3 インチ、1404 × 1872 ピクセル、227.18 ppi、表示領域 156.97 × 209.30 mm です。画面に描いた 100 mm の線を定規で測るとちょうど 100 mm になります。ダウンロードできるキャリブレーションページで、他の端末でも同じ 1:1 を確認できます。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "A4（FMVDP41）、Intel Mac、Windows でも使えますか？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A4 は使えますが、ページ寸法はまだ実測ではなく算出値なので、使用前に 2 つの値を変更してください。配布バイナリは Apple Silicon と macOS 14 以降のみ対応です。Intel Mac はソースから自機向けにビルドできます。Windows は非対応です。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "送信すると QUADERNO 内のファイルが上書き・削除されますか？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "いいえ。書き込みは Document/Received/ への保存と画面で開く処理だけです。移動と削除は「端末のファイル」で明示的に操作した場合のみで、必ず確認します。各アップロードは端末から読み戻して SHA-256 を比較し、一致して初めて送信完了になります。"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "無料ですか？富士通と関係はありますか？",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "MIT ライセンスの無料オープンソースです。TrueScale for QUADERNO は独立したプロジェクトで、富士通とは関係がなく、承認や支援も受けていません。FUJITSU および QUADERNO はそれぞれの権利者の商標です。"
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="../index.html"><img src="../assets/icon.png" alt="" width="32" height="32"><span>TrueScale for QUADERNO</span></a>
+    <nav class="topnav" aria-label="ページ内ナビゲーション">
+      <a href="#features">機能一覧</a>
+      <a href="#changelog">更新履歴</a>
+      <a href="#faq">よくある質問</a>
+    </nav>
+    <nav class="langs" aria-label="言語">
+<a href="https://leekaomin380.github.io/eink-truescale-pdf/zh/" hreflang="zh-Hans" lang="zh-Hans">中文</a>
+<a href="https://leekaomin380.github.io/eink-truescale-pdf/" hreflang="en" lang="en">English</a>
+<a href="https://leekaomin380.github.io/eink-truescale-pdf/ja/" hreflang="ja" lang="ja" aria-current="page">日本語</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1>手の中のページのための組版。</h1>
+        <p class="lead">Mac でテキストをコピーしてキーを押すだけで、FUJITSU QUADERNO に表示されます。画面の実寸で組むので、印刷物のようにくっきり読めます。</p>
+        <div class="flow" aria-hidden="true">
+          <span>コピー</span><span>→</span><span class="key">⌃1</span><span>→</span><span>QUADERNO で開く</span>
+        </div>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/leekaomin380/eink-truescale-pdf/releases/latest">Mac 版をダウンロード</a>
+          <a class="button secondary" href="https://github.com/leekaomin380/eink-truescale-pdf">GitHub のソースコード</a>
+        </div>
+        <p class="note">バージョン <span id="version">1.2.2</span> · 無料・オープンソース（MIT）。Apple Silicon、macOS 14 以降。</p>
+      </div>
+      <figure class="device">
+        <img src="../assets/device-page.png" width="1404" height="1872" alt="QUADERNO A5 の画面：実寸で組版された日中英の文書">
+        <figcaption>この App で取り込んだ QUADERNO A5 の実際の画面です。</figcaption>
+      </figure>
+    </div>
+
+    <section id="why">
+      <div class="wrap">
+        <h2>電子ペーパーで PDF がぼやける理由</h2>
+        <p class="intro">A4 のページを 10.3 インチの画面に縮小すると、再サンプリングで線がにじみます。足りないのは画素ではありません。TrueScale はまず画面を測り、ページをその大きさちょうどに作ります。</p>
+        <div class="why">
+          <div class="panel">
+            <div class="figure">156.97 × 209.30 mm</div>
+            <h3>推測ではなく実測</h3>
+            <p>1404 × 1872 ピクセルと対角 10.3 インチから算出（227.18 dpi、公表値 227 dpi との差 0.08%）し、定規で確認しました。画面上の 100 mm の線は、測るとちょうど 100 mm です。</p>
+          </div>
+          <div class="panel">
+            <div class="figure">1 : 1</div>
+            <h3>端末側で拡大縮小しない</h3>
+            <p>ページが画面そのものなので、端末はそのまま表示します。ページ上の 10.5 pt は、ペン先の下でも本物の 10.5 pt。印刷された本と同じ大きさです。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="ways">
+      <div class="wrap">
+        <h2>4 つの入口、どれもダイアログなし</h2>
+        <p class="intro">送ったファイルは端末の Received に保存され、画面に表示されます。端末上のファイルを上書きすることはありません。</p>
+        <div class="ways">
+          <div class="way">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M7 11h2M11 11h2M15 11h2M7 15h10"/></svg>
+            <h3>クリップボード + ⌃1</h3>
+            <p>テキストや Markdown をコピーして ⌃1。命名・組版・送信まで約 2 秒。</p>
+          </div>
+          <div class="way">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <h3>Finder の右クリック</h3>
+            <p>PDF・EPUB・Markdown・テキストファイルで「QUADERNO へ送信」。複数選択でき、ウインドウも開きません。</p>
+          </div>
+          <div class="way">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5z"/><path d="M14 4v5h5M8 13h8M8 17h6"/></svg>
+            <h3>電子書籍と Web 記事</h3>
+            <p>EPUB・MOBI・FB2・HTML、WeChat の記事にも対応。目次としおり付き。</p>
+          </div>
+          <div class="way">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="12" cy="12" r="3.2"/><path d="M8 3h3"/></svg>
+            <h3>スクリーンショットを Mac へ</h3>
+            <p>端末の画面を手書きごと、PNG・JPEG・実寸 PDF で保存。⌃2 かワンクリックで完了。保存先は一度決めるだけ。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="trust">
+      <div class="wrap">
+        <h2>書き込みを任せられる作り</h2>
+        <div class="features">
+          <div class="feature"><h3>USB / Wi-Fi で直接接続</h3><p>端末と直接やり取りします。QUADERNO PC App を開いておく必要はありません。</p></div>
+          <div class="feature"><h3>読み戻して照合</h3><p>アップロードのたびに読み戻し、SHA-256 で照合してから送信完了とします。</p></div>
+          <div class="feature"><h3>端末の身元を固定</h3><p>ペアリング時に端末の公開鍵を固定。異なる鍵の端末は信頼せず拒否します。</p></div>
+          <div class="feature"><h3>端末のファイル</h3><p>閲覧・検索・手書きごとのダウンロード・アップロード・移動・削除。削除は必ず確認します。</p></div>
+          <div class="feature"><h3>最近の送信</h3><p>すべての入口からの送信履歴。失敗したものは PDF を残し、ワンクリックで再試行。</p></div>
+          <div class="feature"><h3>中文 · English · 日本語</h3><p>App と通知は 3 言語に対応し、設定で切り替えられます。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <h2>機能一覧</h2>
+        <p class="intro">どの入口も同じ組版・送信パイプラインを共有します。表組みとリッチテキストの新しい扱いを含め、全体を一覧にしました。</p>
+        <div class="capabilities">
+          <article class="capability"><h3>実寸組版</h3><p>ページが画面そのもの。ページ上の 10.5 pt は、ペン先の下でも本物の 10.5 pt です。</p><ul><li>実測した QUADERNO A5 の表示領域：156.97 × 209.30 mm、227.18 ppi</li><li>フォント・サイズ・余白・行間を調整でき、ページをプレビュー可能</li><li>pandoc → Typst → PDF。両エンジンを App に同梱</li><li>A4（FMVDP41）は 2 つの値を変更すれば利用可能</li></ul></article>
+          <article class="capability"><h3>送れるもの</h3><p>短いメモも、一冊の本も、Web 記事も同じ経路で。</p><ul><li>クリップボードのプレーンテキスト、Markdown、リッチ HTML 表、TSV</li><li>Finder の右クリックから PDF・EPUB・MOBI・FB2・HTML・TXT</li><li>WeChat（微信公众号）記事はリンクを貼るだけ。抽出はローカルで完結し、アカウント不要</li><li>App に直接入力・貼り付けも可能</li></ul></article>
+          <article class="capability"><h3>表組みとリッチテキスト</h3><p>AI の回答や Web ページからコピーした構造が崩れません。</p><ul><li>HTML 表・TSV ブロック・GFM パイプ表を組版前に正規化</li><li>列幅はセルの内容量に比例し、指定済みの揃えは保持</li><li>長い表は縮小せずページ分割し、ヘッダーを繰り返し表示</li><li>幅が広すぎる表は読みやすいリストに降级。プレーンテキストは一字も変わりません</li></ul></article>
+          <article class="capability"><h3>直接送信と照合</h3><p>相手は端末そのもの。公式クライアントは任意です。</p><ul><li>USB / ローカルネットワーク上の HTTPS。ペアリング時に公開鍵を固定</li><li>Document/Received/ に保存し、画面で開く</li><li>読み戻して SHA-256 を比較し、ディレクトリ一覧でも確認</li><li>転送は常に 1 本。失敗時は PDF を残して再試行でき、残骸は自動 cleanup</li><li>アップロード開始前に直結できず、公式 App が起動中の場合のみその印刷キューに降级</li></ul></article>
+          <article class="capability"><h3>ファイルとスクリーンショット</h3><p>端末に入っているものもそのまま扱えます。</p><ul><li>閲覧・検索・並べ替え・手書きごとのダウンロード・アップロード・移動・削除（削除は必ず確認）</li><li>⌃2 / ⌘⇧S で画面を PNG・JPEG・実寸 PDF として保存</li><li>スクリーンショットは開いている文書名とページ番号で命名</li><li>「最近の送信」に全入口の履歴。再試行と Finder で表示に対応</li></ul></article>
+          <article class="capability"><h3>アプリと作業形態</h3><p>macOS ネイティブ、かつスクリプトからも。</p><ul><li>メニューバー常駐、⌃1 / ⌃2 を内蔵。「ショートカット」の設定は不要</li><li>简体中文 / English / 日本語 の UI と通知</li><li>自己完結型バンドル。Homebrew もターミナルも不要</li><li>コマンドラインの book.sh / deliver.sh、ソースビルドも同じパイプライン</li></ul></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="start">
+      <div class="wrap">
+        <h2>使い始める</h2>
+        <ol class="steps">
+          <li><div>App をダウンロードし、アプリケーションフォルダーへドラッグします。</div></li>
+          <li><div>QUADERNO を USB で接続すると、設定ガイドが自動で開きます。</div></li>
+          <li><div>ペアリングを移行し、セルフチェックを実行。Finder からの送信、⌃1 と ⌃2 はすぐに使えます。「ショートカット」での設定は不要です。</div></li>
+        </ol>
+        <ul class="requirements">
+          <li>Apple Silicon 搭載の Mac、macOS 14 以降。</li>
+          <li>FUJITSU QUADERNO A5（FMVDP51）で実機確認済み。A4（FMVDP41）も使えますが、ページ寸法はまだ実測ではなく算出値です。</li>
+          <li>同じ Mac で QUADERNO PC App が一度作成したペアリングが必要です。PIN による新規ペアリングは未対応です。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="changelog">
+      <div class="wrap">
+        <h2>更新履歴</h2>
+        <p class="intro">公開済みのバージョンと、ローカルには適用済みだがまだ GitHub Release にしていない変更です。 <a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">GitHub で完全な変更履歴を見る</a></p>
+        <ol class="releases">
+          <li class="release"><div class="release-head"><span class="tag">未リリース</span><time datetime="2026-11-07">2026-11-07</time></div><h3>クリップボードの忠実性と送信レイテンシ</h3><ul><li>「·」を含むファイル名で端末が「ファイルが削除されました」と誤報する問題を修正。厳密な UTF-8 でない応答でも処理が中断しなくなりました。</li><li>⌃1 がクリップボードのリッチ HTML を読み取り、HTML 表・TSV・GFM 表を正規化。プレーンテキストと数式はそのまま保持します。</li><li>複雑な表は内容量に応じた列幅、長い表はヘッダー付きで改ページ、広すぎる表はリストに降级。認証と組版を並列化して遅延を削減し、検証チェーンは短縮していません。</li></ul></li>
+          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.2">1.2.2</a></span><time datetime="2026-11-02">2026-11-02</time></div><h3>ショートカット、静かな Finder 送信、EPUB</h3><ul><li>⌃1 / ⌃2 を内蔵。Finder の右クリックで App のウインドウが開かなくなりました。</li><li>Finder の右クリックから EPUB を書籍組版で送信可能に。</li><li>スクリーンショットを文書名とページ番号で命名。ウインドウを閉じてもメニューバーに常駐。</li></ul></li>
+          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.1">1.2.1</a></span><time datetime="2026-11-01">2026-11-01</time></div><h3>より静かなアイコン</h3><ul><li>グレースケールの紙と左上の斜体小文字 q に変更。サイトのアイコンと favicon も同じデザインに。</li></ul></li>
+          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.0">1.2.0</a></span><time datetime="2026-11-01">2026-11-01</time></div><h3>直接送信と TrueScale への改名</h3><ul><li>Quaderno Converter から改名。初回起動時に設定を移行。</li><li>USB / LAN からの直接送信、公開鍵の固定、SHA-256 の読み戻し、アップロード前に限った公式クライアントへの降级。</li><li>Finder 右クリック送信、简体中文 / English / 日本語 UI、初回ガイド、端末ファイル、スクリーンショット書き出し。</li></ul></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <h2>よくある質問</h2>
+        <p class="intro">寸法、対応環境、対応する入力、送信の安全性についての短い回答です。</p>
+        <div class="faq">
+          <details class="qa" open><summary>QUADERNO で PDF がぼやけるのはなぜですか？どう直せますか？</summary><p>多くの場合、A4 / Letter のページが 10.3 インチ画面に縮小され、再サンプリングで線がにじむのが原因です。TrueScale は QUADERNO A5 の実測表示領域（156.97 × 209.30 mm）に合わせてページを作るため、端末は拡大縮小せず 227 ppi をそのまま表示します。キャリブレーションページでどの電子ペーパーでも 1:1 を確認できます。</p></details>
+          <details class="qa"><summary>QUADERNO PC App を開かずに Mac から QUADERNO へファイルを送れますか？</summary><p>はい。TrueScale は USB またはローカルネットワーク上の HTTPS で端末と直接通信し、公式 App から一度取り込んだペアリングを再利用します。以後は公式クライアントを起動する必要はありません。アップロード開始前に直結できず、公式 App が起動している場合のみ、その印刷キューに降级します。</p></details>
+          <details class="qa"><summary>対応する入力は？EPUB、WeChat 記事、AI の回答に含まれる表も送れますか？</summary><p>クリップボードのプレーンテキスト・Markdown・リッチ HTML、Finder の PDF・EPUB・MOBI・FB2・HTML・TXT、WeChat（微信公众号）記事のリンク、App への直接入力に対応します。AI の回答に含まれる表は HTML・TSV・GFM パイプ表から正規化し、列幅と揃えを保持します。WeChat 記事の抽出は Mac 上で完結します。</p></details>
+          <details class="qa"><summary>QUADERNO A5（FMVDP51）の表示領域と解像度は？</summary><p>対角 10.3 インチ、1404 × 1872 ピクセル、227.18 ppi、表示領域 156.97 × 209.30 mm です。画面に描いた 100 mm の線を定規で測るとちょうど 100 mm になります。ダウンロードできるキャリブレーションページで、他の端末でも同じ 1:1 を確認できます。</p></details>
+          <details class="qa"><summary>A4（FMVDP41）、Intel Mac、Windows でも使えますか？</summary><p>A4 は使えますが、ページ寸法はまだ実測ではなく算出値なので、使用前に 2 つの値を変更してください。配布バイナリは Apple Silicon と macOS 14 以降のみ対応です。Intel Mac はソースから自機向けにビルドできます。Windows は非対応です。</p></details>
+          <details class="qa"><summary>送信すると QUADERNO 内のファイルが上書き・削除されますか？</summary><p>いいえ。書き込みは Document/Received/ への保存と画面で開く処理だけです。移動と削除は「端末のファイル」で明示的に操作した場合のみで、必ず確認します。各アップロードは端末から読み戻して SHA-256 を比較し、一致して初めて送信完了になります。</p></details>
+          <details class="qa"><summary>無料ですか？富士通と関係はありますか？</summary><p>MIT ライセンスの無料オープンソースです。TrueScale for QUADERNO は独立したプロジェクトで、富士通とは関係がなく、承認や支援も受けていません。FUJITSU および QUADERNO はそれぞれの権利者の商標です。</p></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>TrueScale for QUADERNO は独立したオープンソースプロジェクトであり、富士通とは関係がなく、富士通による承認や支援も受けていません。FUJITSU および QUADERNO は、それぞれの権利者の商標です。</p>
+    <p>MIT ライセンス。同梱の pandoc・Typst などはそれぞれのライセンスに従います。詳細は App の「情報」画面をご覧ください。</p>
+    <p><a href="https://github.com/leekaomin380/eink-truescale-pdf">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="https://github.com/leekaomin380/eink-truescale-pdf/issues">問題を報告</a></p>
+    <p>連絡先：<a href="mailto:leekaomin@foxmail.com">leekaomin@foxmail.com</a></p>
+  </footer>
+</div>
+
+<script>
+// 页面里写的是发布时的版本；能连上 GitHub 时换成最新 Release，失败就保留原值。
+fetch("https://api.github.com/repos/leekaomin380/eink-truescale-pdf/releases/latest")
+  .then(r => r.ok ? r.json() : null)
+  .then(release => {
+    const tag = release && /^v?(\d+\.\d+\.\d+)$/.exec(release.tag_name || "");
+    if (tag) document.getElementById("version").textContent = tag[1];
+  })
+  .catch(() => {});
+</script>
+</body>
+</html>

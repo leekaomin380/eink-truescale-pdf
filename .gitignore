@@ -3,6 +3,9 @@ quaderno_delivery_*.pdf
 quaderno_render_*.log
 .DS_Store
 
+# 本地排版试产 PDF，不入库
+output/
+
 # 根目录下的临时预览图不入库，但 docs/assets 下的文档插图必须保留
 /*.png
 
