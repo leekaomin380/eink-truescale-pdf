@@ -57,8 +57,6 @@ CONTENT = {
             "copy": "Copy", "open": "Open on QUADERNO",
             "download": "Download for Mac", "source": "Source on GitHub",
             "version": "Version", "note": "Free and open source (MIT). Apple Silicon, macOS 14 or later.",
-            "alt": "QUADERNO A5 screen: a document typeset at true size",
-            "caption": "An actual screenshot from a QUADERNO A5, taken with the app.",
         },
         "why": {
             "title": "Why PDFs look blurry on e-paper",
@@ -216,8 +214,6 @@ CONTENT = {
             "copy": "复制", "open": "在 QUADERNO 上打开",
             "download": "下载 Mac 版", "source": "GitHub 源代码",
             "version": "版本", "note": "免费、开源（MIT）。需要 Apple Silicon 芯片、macOS 14 或更新版本。",
-            "alt": "QUADERNO A5 屏幕截图：一页按实际尺寸排版的中英文文档",
-            "caption": "QUADERNO A5 的真实屏幕截图，由本 App 截取。",
         },
         "why": {
             "title": "为什么 PDF 在电子纸上看起来模糊",
@@ -375,8 +371,6 @@ CONTENT = {
             "copy": "コピー", "open": "QUADERNO で開く",
             "download": "Mac 版をダウンロード", "source": "GitHub のソースコード",
             "version": "バージョン", "note": "無料・オープンソース（MIT）。Apple Silicon、macOS 14 以降。",
-            "alt": "QUADERNO A5 の画面：実寸で組版された日中英の文書",
-            "caption": "この App で取り込んだ QUADERNO A5 の実際の画面です。",
         },
         "why": {
             "title": "電子ペーパーで PDF がぼやける理由",
@@ -597,6 +591,10 @@ def validate_markup(files: dict[Path, str]) -> None:
             problems.append("FAQ count")
         if "data-i18n" in doc:
             problems.append("JS-injected copy survived")
+        if 'class="device"' in doc:
+            problems.append("device mockup is back in the hero")
+        if re.search(r"<img[^>]+device-page\.png", doc):
+            problems.append("device screenshot bitmap is back in the hero")
 
         balance = TagBalance()
         balance.feed(doc)
@@ -637,6 +635,9 @@ def validate_markup(files: dict[Path, str]) -> None:
         raise SystemExit("robots.txt does not advertise the sitemap")
     if not (SITE / "assets" / "og-card.png").exists():
         raise SystemExit("og-card.png missing; run site/make-og-card.py")
+    css = (SITE / "assets" / "site.css").read_text(encoding="utf-8")
+    if "--band" in css or ".device {" in css:
+        raise SystemExit("device mockup styles are back in site.css")
 
 
 def json_ld(lang: str) -> str:
@@ -789,22 +790,16 @@ def render(lang: str) -> str:
 
   <main>
     <div class="hero">
-      <div>
-        <h1>{esc(hero["title"])}</h1>
-        <p class="lead">{esc(hero["lead"])}</p>
-        <div class="flow" aria-hidden="true">
-          <span>{esc(hero["copy"])}</span><span>→</span><span class="key">⌃1</span><span>→</span><span>{esc(hero["open"])}</span>
-        </div>
-        <div class="actions">
-          <a class="button primary" href="{RELEASES}">{esc(hero["download"])}</a>
-          <a class="button secondary" href="{REPO}">{esc(hero["source"])}</a>
-        </div>
-        <p class="note">{esc(hero["version"])} <span id="version">{LATEST}</span> · {esc(hero["note"])}</p>
+      <h1>{esc(hero["title"])}</h1>
+      <p class="lead">{esc(hero["lead"])}</p>
+      <div class="flow" aria-hidden="true">
+        <span>{esc(hero["copy"])}</span><span>→</span><span class="key">⌃1</span><span>→</span><span>{esc(hero["open"])}</span>
       </div>
-      <figure class="device">
-        <img src="{base}assets/device-page.png" width="1404" height="1872" alt="{esc(hero["alt"])}">
-        <figcaption>{esc(hero["caption"])}</figcaption>
-      </figure>
+      <div class="actions">
+        <a class="button primary" href="{RELEASES}">{esc(hero["download"])}</a>
+        <a class="button secondary" href="{REPO}">{esc(hero["source"])}</a>
+      </div>
+      <p class="note">{esc(hero["version"])} <span id="version">{LATEST}</span> · {esc(hero["note"])}</p>
     </div>
 
     <section id="why">

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Render the 1200x630 social / search preview card from the existing site assets.
+"""Render the 1200x630 social / search preview card.
 
-Kept as a script rather than a hand-drawn binary so the card can be regenerated
-when the icon or the device screenshot changes. Uses only Pillow and the fonts
-that ship with macOS; no network access.
+Text-only composition: no device mockup, no screenshot bitmap, no dark frame
+or elastic band. Uses only Pillow and the fonts that ship with macOS; no
+network access.
 
     python3 site/make-og-card.py
 """
@@ -20,8 +20,6 @@ INK = "#1b1b19"
 MUTED = "#5d5c57"
 RULE = "#dedbd2"
 ACCENT = "#1f6b5f"
-FRAME = "#2b2b29"
-BAND = "#b9472f"
 
 SUPPLEMENTAL = Path("/System/Library/Fonts/Supplemental")
 BOLD = SUPPLEMENTAL / "Arial Bold.ttf"
@@ -36,7 +34,7 @@ def main() -> None:
     img = Image.new("RGB", (W, H), GROUND)
     draw = ImageDraw.Draw(img)
 
-    # Divider between the copy and the device, using the site's rule colour.
+    # Divider between the copy and the measurement, using the site's rule colour.
     draw.line([(760, 70), (760, 560)], fill=RULE, width=2)
 
     icon = Image.open(ASSETS / "icon.png").convert("RGBA").resize((96, 96), Image.LANCZOS)
@@ -51,23 +49,19 @@ def main() -> None:
     draw.rounded_rectangle([(72, 522), (392, 570)], radius=24, fill=ACCENT)
     draw.text((94, 533), "FREE  ·  MIT  ·  macOS 14+", font=font(BOLD, 19), fill="#ffffff")
 
-    # Device frame: same dark body and right-hand elastic band as the page.
-    frame = (790, 48, 1170, 582)
-    draw.rounded_rectangle([(frame[0] + 8, frame[1] + 10), (frame[2] + 8, frame[3] + 10)],
-                           radius=26, fill="#e2dfd6")
-    draw.rounded_rectangle(frame, radius=26, fill=FRAME)
+    # Right column: a typographic measurement instead of a device illustration.
+    draw.text((800, 96), "MEASURED, NOT ASSUMED", font=font(BOLD, 19), fill=ACCENT)
+    draw.text((792, 148), "1 : 1", font=font(BOLD, 116), fill=INK)
+    draw.line([(800, 306), (1140, 306)], fill=RULE, width=2)
 
-    page = Image.open(ASSETS / "device-page.png").convert("RGB")
-    page_h = 458
-    page_w = round(page.width * page_h / page.height)
-    page = page.resize((page_w, page_h), Image.LANCZOS)
-    page_x = frame[0] + (frame[2] - frame[0] - page_w) // 2
-    page_y = frame[1] + 18
-    draw.rounded_rectangle([(page_x - 2, page_y - 2), (page_x + page_w + 2, page_y + page_h + 2)],
-                           radius=4, fill="#f4f3ef")
-    img.paste(page, (page_x, page_y))
-    draw.rounded_rectangle([(frame[2] - 14, frame[1] - 8), (frame[2] - 2, frame[3] + 8)],
-                           radius=5, fill=BAND)
+    draw.text((800, 342), "100 mm", font=font(BOLD, 28), fill=INK)
+    y = 398
+    draw.line([(800, y), (1000, y)], fill=MUTED, width=2)
+    draw.line([(800, y - 9), (800, y + 9)], fill=MUTED, width=2)
+    draw.line([(1000, y - 9), (1000, y + 9)], fill=MUTED, width=2)
+    draw.text((800, y + 20), "ON SCREEN = UNDER THE RULER", font=font(REGULAR, 19), fill=MUTED)
+    draw.text((800, 474), "156.97 × 209.30 mm", font=font(REGULAR, 24), fill=INK)
+    draw.text((800, 512), "227 ppi  ·  NO RESCALING", font=font(REGULAR, 19), fill=MUTED)
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     img.save(OUT, optimize=True)
