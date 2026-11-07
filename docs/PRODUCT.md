@@ -36,7 +36,7 @@ eink-truescale-pdf 是一套面向长文档阅读的 macOS 本地转换工具。
 | 页面规格 | 以已测量的 QUADERNO A5 为主，保留设备参数能力 | A4、A5、B5，避免一次展示过多规格 |
 | 网络访问 | 仅在用户主动转换网页链接时获取网页及图片 | 不访问互联网 |
 | 分发 | GitHub Release，Developer ID 签名和 Apple 公证 | Mac App Store，App Sandbox |
-| 当前版本基线 | 1.2.2（与 `Info.plist`、`CHANGELOG.md` 一致） | 1.1.0（App Store 候选，提交构建仍待解决平台拒绝） |
+| 当前版本基线 | 1.3.0（与 `Info.plist`、`CHANGELOG.md` 一致） | 1.1.0（App Store 候选，提交构建仍待解决平台拒绝） |
 
 两个版本共享的长期资产是：文档解析、Pandoc/Typst 排版管道、PDFKit 预览、字体与版面参数、物理尺寸测量方法以及回归测试。厂商投递属于可替换的外围适配，不应侵入通用转换内核。
 

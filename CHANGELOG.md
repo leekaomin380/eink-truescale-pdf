@@ -1,10 +1,10 @@
 # Changelog
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Released
-versions are listed below; the dated `Unreleased` sections at the top cover work that
-is already deployed locally but has not been cut into a GitHub Release yet.
+versions are listed below, newest first. Version 1.3.0 collects the locally
+deployed hardening and clipboard work dated 2026-11-04 through 2026-11-07.
 
-## [Unreleased] — 2026-11-06/07 clipboard fidelity and delivery latency
+## [1.3.0] — 2026-11-07
 
 ### Fixed
 - File names containing `·` (U+00B7 MIDDLE DOT) or a bare Latin-1 `0xB7` no longer make
@@ -49,9 +49,9 @@ and a uniform page size; four-column widths change from 25/25/25/25% to
 layer. On-device delivery was not re-run; the single-variable check is to resend the
 original AI reply with ⌃1.
 
-## [Unreleased] — 2026-11-04/05 robustness hardening
+### Robustness hardening (2026-11-04/05)
 
-### Fixed
+#### Fixed
 - Concurrent deliveries now queue: a FIFO gate in the App serializes helper calls, and the
   cross-process lock waits for a full transaction instead of failing after 30 s.
 - USB serial-mode probing and `tcdrain` moved off the main actor; the drain is bounded to
@@ -71,7 +71,7 @@ original AI reply with ⌃1.
   across device pins, and never silently truncated at the record limit.
 - The curl stall check uses a 32 KiB/s effective floor (90 s window) instead of 1 B/s.
 
-### Verification
+#### Verification
 84 Python unit tests, 74 regression assertions, zero-warning build, strict codesign, and
 on-device probes for empty input, long names, idempotency, concurrent delivery, 24 MiB and
 128 MiB end-to-end SHA-256 round-trips, plus a non-destructive USB link-injection/recovery

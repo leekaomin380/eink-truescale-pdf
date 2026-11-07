@@ -29,7 +29,7 @@ SITE_URL = "https://leekaomin380.github.io/eink-truescale-pdf/"
 REPO = "https://github.com/leekaomin380/eink-truescale-pdf"
 RELEASES = REPO + "/releases/latest"
 CHANGELOG = REPO + "/blob/master/CHANGELOG.md"
-LATEST = "1.2.2"
+LATEST = "1.3.0"
 LASTMOD = "2026-11-07"
 
 LANGS = {
@@ -147,13 +147,14 @@ CONTENT = {
         },
         "releases": {
             "title": "Version history",
-            "intro": "Released versions, followed by work already deployed locally but not yet cut into a GitHub Release.",
+            "intro": "Released versions, newest first, each linked to its GitHub Release.",
             "full": "Full changelog on GitHub",
             "entries": [
-                {"tag": "Unreleased", "date": "2026-11-07", "title": "Clipboard fidelity and delivery latency", "link": None, "items": [
+                {"tag": "1.3.0", "date": "2026-11-07", "title": "Clipboard fidelity, table layout and delivery hardening", "link": REPO + "/releases/tag/v1.3.0", "items": [
                     "EPUB and PDF names containing “·” no longer make the device report “the file has been deleted”; non-UTF-8 device responses no longer abort the transaction.",
                     "⌃1 reads rich HTML from the clipboard: HTML tables, TSV and GFM pipe tables are normalised, while plain text and formulas pass through unchanged.",
                     "Complex tables get content-proportional columns, paginate with repeating headers and degrade to a list when over-wide. Authentication now overlaps typesetting to cut latency without shortening the verification chain.",
+                    "Concurrent deliveries now queue, USB link faults are detected separately, and uploads gain bounded timeouts, empty-PDF rejection and idempotency checks.",
                 ]},
                 {"tag": "1.2.2", "date": "2026-11-02", "title": "Hotkeys, quiet Finder delivery and EPUB", "link": REPO + "/releases/tag/v1.2.2", "items": [
                     "Built-in ⌃1 / ⌃2 hotkeys; Finder right-click no longer shows the app.",
@@ -304,13 +305,14 @@ CONTENT = {
         },
         "releases": {
             "title": "版本日志",
-            "intro": "已发布的版本，以及已在本地部署、尚未打成 GitHub Release 的改动。",
+            "intro": "已发布的版本，按时间倒序排列，附对应 GitHub Release 链接。",
             "full": "在 GitHub 查看完整变更日志",
             "entries": [
-                {"tag": "未发布", "date": "2026-11-07", "title": "剪贴板保真与投递延迟", "link": None, "items": [
+                {"tag": "1.3.0", "date": "2026-11-07", "title": "剪贴板保真、表格版式与投递加固", "link": REPO + "/releases/tag/v1.3.0", "items": [
                     "修复文件名含「·」时设备误报「文件已被删除」；设备响应不再因非严格 UTF-8 解码而中断。",
                     "⌃1 读取剪贴板富文本：HTML 表格、TSV 与 GFM 表格归一化，纯文本与公式原样保留。",
                     "复杂表格按内容分配列宽、长表分页重复表头、超宽表降级为列表；设备认证与排版并行以降低延迟，校验链不缩减。",
+                    "并发投递改为队列串行，USB 链路故障单独识别，上传增加超时上界、空 PDF 拦截与幂等跳过。",
                 ]},
                 {"tag": "1.2.2", "date": "2026-11-02", "title": "原生快捷键、静默右键投递与 EPUB", "link": REPO + "/releases/tag/v1.2.2", "items": [
                     "内置 ⌃1 / ⌃2 快捷键；Finder 右键不再弹出 App 窗口。",
@@ -461,13 +463,14 @@ CONTENT = {
         },
         "releases": {
             "title": "更新履歴",
-            "intro": "公開済みのバージョンと、ローカルには適用済みだがまだ GitHub Release にしていない変更です。",
+            "intro": "公開済みのバージョンを新しい順に掲載し、各 GitHub Release にリンクしています。",
             "full": "GitHub で完全な変更履歴を見る",
             "entries": [
-                {"tag": "未リリース", "date": "2026-11-07", "title": "クリップボードの忠実性と送信レイテンシ", "link": None, "items": [
+                {"tag": "1.3.0", "date": "2026-11-07", "title": "クリップボードの忠実性、表組版、送信の堅牢化", "link": REPO + "/releases/tag/v1.3.0", "items": [
                     "「·」を含むファイル名で端末が「ファイルが削除されました」と誤報する問題を修正。厳密な UTF-8 でない応答でも処理が中断しなくなりました。",
                     "⌃1 がクリップボードのリッチ HTML を読み取り、HTML 表・TSV・GFM 表を正規化。プレーンテキストと数式はそのまま保持します。",
                     "複雑な表は内容量に応じた列幅、長い表はヘッダー付きで改ページ、広すぎる表はリストに降级。認証と組版を並列化して遅延を削減し、検証チェーンは短縮していません。",
+                    "同時送信はキューで直列化し、USB リンク異常を個別に検出。タイムアウト上界、空 PDF の拒否、重複送信のスキップを追加しました。",
                 ]},
                 {"tag": "1.2.2", "date": "2026-11-02", "title": "ショートカット、静かな Finder 送信、EPUB", "link": REPO + "/releases/tag/v1.2.2", "items": [
                     "⌃1 / ⌃2 を内蔵。Finder の右クリックで App のウインドウが開かなくなりました。",

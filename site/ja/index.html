@@ -62,7 +62,7 @@
       "applicationCategory": "UtilitiesApplication",
       "applicationSubCategory": "E-ink / e-paper document tools",
       "operatingSystem": "macOS 14 or later (Apple Silicon)",
-      "softwareVersion": "1.2.2",
+      "softwareVersion": "1.3.0",
       "dateModified": "2026-11-07",
       "isAccessibleForFree": true,
       "inLanguage": [
@@ -194,7 +194,7 @@
         <a class="button primary" href="https://github.com/leekaomin380/eink-truescale-pdf/releases/latest">Mac 版をダウンロード</a>
         <a class="button secondary" href="https://github.com/leekaomin380/eink-truescale-pdf">GitHub のソースコード</a>
       </div>
-      <p class="note">バージョン <span id="version">1.2.2</span> · 無料・オープンソース（MIT）。Apple Silicon、macOS 14 以降。</p>
+      <p class="note">バージョン <span id="version">1.3.0</span> · 無料・オープンソース（MIT）。Apple Silicon、macOS 14 以降。</p>
     </div>
 
     <section id="why">
@@ -293,9 +293,9 @@
     <section id="changelog">
       <div class="wrap">
         <h2>更新履歴</h2>
-        <p class="intro">公開済みのバージョンと、ローカルには適用済みだがまだ GitHub Release にしていない変更です。 <a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">GitHub で完全な変更履歴を見る</a></p>
+        <p class="intro">公開済みのバージョンを新しい順に掲載し、各 GitHub Release にリンクしています。 <a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">GitHub で完全な変更履歴を見る</a></p>
         <ol class="releases">
-          <li class="release"><div class="release-head"><span class="tag">未リリース</span><time datetime="2026-11-07">2026-11-07</time></div><h3>クリップボードの忠実性と送信レイテンシ</h3><ul><li>「·」を含むファイル名で端末が「ファイルが削除されました」と誤報する問題を修正。厳密な UTF-8 でない応答でも処理が中断しなくなりました。</li><li>⌃1 がクリップボードのリッチ HTML を読み取り、HTML 表・TSV・GFM 表を正規化。プレーンテキストと数式はそのまま保持します。</li><li>複雑な表は内容量に応じた列幅、長い表はヘッダー付きで改ページ、広すぎる表はリストに降级。認証と組版を並列化して遅延を削減し、検証チェーンは短縮していません。</li></ul></li>
+          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.3.0">1.3.0</a></span><time datetime="2026-11-07">2026-11-07</time></div><h3>クリップボードの忠実性、表組版、送信の堅牢化</h3><ul><li>「·」を含むファイル名で端末が「ファイルが削除されました」と誤報する問題を修正。厳密な UTF-8 でない応答でも処理が中断しなくなりました。</li><li>⌃1 がクリップボードのリッチ HTML を読み取り、HTML 表・TSV・GFM 表を正規化。プレーンテキストと数式はそのまま保持します。</li><li>複雑な表は内容量に応じた列幅、長い表はヘッダー付きで改ページ、広すぎる表はリストに降级。認証と組版を並列化して遅延を削減し、検証チェーンは短縮していません。</li><li>同時送信はキューで直列化し、USB リンク異常を個別に検出。タイムアウト上界、空 PDF の拒否、重複送信のスキップを追加しました。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.2">1.2.2</a></span><time datetime="2026-11-02">2026-11-02</time></div><h3>ショートカット、静かな Finder 送信、EPUB</h3><ul><li>⌃1 / ⌃2 を内蔵。Finder の右クリックで App のウインドウが開かなくなりました。</li><li>Finder の右クリックから EPUB を書籍組版で送信可能に。</li><li>スクリーンショットを文書名とページ番号で命名。ウインドウを閉じてもメニューバーに常駐。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.1">1.2.1</a></span><time datetime="2026-11-01">2026-11-01</time></div><h3>より静かなアイコン</h3><ul><li>グレースケールの紙と左上の斜体小文字 q に変更。サイトのアイコンと favicon も同じデザインに。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.0">1.2.0</a></span><time datetime="2026-11-01">2026-11-01</time></div><h3>直接送信と TrueScale への改名</h3><ul><li>Quaderno Converter から改名。初回起動時に設定を移行。</li><li>USB / LAN からの直接送信、公開鍵の固定、SHA-256 の読み戻し、アップロード前に限った公式クライアントへの降级。</li><li>Finder 右クリック送信、简体中文 / English / 日本語 UI、初回ガイド、端末ファイル、スクリーンショット書き出し。</li></ul></li>
