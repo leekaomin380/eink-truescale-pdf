@@ -1,9 +1,53 @@
 # Changelog
 
-Format loosely follows [Keep a Changelog](https://keepachangelog.com/). No
-version tags have been cut yet — everything below is `Unreleased`, seeded
-retrospectively from the project's git history to give newcomers a map without
-requiring them to read every commit.
+Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Released
+versions are listed below; the dated `Unreleased` sections at the top cover work that
+is already deployed locally but has not been cut into a GitHub Release yet.
+
+## [Unreleased] — 2026-11-06/07 clipboard fidelity and delivery latency
+
+### Fixed
+- File names containing `·` (U+00B7 MIDDLE DOT) or a bare Latin-1 `0xB7` no longer make
+  the device report "the file has been deleted". Remote names fold the Latin-1 punctuation
+  range, CJK characters stay intact, and device responses that fail strict UTF-8 decoding
+  fall back to a lossy decode instead of raising.
+- A failing `open2` viewer control is isolated from the upload transaction, so it no
+  longer triggers the compensating `DELETE` of a document that was delivered correctly.
+- Failed deliveries keep their rendered PDF for Retry, and `history.jsonl` records the
+  traceback in `detail` instead of losing the failure reason.
+- Tabs inside fenced code blocks are no longer mistaken for TSV table data.
+- `clean_title` folds tabs and newlines before stripping control characters, so adjacent
+  clipboard cells no longer concatenate into a single word in the file name.
+
+### Added
+- Clipboard normalization for non-Markdown sources, converged at one point in
+  `render_and_upload`: HTML tables, TSV blocks and GFM pipe tables are mapped to a
+  structural intermediate representation; plain text passes through unchanged. The ⌃1
+  hotkey writes a `public.html` sidecar when the pasteboard carries rich HTML. Formula
+  delimiters (`\(`, `\[`, `\\(`, `\\[`) survive verbatim; `colspan` becomes empty cells;
+  `rowspan` is reported as unmapped and the source is kept.
+- A table layout policy (`table-layout.lua`): column widths follow cell content length
+  (CJK counted double), explicit alignment is preserved, long tables paginate with a
+  repeating header, and over-wide or unsplittable tables degrade to a definition list.
+  No whole-table scaling, no cropping, no dropped rows.
+- `deliver.typ` restores the existing grey hairline / bold-header table vocabulary, and
+  `figure.where(kind: table)` is breakable so a long table is not merged into one page.
+- 104 Python unit tests and 87 regression assertions, including byte-identical output
+  for plain text and formulas before and after the change.
+
+### Changed
+- Delivery latency is reduced by overlapping device authentication with book typesetting
+  in a single helper process, overlapping the local SHA-256 with the directory query,
+  and removing the `layout` helper plus its `plutil` subprocess. The verification chain
+  is untouched: SHA-256 read-back, directory confirmation, failure cleanup, TLS public-key
+  pinning, bounded timeouts and the cross-entry lock all remain.
+
+### Verification
+30-row table paginates over 5 pages with the header repeated 5/5 times, rows 1–30 intact
+and a uniform page size; four-column widths change from 25/25/25/25% to
+11.66/16.44/40.52/31.38%. Plain-text and formula PDFs are byte-identical in the text
+layer. On-device delivery was not re-run; the single-variable check is to resend the
+original AI reply with ⌃1.
 
 ## [Unreleased] — 2026-11-04/05 robustness hardening
 
