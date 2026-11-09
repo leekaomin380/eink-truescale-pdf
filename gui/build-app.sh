@@ -55,9 +55,13 @@ SDK_ARGS=()
 swiftc \
     "${SDK_ARGS[@]}" \
     "$MAC_DIR/QuadernoApp.swift" \
+    "$MAC_DIR/MenuBarIcon.swift" \
     "$MAC_DIR/Localization.swift" \
     "$MAC_DIR/AboutView.swift" \
     "$MAC_DIR/ContentView.swift" \
+    "$MAC_DIR/AppMotion.swift" \
+    "$MAC_DIR/FontSettings.swift" \
+    "$MAC_DIR/MarkdownPasteEditor.swift" \
     "$MAC_DIR/QuickSendView.swift" \
     "$MAC_DIR/DeviceFilesView.swift" \
     "$MAC_DIR/GlobalHotkeys.swift" \
@@ -77,6 +81,13 @@ swiftc \
     -framework IOKit \
     -framework CoreImage \
     -target arm64-apple-macos14.0
+
+echo ">>> 编译中文输出转换工具"
+mkdir -p "$REPO/.build"
+swiftc "${SDK_ARGS[@]}" "$MAC_DIR/tools/ChineseConverter.swift" \
+  -o "$REPO/.build/chinese-convert" -target arm64-apple-macos14.0
+cp "$REPO/.build/chinese-convert" "$APP_DIR/Contents/Resources/chinese-convert"
+cp "$REPO/traditional-filter.lua" "$APP_DIR/Contents/Resources/traditional-filter.lua"
 
 echo ">>> 复制 Info.plist"
 cp "$MAC_DIR/Info.plist" "$APP_DIR/Contents/Info.plist"
@@ -212,7 +223,7 @@ else
 fi
 
 echo ">>> 重签渲染引擎"
-for f in "$BIN_DIR"/* "$LIB_DIR"/*; do
+for f in "$BIN_DIR"/* "$LIB_DIR"/* "$APP_DIR/Contents/Resources/chinese-convert"; do
   [[ -f "$f" ]] || continue
   codesign -f "${SIGN_FLAGS[@]}" -s "$SIGN_IDENTITY" "$f" >/dev/null 2>&1
 done

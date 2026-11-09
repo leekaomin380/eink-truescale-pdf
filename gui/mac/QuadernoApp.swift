@@ -14,6 +14,8 @@ struct QuadernoApp: App {
                 .frame(minWidth: 900, minHeight: 600)
                 .environment(\.locale, AppLanguage.locale)
         }
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 1080, height: 720)
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button(L("关于 TrueScale for QUADERNO")) { MainNavigation.shared.show(.about) }
@@ -37,9 +39,13 @@ private struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Image(systemName: "q.square")
+        Image(nsImage: MenuBarIcon.image)
+            .renderingMode(.template)
+            .accessibilityLabel(Text("TrueScale for QUADERNO"))
             .onAppear { MainWindow.opener = openWindow }
     }
+
+
 }
 
 /// 常驻：关闭最后一个窗口不退出，Dock 图标收起，只留菜单栏图标（「退出」在菜单栏菜单里）。

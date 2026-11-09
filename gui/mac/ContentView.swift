@@ -33,36 +33,44 @@ private struct PrimaryStyled: ViewModifier {
 
 struct ContentView: View {
     @Environment(\.undoManager) private var undoManager
-    @StateObject private var vm = ConversionViewModel()
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var sidebarSurface: Color {
+        colorScheme == .dark ? Color(nsColor: .windowBackgroundColor) : Color(white: 0.965)
+    }
+    @StateObject private var vm: ConversionViewModel
     @ObservedObject private var navigation = MainNavigation.shared
     @State private var inputMode: InputMode = .epub
     @State private var isDragOver = false
     @State private var previewImage: NSImage?
+    @State private var previewRevision = 0
+    @State private var lastPreviewKey: String?
     @State private var showFilePicker = false
     @State private var clearedPasteText: String?
     @State private var clearedWechatURL: String?
     @State private var showClearNotice = false
     @State private var clearNoticeID = UUID()
+    private enum LayoutHint { case margin, footer }
+    @State private var layoutHint: LayoutHint?
+    @State private var layoutHintTask: Task<Void, Never>?
     @AppStorage("isAdvancedExpanded") private var isAdvancedExpanded = false
-    /// 排版参数变更后的防抖重渲染任务。
-    ///
-    /// 【为何需要】renderMetrics 只在渲染成功时赋值，而控件是即时的。
-    /// 改了字号却不重渲，左栏「中文 N 字/行」与底栏「版心 / 共 N 页」描述的仍是
-    /// 上一次渲染的版面 —— 用户看到的是一个【描述旧设置的数字，紧挨着新设置的控件】，
-    /// 且底栏会同时显示当前字号与旧页数，自相矛盾且无从分辨。
-    /// 本地渲染是秒级操作，没有理由让用户手动同步这件事。
-    @State private var autoRenderTask: Task<Void, Never>?
+    init(viewModel: ConversionViewModel = ConversionViewModel(), initialMode: InputMode = .epub) {
+        _vm = StateObject(wrappedValue: viewModel)
+        _inputMode = State(initialValue: initialMode)
+    }
 
     private let cjkNames: [String: String] = [
         "PingFang SC": L("苹方"), "Songti SC": L("宋体"), "Heiti SC": L("黑体"),
         "STSong": L("华文宋体"), "Hiragino Sans GB": L("冬青黑体"),
-        "Noto Serif CJK SC": L("思源宋体"), "Source Han Sans SC": L("思源黑体"),
+        "Noto Sans CJK SC": L("思源黑体"), "Noto Serif CJK SC": L("思源宋体"),
+        "LXGW Neo ZhiSong": L("霞鹜新致宋"), "Kaiti SC": L("楷体"),
+        "STFangsong": L("华文仿宋"), "Source Han Sans SC": L("思源黑体"),
         "Source Han Serif SC": L("思源宋体")
     ]
 
     private func cjkDisplayName(for name: String) -> String {
         if let cn = cjkNames[name] {
-            return "\(cn) (\(name))"
+            return cn
         }
         return name
     }
@@ -101,17 +109,55 @@ struct ContentView: View {
         }
     }
 
-    /// 排版参数变化后延迟重渲染。
-    ///
-    /// 网页模式排除在外 —— 它要发起网络抓取，不能因为用户正在输入网址就自动触发。
-    /// 防抖窗口按来源区分：调字号是离散点击，文本输入是连续键入，后者需要更长的静默期。
-    private func scheduleAutoRender(delay: Duration) {
-        guard inputMode != .wechat, hasInput else { return }
-        autoRenderTask?.cancel()
-        autoRenderTask = Task { @MainActor in
-            try? await Task.sleep(for: delay)
-            guard !Task.isCancelled, !vm.isConverting, vm.isStale else { return }
-            vm.ensureFresh {}
+    private func showLayoutHint(_ hint: LayoutHint) {
+        layoutHintTask?.cancel()
+        withAnimation(AppMotion.expand) { layoutHint = hint }
+        layoutHintTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(2500))
+            guard !Task.isCancelled else { return }
+            withAnimation(AppMotion.exit) { layoutHint = nil }
+        }
+    }
+
+    @ViewBuilder
+    private var layoutHintOverlay: some View {
+        if let hint = layoutHint {
+            GeometryReader { geometry in
+                let pageWidth = Double(vm.config.pageW.replacingOccurrences(of: "mm", with: "")) ?? 157.1
+                let pageHeight = Double(vm.config.pageH.replacingOccurrences(of: "mm", with: "")) ?? 209.5
+                let margin = Double(vm.margin.replacingOccurrences(of: "mm", with: "")) ?? 10
+                let insetX = geometry.size.width * margin / pageWidth
+                let insetY = geometry.size.height * margin / pageHeight
+                ZStack(alignment: .top) {
+                    if hint == .margin {
+                        Rectangle()
+                            .stroke(Color.accentColor.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
+                            .padding(.horizontal, insetX)
+                            .padding(.vertical, insetY)
+                        Text("页边距 \(vm.margin)")
+                            .font(.caption)
+                            .padding(5)
+                            .background(.regularMaterial, in: Capsule())
+                            .position(x: geometry.size.width / 2, y: max(insetY, 36))
+                    } else {
+                        Label(vm.printTime ? L("页脚时间：将显示") : L("页脚时间：将隐藏"), systemImage: "clock")
+                            .font(.caption)
+                            .padding(6)
+                            .background(.regularMaterial, in: Capsule())
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            .padding(.horizontal, max(insetX, 8))
+                            .padding(.bottom, max(insetY / 2, 6))
+                    }
+                    Text("设置示意，刷新后生效")
+                        .font(.caption2)
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.top, 6)
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+            .allowsHitTesting(false)
+            .transition(AppMotion.hintTransition)
         }
     }
 
@@ -139,7 +185,7 @@ struct ContentView: View {
             case nil:
                 HSplitView {
                     sidebar
-                        .frame(minWidth: 300, idealWidth: 360, maxWidth: 520)
+                        .frame(minWidth: 320, idealWidth: 360, maxWidth: 520)
                     if inputMode == .shortcut {
                         QuickSendOverview()
                             .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
@@ -154,6 +200,12 @@ struct ContentView: View {
         .overlay(alignment: .bottom) { ToastView() }
         .sheet(isPresented: $navigation.showSetupGuide) { SetupGuideSheet() }
         .onAppear {
+            vm.activeKind = switch inputMode {
+                case .epub: .epub
+                case .text: .text
+                case .wechat: .wechat
+                case .shortcut: vm.activeKind
+            }
             // 首次使用且尚未配对时自动打开设置向导；「以后再说」后不再自动弹出。
             if !Pairing.isPaired && !UserDefaults.standard.bool(forKey: Pairing.guideDismissedKey) {
                 navigation.showSetupGuide = true
@@ -166,17 +218,15 @@ struct ContentView: View {
         // 【为何逐项监听而不在退出时统一保存】app 是常驻型（关窗不退出），
         // 「退出时保存」在异常退出或强制关闭时会丢；而这些值改动频率极低，
         // 每次写一个 UserDefaults 字典的开销可以忽略。
-        .onChange(of: vm.selectedCjkFont)     { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
-        .onChange(of: vm.selectedLatinFont)   { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
-        .onChange(of: vm.bodySize)            { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
-        .onChange(of: vm.margin)              { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
-        .onChange(of: vm.printTime) { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
-        .onChange(of: vm.leading)             { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
-        .onChange(of: vm.selectedDeviceIndex) { _, _ in vm.savePreferences(); scheduleAutoRender(delay: .milliseconds(400)) }
-        // 选中文件即视为「要看结果」，无需再点一次按钮。
-        .onChange(of: vm.sourceFileURL)       { _, _ in scheduleAutoRender(delay: .milliseconds(150)) }
-        // 键入是连续动作，静默期取长一些，避免每敲一个字就起一次渲染。
-        .onChange(of: vm.pasteText)           { _, _ in scheduleAutoRender(delay: .milliseconds(900)) }
+        .onChange(of: vm.selectedCjkFont)     { _, _ in vm.savePreferences() }
+        .onChange(of: vm.selectedLatinFont)   { _, _ in vm.savePreferences() }
+        .onChange(of: vm.bodySize)            { _, _ in vm.savePreferences() }
+        .onChange(of: vm.margin)              { _, _ in vm.savePreferences(); showLayoutHint(.margin) }
+        .onChange(of: vm.printTime) { _, _ in vm.savePreferences(); showLayoutHint(.footer) }
+        .onChange(of: vm.leading)             { _, _ in vm.savePreferences() }
+        .onChange(of: vm.selectedDeviceIndex) { _, _ in vm.savePreferences() }
+        .onChange(of: vm.landscape)           { _, _ in vm.savePreferences() }
+        .onChange(of: vm.renderTraditional)   { _, _ in vm.savePreferences() }
         .navigationTitle(windowTitle)
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers)
@@ -238,7 +288,10 @@ struct ContentView: View {
                             settingsSection
                         }
                         .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(sidebarSurface)
                     }
+                    .background(sidebarSurface)
                 }
                 Divider()
                 sidebarFooter
@@ -246,25 +299,39 @@ struct ContentView: View {
                     .layoutPriority(2)
             }
         }
+        .background(sidebarSurface)
     }
 
     private var inputModePicker: some View {
-        Picker("输入来源", selection: $inputMode) {
-            ForEach(InputMode.allCases, id: \.self) { mode in
-                Text(mode.title).tag(mode)
+        ViewThatFits(in: .horizontal) {
+            Picker("输入来源", selection: $inputMode) {
+                ForEach(InputMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
+                }
             }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .fixedSize(horizontal: true, vertical: false)
+
+            Picker("输入来源", selection: $inputMode) {
+                ForEach(InputMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .labelsHidden()
-        .pickerStyle(.segmented)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(sidebarSurface)
         .onChange(of: inputMode) { _, newMode in
+            layoutHintTask?.cancel()
+            layoutHint = nil
             showClearNotice = false
             clearedPasteText = nil
             clearedWechatURL = nil
 
             if newMode == .shortcut {
-                autoRenderTask?.cancel()
                 return
             }
             vm.activeKind = switch newMode {
@@ -283,40 +350,55 @@ struct ContentView: View {
         }
     }
 
+    /// Scroll the entire editing/settings area; reserve the footer before allocating space.
+    /// The native editor scrolls its own text, while the outer scroll keeps every setting reachable.
     private var textWorkspace: some View {
-        VStack(spacing: 0) {
-            textSection
-                .padding(16)
-                .frame(maxHeight: .infinity)
-                .layoutPriority(1)
-
-            Divider()
-
+        GeometryReader { available in
             ScrollView {
-                settingsSection
-                    .padding(16)
+                VStack(alignment: .leading, spacing: 16) {
+                    textSection
+                        .frame(height: max(260, min(440, available.size.height * 0.65)))
+                    Divider()
+                    settingsSection
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(sidebarSurface)
             }
-            .frame(minHeight: 190, idealHeight: 220, maxHeight: 280)
+            .background(sidebarSurface)
+            .scrollIndicators(.visible)
         }
     }
 
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("排版设置")
-                .font(.headline)
+            Label("排版设置", systemImage: "slider.horizontal.3")
+                .font(.subheadline.weight(.semibold))
 
+            pageFormatSection
             layoutSummary
 
             layoutBasicSection
 
+            VStack(alignment: .leading, spacing: 8) {
+                settingHeading("中文输出", symbol: "character.book.closed")
+                Picker("中文输出", selection: $vm.renderTraditional) {
+                    Text("保持原文").tag(false)
+                    Text("繁体中文").tag(true)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+
             DisclosureGroup("进阶设置", isExpanded: $isAdvancedExpanded) {
                 VStack(alignment: .leading, spacing: 12) {
-                    deviceSection
                     fontSection
                     layoutAdvancedSection
                 }
                 .padding(.top, 4)
+                .transition(.opacity)
             }
+            .animation(AppMotion.expand, value: isAdvancedExpanded)
         }
     }
 
@@ -430,10 +512,10 @@ struct ContentView: View {
                     .help("清除正文并保留标题，可撤销")
             }
 
-            TextEditor(text: $vm.pasteText)
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.visible)
-                .border(Color.secondary.opacity(0.2), width: 1)
+            MarkdownPasteEditor(text: $vm.pasteText)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
                 .frame(minHeight: 180, maxHeight: .infinity)
                 .onChange(of: vm.pasteText) { _, newValue in
                     // 清空后开始新的输入，旧内容不再适合作为快捷“撤销”目标。
@@ -480,11 +562,46 @@ struct ContentView: View {
         }
     }
 
+    private func settingHeading(_ title: LocalizedStringKey, symbol: String) -> some View {
+        Label { Text(title) } icon: {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .regular))
+                .frame(width: 16)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .symbolRenderingMode(.monochrome)
+    }
+
+    private var pageFormatSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            settingHeading("页面规格", symbol: "doc")
+            Picker("页面规格", selection: $vm.pagePresetID) {
+                Section("设备屏幕") { Text("QUADERNO").tag("device") }
+                Section("标准纸张") {
+                    ForEach(StandardPaper.all) { paper in Text(paper.name).tag(paper.id) }
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if vm.isStandardPaper {
+                settingHeading("页面方向", symbol: "arrow.triangle.2.circlepath")
+                Picker("页面方向", selection: $vm.landscape) {
+                    Label("纵向", systemImage: "rectangle.portrait").tag(false)
+                    Label("横向", systemImage: "rectangle").tag(true)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            } else {
+                deviceSection
+            }
+        }
+    }
+
     private var deviceSection: some View {
         Group {
-            Text("目标设备")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            settingHeading("目标设备", symbol: "rectangle.portrait")
             Picker("", selection: $vm.selectedDeviceIndex) {
                 ForEach(0..<vm.devices.count, id: \.self) { i in
                     Text(vm.devices[i].name).tag(i)
@@ -506,27 +623,43 @@ struct ContentView: View {
     }
 
     private var fontSection: some View {
-        Group {
-            Text("中文字体")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Picker("", selection: $vm.selectedCjkFont) {
-                ForEach(vm.cjkFonts, id: \.self) { f in
-                    Text(cjkDisplayName(for: f)).tag(f)
-                }
-            }
-            .pickerStyle(.menu)
+        VStack(alignment: .leading, spacing: 10) {
+            settingHeading("中文字体", symbol: "pencil.tip")
+            FontFamilyPicker(
+                choices: vm.cjkFonts.map { FontChoice(family: $0, title: cjkDisplayName(for: $0)) },
+                accessibilityTitle: L("中文字体"), selection: $vm.selectedCjkFont)
+                .frame(maxWidth: .infinity)
 
-            Text("西文字体")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Picker("", selection: $vm.selectedLatinFont) {
-                ForEach(vm.latinFonts, id: \.self) { f in
-                    Text(f).tag(f)
-                }
-            }
-            .pickerStyle(.menu)
+            settingHeading("西文字体（英文与数字）", symbol: "pencil.tip")
+            FontFamilyPicker(
+                choices: vm.latinFonts.map { FontChoice(family: $0, title: $0) },
+                accessibilityTitle: L("西文字体（英文与数字）"), selection: $vm.selectedLatinFont)
+                .frame(maxWidth: .infinity)
+
+            mixedFontSpecimen
         }
+    }
+
+    private var mixedFontSpecimen: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("中英混排样张")
+                Spacer()
+                Text("18pt · 常规")
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            Text(FontSpecimenTypography.sample(cjkFamily: vm.selectedCjkFont,
+                                                latinFamily: vm.selectedLatinFont,
+                                                traditional: vm.renderTraditional))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(10)
+        .background(Color(nsColor: .textBackgroundColor).opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
+        .accessibilityLabel(Text("中英混排样张"))
+        .accessibilityValue(Text(verbatim: "\(vm.selectedCjkFont) / \(vm.selectedLatinFont)"))
     }
 
     /// 版面摘要：页面物理尺寸、版心宽度、全书尺寸一致性校验。
@@ -543,11 +676,9 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
                 Text("\(vm.config.pageW) × \(vm.config.pageH)")
                     .font(.callout.monospacedDigit())
-                if let name = vm.selectedDevice?.name {
-                    Text(name)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
+                Text(vm.pagePresetName)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
 
             if let m = vm.renderMetrics {
@@ -574,16 +705,12 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(Color.secondary.opacity(0.06))
-        .cornerRadius(6)
+        .padding(.vertical, 2)
     }
 
     private var layoutBasicSection: some View {
         Group {
-            Text("正文字号")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            settingHeading("正文字号", symbol: "textformat.size")
             Picker("", selection: $vm.bodySize) {
                 ForEach(ConversionViewModel.bodySizeChoices, id: \.self) { s in
                     Text(s).tag(s)
@@ -602,14 +729,11 @@ struct ContentView: View {
                         .font(.caption2)
                         .foregroundColor(m.latinPerLine >= 45 && m.latinPerLine <= 75 ? .green : .orange)
                 }
-                // 自动重渲染有防抖窗口，其间这两个数描述的仍是上一次渲染的版面。
-                // 变暗表示「正在追上」，避免用户把旧数字当成新设置的结果。
+                // These figures describe the last preview until the user refreshes it.
                 .opacity(vm.isStale ? 0.4 : 1)
             }
 
-            Text("行距")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            settingHeading("行距", symbol: "arrow.up.and.down")
             Picker("", selection: $vm.leading) {
                 ForEach(ConversionViewModel.leadingChoices, id: \.0) { pair in
                     Text(pair.1).tag(pair.0)
@@ -623,9 +747,7 @@ struct ContentView: View {
         Group {
             HStack {
                 VStack(alignment: .leading) {
-                    Text("页边距")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    settingHeading("页边距", symbol: "rectangle.dashed")
                     Picker("", selection: $vm.margin) {
                         ForEach(ConversionViewModel.marginChoices, id: \.self) { m in
                             Text(m).tag(m)
@@ -635,9 +757,7 @@ struct ContentView: View {
                 }
                 
                 VStack(alignment: .leading) {
-                    Text("页脚时间")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    settingHeading("页脚时间", symbol: "clock")
                     Toggle("开启", isOn: $vm.printTime)
                         .toggleStyle(.switch)
                         .controlSize(.small)
@@ -648,60 +768,116 @@ struct ContentView: View {
 
     /// 主操作区。
     ///
-    /// 【为何删掉「预览」按钮】右侧面板一直显示着预览，再放一个叫「预览」的
-    /// 醒目按钮在语义上是重复的；而它此前是唯一的 prominent 按钮，等于把
-    /// 视觉重心压在【手段】上，真正的目的（投递到设备）反而是次要样式。
-    /// 参数变更已由 scheduleAutoRender 自动跟进，这个按钮不再有存在理由。
+    /// 编辑只标记待更新；刷新、投递或另存时才生成 PDF。
     ///
     /// 网页模式例外：它要发起网络抓取，必须由用户显式触发，故保留独立按钮。
     private var actionButtons: some View {
-        VStack(spacing: 8) {
-            if inputMode == .wechat {
-                Button(action: { vm.convertWechat() }) {
-                    HStack {
-                        if vm.isConverting { ProgressView().controlSize(.small) }
-                        Text("解析并预览")
-                    }
-                    .frame(maxWidth: .infinity)
+        VStack(spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    deliverButton
+                    savePDFButton
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(vm.isConverting || !hasInput)
-                .keyboardShortcut("r", modifiers: .command)
-            }
-
-            HStack(spacing: 8) {
-                if vm.hasQuaderno {
-                    Button(action: { vm.ensureFresh { vm.deliverToDevice() } }) {
-                        Text("投递到 QUADERNO")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .modifier(PrimaryStyled(isPrimary: inputMode != .wechat))
-                    .disabled(vm.isConverting || !hasInput)
-                    .keyboardShortcut(.return, modifiers: .command)
+                VStack(spacing: 8) {
+                    deliverButton
+                    savePDFButton
                 }
-
-                Button(action: { vm.ensureFresh { vm.savePDF() } }) {
-                    Text("另存 PDF…")
-                        .frame(maxWidth: .infinity)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    refreshButton
+                    exportMarkdownButton
                 }
-                .modifier(PrimaryStyled(isPrimary: !vm.hasQuaderno && inputMode != .wechat))
-                .disabled(vm.isConverting || !hasInput)
-                .keyboardShortcut("s", modifiers: .command)
+                VStack(spacing: 8) {
+                    refreshButton
+                    exportMarkdownButton
+                }
             }
-
-            Button(action: { vm.exportMarkdown() }) {
-                Label(inputMode == .wechat ? L("导出 Markdown（.md）…") : L("导出 Markdown…"), systemImage: "doc.text")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .disabled(vm.isConverting || !hasInput)
-            .help(inputMode == .wechat ? L("直接保存 .md，保留正文、原文地址与图片链接，供 AI 阅读") : L("导出为 Markdown（含图片），供 AI 阅读"))
         }
+    }
+
+    private var refreshButton: some View {
+        Button(action: {
+            if inputMode == .wechat { vm.convertWechat() }
+            else { vm.ensureFresh {} }
+        }) {
+            Label(inputMode == .wechat ? L("解析并预览") : L("刷新预览"),
+                  systemImage: inputMode == .wechat ? "doc.text.magnifyingglass" : "arrow.clockwise")
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.regular)
+        .foregroundStyle(Color.primary.opacity(0.72))
+        .disabled(vm.isConverting || vm.isDelivering || !hasInput)
+        .keyboardShortcut("r", modifiers: .command)
+    }
+
+    private var exportMarkdownButton: some View {
+        Button(action: { vm.exportMarkdown() }) {
+            Label("导出 Markdown…", systemImage: "doc.text")
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.regular)
+        .foregroundStyle(Color.primary.opacity(0.72))
+        .disabled(vm.isConverting || vm.isDelivering || !hasInput)
+        .help(inputMode == .wechat ? L("直接保存 .md，保留正文、原文地址与图片链接，供 AI 阅读") : L("导出为 Markdown（含图片），供 AI 阅读"))
+    }
+
+    @ViewBuilder
+    private var deliverButton: some View {
+        if vm.hasQuaderno && !vm.isStandardPaper {
+            Button(action: { vm.requestDelivery() }) {
+                Label("投递到 QUADERNO", systemImage: "paperplane")
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(maxWidth: .infinity)
+            }
+            .modifier(PrimaryStyled(isPrimary: true))
+            .disabled(vm.isConverting || vm.isDelivering || !hasInput)
+            .keyboardShortcut(.return, modifiers: .command)
+        }
+    }
+
+    private var savePDFButton: some View {
+        Button(action: { vm.ensureFresh { vm.savePDF() } }) {
+            Label("另存 PDF…", systemImage: "square.and.arrow.down")
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity)
+        }
+        .modifier(PrimaryStyled(isPrimary: !vm.hasQuaderno || vm.isStandardPaper))
+        .disabled(vm.isConverting || vm.isDelivering || !hasInput)
+        .keyboardShortcut("s", modifiers: .command)
     }
 
     private var sidebarFooter: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if showClearNotice {
+            if vm.isDelivering, let progress = vm.deliveryProgress {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        if progress.fraction == nil { ProgressView().controlSize(.small) }
+                        Text(progress.title)
+                            .contentTransition(.opacity)
+                            .animation(AppMotion.micro, value: progress.phase)
+                        Spacer(minLength: 0)
+                        if let fraction = progress.fraction {
+                            Text("\(Int(fraction * 100))%")
+                                .monospacedDigit()
+                                .transaction { $0.animation = nil }
+                        }
+                    }
+                    .font(.caption)
+                    if let fraction = progress.fraction {
+                        ProgressView(value: fraction)
+                            .transaction { $0.animation = nil }
+                    }
+                    if let completed = progress.completed, let total = progress.total, total > 0 {
+                        Text(verbatim: "\(ByteCountFormatter.string(fromByteCount: completed, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+            } else if showClearNotice {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.uturn.backward.circle.fill")
                         .foregroundColor(.accentColor)
@@ -727,12 +903,17 @@ struct ContentView: View {
 
             actionButtons
         }
-        .padding(12)
+        .padding(16)
+        .background(sidebarSurface)
+        .animation(AppMotion.expand, value: vm.isDelivering)
+        .animation(showClearNotice ? AppMotion.expand : AppMotion.exit, value: showClearNotice)
+        .imageScale(.medium)
+        .symbolRenderingMode(.monochrome)
     }
 
     private var statusBar: some View {
         Group {
-            if !vm.statusMessage.isEmpty {
+            if !vm.statusMessage.isEmpty || previewPending {
                 HStack(spacing: 6) {
                     // 渲染进度原先寄生在「预览」按钮里，按钮删掉后迁到状态条。
                     if vm.isConverting {
@@ -742,20 +923,28 @@ struct ContentView: View {
                             .fill(statusColor)
                             .frame(width: 7, height: 7)
                     }
-                    Text(vm.statusMessage)
+                    Text(previewPending
+                         ? (vm.isStandardPaper ? L("预览待更新，点击刷新预览或另存 PDF") : L("预览待更新，点击刷新预览或直接投递"))
+                         : vm.statusMessage)
+                        .contentTransition(.opacity)
+                        .animation(AppMotion.micro, value: vm.statusMessage)
                         .font(.caption)
                         .foregroundColor(statusColor)
                         .lineLimit(2)
                 }
-                .padding(8)
+                .padding(.vertical, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(statusColor.opacity(0.08))
-                .cornerRadius(6)
             }
         }
     }
 
+    private var previewPending: Bool {
+        inputMode != .wechat && inputMode != .shortcut && hasInput && vm.isStale
+            && !vm.isConverting && !vm.isDelivering && vm.statusKind != .err
+    }
+
     private var statusColor: Color {
+        if previewPending { return .secondary }
         switch vm.statusKind {
         case .ok: return .green
         case .err: return .red
@@ -836,49 +1025,65 @@ struct ContentView: View {
 
     // MARK: - Preview Area
 
+    private var pageNavigation: some View {
+        HStack(spacing: 8) {
+            Button(action: { vm.currentPage = max(1, vm.currentPage - 1) }) {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(vm.currentPage <= 1)
+
+            Text("第")
+            TextField("", value: $vm.currentPage, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 44)
+                .multilineTextAlignment(.center)
+                .onSubmit { vm.currentPage = max(1, min(vm.totalPages, vm.currentPage)) }
+            Text("/ \(vm.totalPages) 页")
+                .foregroundColor(.secondary)
+
+            Button(action: { vm.currentPage = min(vm.totalPages, vm.currentPage + 1) }) {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(vm.currentPage >= vm.totalPages)
+
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    @ViewBuilder
+    private var pageStatusBadge: some View {
+        if let m = vm.renderMetrics {
+            Group {
+                if m.sizeUniform {
+                    Label("页面尺寸统一", systemImage: "checkmark.seal")
+                        .foregroundColor(.green)
+                } else {
+                    Label("尺寸不一致", systemImage: "exclamationmark.triangle")
+                        .foregroundColor(.red)
+                }
+            }
+            .font(.caption2)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(1)
+            .opacity(vm.isStale ? 0.4 : 1)
+        }
+    }
+
+
     private var previewArea: some View {
         VStack(spacing: 0) {
-            // Page bar
-            HStack(spacing: 8) {
-                Button(action: { vm.currentPage = max(1, vm.currentPage - 1) }) {
-                    Image(systemName: "chevron.left")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    pageNavigation
+                    Spacer(minLength: 0)
+                    pageStatusBadge
                 }
-                .disabled(vm.currentPage <= 1)
-
-                Text("第")
-                TextField("", value: $vm.currentPage, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 44)
-                    .multilineTextAlignment(.center)
-                    .onSubmit { vm.currentPage = max(1, min(vm.totalPages, vm.currentPage)) }
-                Text("/ \(vm.totalPages) 页")
-                    .foregroundColor(.secondary)
-
-                Button(action: { vm.currentPage = min(vm.totalPages, vm.currentPage + 1) }) {
-                    Image(systemName: "chevron.right")
+                VStack(alignment: .leading, spacing: 6) {
+                    pageNavigation
+                    pageStatusBadge
                 }
-                .disabled(vm.currentPage >= vm.totalPages)
-
-                Spacer()
-
-                // 窄窗口下这枚标记会被挤到窗口边缘并截断（实测「页面尺寸统一」只剩前几字）。
-                // fixedSize + layoutPriority 让它保持固有宽度，压缩由左侧翻页控件承担。
-                if let m = vm.renderMetrics {
-                    Group {
-                        if m.sizeUniform {
-                            Label("页面尺寸统一", systemImage: "checkmark.seal")
-                                .foregroundColor(.green)
-                        } else {
-                            Label("尺寸不一致", systemImage: "exclamationmark.triangle")
-                                .foregroundColor(.red)
-                        }
-                    }
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .layoutPriority(1)
-                    .opacity(vm.isStale ? 0.4 : 1)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -895,26 +1100,29 @@ struct ContentView: View {
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: box.width, height: box.height)
+                            .id(previewRevision)
+                            .transition(.opacity)
                     } else {
                         Rectangle()
-                            .fill(Color(nsColor: .textBackgroundColor))
+                            .fill(Color.white)
                             .frame(width: box.width, height: box.height)
                             .overlay(
                                 Text("准备就绪")
                                     .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.gray)
                             )
                     }
                 }
                 .frame(width: box.width, height: box.height)
+                .overlay { layoutHintOverlay }
                 .overlay(
                     Rectangle()
-                        .stroke(Color.secondary.opacity(0.45), lineWidth: 1)
+                        .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
                 )
-                .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+                .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
                 .frame(width: geo.size.width, height: geo.size.height)
             }
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(Color(nsColor: .underPageBackgroundColor))
 
             // Bottom info bar
             //
@@ -925,7 +1133,7 @@ struct ContentView: View {
             // 且「字号」与左栏控件、「共 N 页」与上方翻页条本就重复。
             // 现在只保留两项事实性数据，且同属一个时效。
             HStack(spacing: 16) {
-                if vm.selectedDevice != nil {
+                if vm.selectedDevice != nil || vm.isStandardPaper {
                     Text("页面 \(vm.config.pageW) × \(vm.config.pageH)")
                         .font(.caption2).foregroundColor(.secondary)
                 }
@@ -948,11 +1156,18 @@ struct ContentView: View {
     // MARK: - Actions
 
     private func updatePreview() {
+        let key = "\(vm.currentPdfURL?.path ?? "")|\(vm.currentPage)|\(vm.renderGeneration)"
+        guard key != lastPreviewKey else { return }
         guard let img = vm.renderPage(vm.currentPage) else {
             previewImage = nil
+            lastPreviewKey = nil
             return
         }
-        previewImage = img
+        lastPreviewKey = key
+        withAnimation(AppMotion.micro) {
+            previewImage = img
+            previewRevision += 1
+        }
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

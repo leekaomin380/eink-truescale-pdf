@@ -528,8 +528,7 @@ class ClipboardLayoutTests(unittest.TestCase):
         self.assertFalse(direct.can_use_restricted_fonts(r'\[\text{中文公式}\]'))
 
 
-if __name__ == '__main__':
-    unittest.main()
+
 
 
 class MessageLanguageTests(unittest.TestCase):
@@ -1533,3 +1532,59 @@ class ClipboardNormalizationTests(unittest.TestCase):
             self.assertNotIn('input', entry)
             self.assertNotIn('text', entry)
 
+
+class LiveProgressTests(unittest.TestCase):
+    def test_curl_percentage_is_parsed_from_transfer_meter(self):
+        self.assertIsNone(direct.curl_upload_fraction('% Total % Received % Xferd'))
+        self.assertIsNone(direct.curl_upload_fraction('connection failed'))
+        self.assertEqual(direct.curl_upload_fraction('42 1000 0 0 42 420 12 34'), .42)
+        self.assertEqual(direct.curl_upload_fraction('100 1000 0 0 100 1000 12 34'), 1)
+
+    def test_download_progress_observes_written_bytes_and_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = Path(tmp) / 'body'
+            meter = Path(tmp) / 'meter'
+            payload = b'a' * 131072
+            def fake_run(args, **kwargs):
+                with body.open('wb') as stream:
+                    stream.write(payload[:65536])
+                    stream.flush()
+                    time.sleep(.25)
+                    stream.write(payload[65536:])
+                return subprocess.CompletedProcess(args, 0, b'200')
+            output = io.StringIO()
+            with patch.dict(os.environ, {'QUADERNO_PROGRESS': '1'}), contextlib.redirect_stderr(output), \
+                 patch.object(direct.subprocess, 'run', side_effect=fake_run):
+                result = direct.run_transfer_with_progress([], 'PRIVATE_CONFIG', 1,
+                    phase='readback', size=len(payload), body=body, meter=meter)
+                digest = direct.file_sha256(body, progress=True)
+            events = [json.loads(line) for line in output.getvalue().splitlines()]
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(digest, hashlib.sha256(payload).hexdigest())
+            self.assertTrue(any(event.get('completed') == 65536 for event in events))
+            self.assertTrue(any(event.get('fraction') == .5 for event in events))
+            self.assertEqual(events[-1]['phase'], 'verify')
+            self.assertEqual(events[-1]['completed'], len(payload))
+            self.assertNotIn('PRIVATE_CONFIG', output.getvalue())
+
+    def test_upload_progress_uses_curl_percent_not_elapsed_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            meter = Path(tmp) / 'meter'
+            def fake_run(args, **kwargs):
+                kwargs['stderr'].write(b' 40 1000 0 0 40 400 0 0\r')
+                kwargs['stderr'].flush()
+                time.sleep(.25)
+                kwargs['stderr'].write(b'100 1000 0 0 100 1000 0 0\n')
+                kwargs['stderr'].flush()
+                return subprocess.CompletedProcess(args, 0, b'200')
+            output = io.StringIO()
+            with patch.dict(os.environ, {'QUADERNO_PROGRESS': '1'}), contextlib.redirect_stderr(output), \
+                 patch.object(direct.subprocess, 'run', side_effect=fake_run):
+                direct.run_transfer_with_progress([], '', 1, phase='upload', size=1000,
+                    body=Path(tmp) / 'body', meter=meter)
+            fractions = [json.loads(line)['fraction'] for line in output.getvalue().splitlines()]
+            self.assertIn(.4, fractions)
+            self.assertEqual(fractions[-1], 1)
+
+if __name__ == '__main__':
+    unittest.main()

@@ -4,10 +4,9 @@
 The previous single page injected Chinese and Japanese copy with JavaScript at
 runtime: the HTML a search engine received contained English only. Each language
 now owns its own URL, its own <html lang>, title, description, canonical,
-hreflang set and JSON-LD. The visual rules stay in assets/site.css and are
-unchanged; this script only assembles markup around the shared stylesheet.
+hreflang set and JSON-LD. The visual rules live in assets/site.css; all four locales share the same layout.
 
-    python3 site/build.py            # regenerate index.html, zh/, ja/, sitemap, robots
+    python3 site/build.py            # regenerate index.html, zh/, zh-hant/, ja/, sitemap, robots
     python3 site/build.py --check    # exit 1 if the committed output is stale
 
 The generated HTML is committed, so GitHub Pages serves plain static files with
@@ -30,11 +29,12 @@ REPO = "https://github.com/leekaomin380/eink-truescale-pdf"
 RELEASES = REPO + "/releases/latest"
 CHANGELOG = REPO + "/blob/master/CHANGELOG.md"
 LATEST = "1.3.0"
-LASTMOD = "2026-11-07"
+LASTMOD = "2026-11-09"
 
 LANGS = {
     "en": {"dir": "", "lang": "en", "hreflang": "en", "locale": "en_US", "label": "English"},
-    "zh": {"dir": "zh/", "lang": "zh-Hans", "hreflang": "zh-Hans", "locale": "zh_CN", "label": "中文"},
+    "zh": {"dir": "zh/", "lang": "zh-Hans", "hreflang": "zh-Hans", "locale": "zh_CN", "label": "简体中文"},
+    "zh-hant": {"dir": "zh-hant/", "lang": "zh-Hant", "hreflang": "zh-Hant", "locale": "zh_TW", "label": "正體中文"},
     "ja": {"dir": "ja/", "lang": "ja", "hreflang": "ja", "locale": "ja_JP", "label": "日本語"},
 }
 
@@ -516,12 +516,37 @@ CONTENT = {
 }
 
 
+# Independent Traditional Chinese copy is checked in: CI needs no conversion tool.
+CONTENT["en"]["tribute"] = {
+    "title": "With appreciation for FUJITSU QUADERNO.",
+    "text": "We admire the restraint of its industrial design: information technology serving reading, writing and thought. TrueScale shares that spirit, giving digital words the care of a printed page.",
+}
+CONTENT["zh"]["tribute"] = {
+    "title": "向 FUJITSU QUADERNO 致敬。",
+    "text": "我们欣赏它克制的工业设计，让信息技术恰当地服务于阅读、书写与思考。TrueScale 希望延续这种理念，让数字内容以适合纸页的方式呈现。",
+}
+CONTENT["ja"]["tribute"] = {
+    "title": "FUJITSU QUADERNO への敬意を込めて。",
+    "text": "その控えめな工業デザインと、読む・書く・考えることに寄り添う情報技術に敬意を表します。TrueScale もその精神を大切に、デジタルの言葉を紙のページのように丁寧に整えます。",
+}
+CONTENT["en"]["hero"]["title"] = "A little more care for every page."
+CONTENT["zh"]["hero"]["title"] = "让每一页，\n都值得静心阅读。"
+CONTENT["ja"]["hero"]["title"] = "一ページずつ、\n心地よく読むために。"
+CONTENT["en"]["hero"]["lead"] = "From words on your Mac to a page on your QUADERNO. Thoughtful typography, true physical size, and a quiet place to read."
+CONTENT["zh"]["hero"]["lead"] = "从 Mac 上的文字，到 QUADERNO 上的一页。合宜的字体、真实的尺寸，让阅读回到从容。"
+CONTENT["ja"]["hero"]["lead"] = "Mac の言葉を、QUADERNO の一ページへ。読みやすい書体と実際のページサイズで、落ち着いた読書の時間を。"
+CONTENT["en"]["meta"]["jsonld_summary"] = "A free, open-source Mac app that typesets text, Markdown and EPUB for QUADERNO and delivers documents directly over USB or Wi-Fi. Existing PDFs can be sent directly."
+CONTENT["zh"]["meta"]["jsonld_summary"] = "免费的开源 Mac 应用，为 QUADERNO 排版文本、Markdown 和 EPUB，通过 USB 或 Wi-Fi 直接投递文档。现有 PDF 支持直接投递。"
+CONTENT["ja"]["meta"]["jsonld_summary"] = "テキスト、Markdown、EPUB を QUADERNO 向けに組版し、USB または Wi-Fi で直接送信する無料のオープンソース Mac アプリです。既存の PDF も直接送信できます。"
+CONTENT["zh-hant"] = json.loads((SITE / "content-zh-hant.json").read_text(encoding="utf-8"))
+
+
 def esc(value: str) -> str:
     return html.escape(str(value), quote=True)
 
 
 def validate() -> None:
-    """Keep the three localizations structurally identical and complete."""
+    """Keep the four localizations structurally identical and complete."""
     def shape(node, path="root"):
         if isinstance(node, dict):
             return ("dict", tuple(sorted((k, shape(v, path + "." + k)) for k, v in node.items())))
@@ -580,7 +605,7 @@ def validate_markup(files: dict[Path, str]) -> None:
             problems.append("h1 must appear exactly once")
         if f'<link rel="canonical" href="{SITE_URL}{info["dir"]}">' not in doc:
             problems.append("canonical mismatch")
-        for code in ("en", "zh-Hans", "zh-CN", "ja", "x-default"):
+        for code in ("en", "zh-Hans", "zh-CN", "zh-Hant", "ja", "x-default"):
             if f'hreflang="{code}"' not in doc:
                 problems.append("missing hreflang " + code)
         for section in ("features", "changelog", "faq"):
@@ -622,7 +647,9 @@ def validate_markup(files: dict[Path, str]) -> None:
         for ref in re.findall(r'(?:href|src)="([^"]+)"', doc):
             if ref.startswith(("http://", "https://", "mailto:", "#")):
                 continue
-            if not (path.parent / ref.split("#")[0].split("?")[0]).resolve().exists():
+            target = (path.parent / ref.split("#")[0].split("?")[0]).resolve()
+            generated = target in files or target / "index.html" in files
+            if not target.exists() and not generated:
                 problems.append("missing local asset " + ref)
 
         if problems:
@@ -652,7 +679,7 @@ def json_ld(lang: str) -> str:
             "@id": SITE_URL + "#website",
             "url": SITE_URL,
             "name": "TrueScale for QUADERNO",
-            "inLanguage": ["en", "zh-Hans", "ja"],
+            "inLanguage": ["en", "zh-Hans", "zh-Hant", "ja"],
             "publisher": {"@type": "Person", "name": "leekaomin", "email": "leekaomin@foxmail.com"},
         },
         {
@@ -667,7 +694,7 @@ def json_ld(lang: str) -> str:
             "softwareVersion": LATEST,
             "dateModified": LASTMOD,
             "isAccessibleForFree": True,
-            "inLanguage": ["en", "zh-Hans", "ja"],
+            "inLanguage": ["en", "zh-Hans", "zh-Hant", "ja"],
             "license": REPO + "/blob/master/LICENSE",
             "downloadUrl": RELEASES,
             "installUrl": RELEASES,
@@ -704,17 +731,17 @@ def render(lang: str) -> str:
 
     hreflang = "\n".join(
         f'<link rel="alternate" hreflang="{code}" href="{SITE_URL}{suffix}">'
-        for code, suffix in [("en", ""), ("zh-Hans", "zh/"), ("zh-CN", "zh/"), ("ja", "ja/"), ("x-default", "")]
+        for code, suffix in [("en", ""), ("zh-Hans", "zh/"), ("zh-CN", "zh/"), ("zh-Hant", "zh-hant/"), ("ja", "ja/"), ("x-default", "")]
     )
     locale_alternates = "\n".join(
         f'<meta property="og:locale:alternate" content="{LANGS[l]["locale"]}">'
         for l in LANGS if l != lang
     )
     language_links = "\n".join(
-        f'<a href="{SITE_URL}{LANGS[l]["dir"]}" hreflang="{LANGS[l]["hreflang"]}" lang="{LANGS[l]["lang"]}"'
+        f'<a href="{base}{LANGS[l]["dir"]}" hreflang="{LANGS[l]["hreflang"]}" lang="{LANGS[l]["lang"]}"'
         + (' aria-current="page"' if l == lang else "")
         + f'>{esc(LANGS[l]["label"])}</a>'
-        for l in ("zh", "en", "ja")
+        for l in ("zh", "zh-hant", "en", "ja")
     )
 
     trust_cards = "\n".join(
@@ -793,6 +820,9 @@ def render(lang: str) -> str:
 
   <main>
     <div class="hero">
+      <div class="hero-photo" aria-hidden="true"><img src="{base}assets/reading-by-window.jpg" alt="" width="1600" height="1067" fetchpriority="high"></div>
+      <div class="hero-copy">
+      <img class="hero-icon" src="{base}assets/icon.png" alt="TrueScale" width="144" height="144">
       <h1>{esc(hero["title"])}</h1>
       <p class="lead">{esc(hero["lead"])}</p>
       <div class="flow" aria-hidden="true">
@@ -803,6 +833,7 @@ def render(lang: str) -> str:
         <a class="button secondary" href="{REPO}">{esc(hero["source"])}</a>
       </div>
       <p class="note">{esc(hero["version"])} <span id="version">{LATEST}</span> · {esc(hero["note"])}</p>
+      </div>
     </div>
 
     <section id="why">
@@ -903,6 +934,10 @@ def render(lang: str) -> str:
         </div>
       </div>
     </section>
+    <section class="tribute">
+      <h2>{esc(c["tribute"]["title"])}</h2>
+      <p>{esc(c["tribute"]["text"])}</p>
+    </section>
   </main>
 
   <footer>
@@ -910,6 +945,7 @@ def render(lang: str) -> str:
     <p>{esc(foot["license"])}</p>
     <p><a href="{REPO}">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="{REPO}/issues">{esc(foot["issues"])}</a></p>
     <p>{esc(foot["contact"])}<a href="mailto:leekaomin@foxmail.com">leekaomin@foxmail.com</a></p>
+    <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/young-woman-reading-book-on-couch-7578223/">John Diez / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
   </footer>
 </div>
 
@@ -932,7 +968,7 @@ fetch("https://api.github.com/repos/leekaomin380/eink-truescale-pdf/releases/lat
 def sitemap() -> str:
     alternates = "\n".join(
         f'    <xhtml:link rel="alternate" hreflang="{code}" href="{SITE_URL}{suffix}"/>'
-        for code, suffix in [("en", ""), ("zh-Hans", "zh/"), ("zh-CN", "zh/"), ("ja", "ja/"), ("x-default", "")]
+        for code, suffix in [("en", ""), ("zh-Hans", "zh/"), ("zh-CN", "zh/"), ("zh-Hant", "zh-hant/"), ("ja", "ja/"), ("x-default", "")]
     )
     urls = []
     for lang, info in LANGS.items():
@@ -963,6 +999,7 @@ def outputs() -> dict[Path, str]:
         SITE / "index.html": render("en"),
         SITE / "zh" / "index.html": render("zh"),
         SITE / "ja" / "index.html": render("ja"),
+        SITE / "zh-hant" / "index.html": render("zh-hant"),
         SITE / "sitemap.xml": sitemap(),
         SITE / "robots.txt": robots(),
     }

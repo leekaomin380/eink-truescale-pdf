@@ -13,6 +13,7 @@
 <link rel="alternate" hreflang="en" href="https://leekaomin380.github.io/eink-truescale-pdf/">
 <link rel="alternate" hreflang="zh-Hans" href="https://leekaomin380.github.io/eink-truescale-pdf/zh/">
 <link rel="alternate" hreflang="zh-CN" href="https://leekaomin380.github.io/eink-truescale-pdf/zh/">
+<link rel="alternate" hreflang="zh-Hant" href="https://leekaomin380.github.io/eink-truescale-pdf/zh-hant/">
 <link rel="alternate" hreflang="ja" href="https://leekaomin380.github.io/eink-truescale-pdf/ja/">
 <link rel="alternate" hreflang="x-default" href="https://leekaomin380.github.io/eink-truescale-pdf/">
 <link rel="icon" href="../assets/favicon.png">
@@ -21,6 +22,7 @@
 <meta property="og:site_name" content="TrueScale for QUADERNO">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="zh_TW">
 <meta property="og:locale:alternate" content="ja_JP">
 <meta property="og:title" content="TrueScale for QUADERNO：QUADERNO A5 1:1 实际尺寸 PDF／EPUB 投递工具（Mac 开源）">
 <meta property="og:description" content="为你手中的这一页排版。复制文字，按 ⌃1，它就出现在 QUADERNO 上。">
@@ -45,6 +47,7 @@
       "inLanguage": [
         "en",
         "zh-Hans",
+        "zh-Hant",
         "ja"
       ],
       "publisher": {
@@ -58,16 +61,17 @@
       "@id": "https://leekaomin380.github.io/eink-truescale-pdf/#app",
       "name": "TrueScale for QUADERNO",
       "url": "https://leekaomin380.github.io/eink-truescale-pdf/zh/",
-      "description": "免费开源的 macOS 应用：把文字、Markdown、PDF、EPUB 与微信公众号文章按 FUJITSU QUADERNO 屏幕的真实物理尺寸排版，并通过 USB 或局域网直接投递。",
+      "description": "免费的开源 Mac 应用，为 QUADERNO 排版文本、Markdown 和 EPUB，通过 USB 或 Wi-Fi 直接投递文档。现有 PDF 支持直接投递。",
       "applicationCategory": "UtilitiesApplication",
       "applicationSubCategory": "E-ink / e-paper document tools",
       "operatingSystem": "macOS 14 or later (Apple Silicon)",
       "softwareVersion": "1.3.0",
-      "dateModified": "2026-11-07",
+      "dateModified": "2026-11-09",
       "isAccessibleForFree": true,
       "inLanguage": [
         "en",
         "zh-Hans",
+        "zh-Hant",
         "ja"
       ],
       "license": "https://github.com/leekaomin380/eink-truescale-pdf/blob/master/LICENSE",
@@ -177,16 +181,21 @@
       <a href="#faq">常见问题</a>
     </nav>
     <nav class="langs" aria-label="语言">
-<a href="https://leekaomin380.github.io/eink-truescale-pdf/zh/" hreflang="zh-Hans" lang="zh-Hans" aria-current="page">中文</a>
-<a href="https://leekaomin380.github.io/eink-truescale-pdf/" hreflang="en" lang="en">English</a>
-<a href="https://leekaomin380.github.io/eink-truescale-pdf/ja/" hreflang="ja" lang="ja">日本語</a>
+<a href="../zh/" hreflang="zh-Hans" lang="zh-Hans" aria-current="page">简体中文</a>
+<a href="../zh-hant/" hreflang="zh-Hant" lang="zh-Hant">正體中文</a>
+<a href="../" hreflang="en" lang="en">English</a>
+<a href="../ja/" hreflang="ja" lang="ja">日本語</a>
     </nav>
   </header>
 
   <main>
     <div class="hero">
-      <h1>为你手中的这一页排版。</h1>
-      <p class="lead">在 Mac 上复制文字，按一个键，它就出现在 FUJITSU QUADERNO 上——按屏幕的真实物理尺寸排版，读起来像印刷品一样清晰。</p>
+      <div class="hero-photo" aria-hidden="true"><img src="../assets/reading-by-window.jpg" alt="" width="1600" height="1067" fetchpriority="high"></div>
+      <div class="hero-copy">
+      <img class="hero-icon" src="../assets/icon.png" alt="TrueScale" width="144" height="144">
+      <h1>让每一页，
+都值得静心阅读。</h1>
+      <p class="lead">从 Mac 上的文字，到 QUADERNO 上的一页。合宜的字体、真实的尺寸，让阅读回到从容。</p>
       <div class="flow" aria-hidden="true">
         <span>复制</span><span>→</span><span class="key">⌃1</span><span>→</span><span>在 QUADERNO 上打开</span>
       </div>
@@ -195,6 +204,7 @@
         <a class="button secondary" href="https://github.com/leekaomin380/eink-truescale-pdf">GitHub 源代码</a>
       </div>
       <p class="note">版本 <span id="version">1.3.0</span> · 免费、开源（MIT）。需要 Apple Silicon 芯片、macOS 14 或更新版本。</p>
+      </div>
     </div>
 
     <section id="why">
@@ -318,6 +328,10 @@
         </div>
       </div>
     </section>
+    <section class="tribute">
+      <h2>向 FUJITSU QUADERNO 致敬。</h2>
+      <p>我们欣赏它克制的工业设计，让信息技术恰当地服务于阅读、书写与思考。TrueScale 希望延续这种理念，让数字内容以适合纸页的方式呈现。</p>
+    </section>
   </main>
 
   <footer>
@@ -325,6 +339,7 @@
     <p>MIT 许可。打包的 pandoc、Typst 等组件遵循各自的许可，详见 App 的「关于」页。</p>
     <p><a href="https://github.com/leekaomin380/eink-truescale-pdf">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="https://github.com/leekaomin380/eink-truescale-pdf/issues">问题反馈</a></p>
     <p>联系作者：<a href="mailto:leekaomin@foxmail.com">leekaomin@foxmail.com</a></p>
+    <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/young-woman-reading-book-on-couch-7578223/">John Diez / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
   </footer>
 </div>
 

@@ -65,11 +65,15 @@ final class ClipboardLayoutStore: ObservableObject {
 
     var effective: ClipboardLayoutProfile { useShared ? sharedProfile : independent }
 
+    func updateCatalog(cjk: [String], latin: [String], devices: [DeviceInfo]) {
+        cjkFonts = Array(Set(cjk + [sharedProfile.cjkFont, independent.cjkFont])).sorted()
+        latinFonts = Array(Set(latin + [sharedProfile.latinFont, independent.latinFont])).sorted()
+        self.devices = devices
+    }
+
     func updateShared(_ profile: ClipboardLayoutProfile, cjk: [String], latin: [String], devices: [DeviceInfo]) {
         sharedProfile = profile
-        cjkFonts = Array(Set(cjk + [profile.cjkFont, independent.cjkFont])).sorted()
-        latinFonts = Array(Set(latin + [profile.latinFont, independent.latinFont])).sorted()
-        self.devices = devices
+        updateCatalog(cjk: cjk, latin: latin, devices: devices)
         persist()
     }
 
@@ -119,12 +123,12 @@ struct ClipboardLayoutSettings: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("跟随主窗口排版")
-                    Text(store.useShared ? L("与「文件、文本、网页」共用设置") : L("只用于 ⌃1 与 Finder 右键投递"))
+                    Text("跟随设备排版")
+                    Text(store.useShared ? L("与主窗口的设备屏幕规格共用设置") : L("只用于 ⌃1 与 Finder 右键投递"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Toggle("跟随主窗口排版", isOn: Binding(get: { store.useShared }, set: { store.setIndependent(!$0) }))
+                Toggle("跟随设备排版", isOn: Binding(get: { store.useShared }, set: { store.setIndependent(!$0) }))
                     .toggleStyle(.switch).labelsHidden()
             }
             .padding(12)

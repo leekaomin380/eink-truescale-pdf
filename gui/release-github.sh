@@ -131,6 +131,7 @@ for f in \
   "$APP_DIR" \
   "$APP_DIR/Contents/Resources/bin/pandoc" \
   "$APP_DIR/Contents/Resources/bin/typst" \
+  "$APP_DIR/Contents/Resources/chinese-convert" \
   "$APP_DIR/Contents/Resources/lib/libgmp.10.dylib" \
   "${DIRECT_MACHO[@]}"; do
   signature=$(codesign -dv --verbose=4 "$f" 2>&1)

@@ -36,11 +36,14 @@ TEMPLATE="$SCRIPT_DIR/deliver.typ"
 die() { print -r -- "❌ $1" >&2; exit "${2:-1}"; }
 
 # ---- 参数解析 ---------------------------------------------------------------
-SRC=""; OUT=""; DELIVER=0; PLAIN=0; PRINT_TIME=1
+SRC=""; OUT=""; DELIVER=0; PLAIN=0; PRINT_TIME=1; TEXT_LAYOUT=0; TITLE=""; TRADITIONAL=0
 while (( $# )); do
   case "$1" in
     --deliver|-d) DELIVER=1 ;;
     --plain)      PLAIN=1 ;;
+    --text-layout) TEXT_LAYOUT=1 ;;
+    --traditional) TRADITIONAL=1 ;;
+    --title)      shift; TITLE="${1:-}" ;;
     --time)       PRINT_TIME=1 ;;
     --no-time)    PRINT_TIME=0 ;;
     --lang)       shift; DOC_LANG="${1:-zh}" ;;
@@ -128,6 +131,11 @@ case "${${INPUT:t:e}:l}" in
   *)             FROM="$MD_FORMAT" ;;
 esac
 
+# Text-box content uses visible line breaks and permits a list after a single newline.
+if (( TEXT_LAYOUT )) && [[ "$FROM" == "$MD_FORMAT" ]]; then
+  FROM+="+hard_line_breaks+lists_without_preceding_blankline"
+fi
+
 [[ -n "$OUT" ]] || OUT="${SRC:h}/${BASE}.pdf"
 
 # -o 必须转成绝对路径。
@@ -143,6 +151,13 @@ FONTARGS=(); for f in "${FONTS[@]}"; do FONTARGS+=(-V "mainfont=$f"); done
 
 # --plain 模式不加目录与分章（粘贴文本用）
 EXTRA_ARGS=()
+if (( TRADITIONAL )); then
+  export P2Q_CHINESE_CONVERTER="$SCRIPT_DIR/chinese-convert"
+  [[ -x "$P2Q_CHINESE_CONVERTER" ]] || export P2Q_CHINESE_CONVERTER="$SCRIPT_DIR/.build/chinese-convert"
+  [[ -x "$P2Q_CHINESE_CONVERTER" ]] || die "缺少繁体转换工具，请重新构建 App"
+  EXTRA_ARGS+=(--lua-filter="$SCRIPT_DIR/traditional-filter.lua")
+fi
+[[ -n "$TITLE" ]] && EXTRA_ARGS+=(-M "title=$TITLE")
 if (( ! PLAIN )); then
   EXTRA_ARGS+=(--toc --toc-depth=3 -V chapterbreak=true -M chapterbreak=true)
 fi

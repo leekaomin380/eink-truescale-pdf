@@ -28,7 +28,8 @@ private final class DataCollector: @unchecked Sendable {
 ///   1. Both pipes must be drained concurrently (a full ~64 KB buffer otherwise deadlocks).
 ///   2. Waiting must have a hard deadline (a child that never exits otherwise hangs the UI).
 enum ProcessRunner {
-    static func run(_ process: Process, mode: ProcessStreamMode, timeout: TimeInterval) -> ProcessOutcome {
+    static func run(_ process: Process, mode: ProcessStreamMode, timeout: TimeInterval,
+                    stderrChunk: ((Data) -> Void)? = nil) -> ProcessOutcome {
         var outcome = ProcessOutcome()
         let outPipe = Pipe()
         let errPipe = Pipe()
@@ -63,7 +64,12 @@ enum ProcessRunner {
         if mode == .separate {
             group.enter()
             DispatchQueue.global(qos: .utility).async {
-                errCollector.data = errPipe.fileHandleForReading.readDataToEndOfFile()
+                while true {
+                    let chunk = errPipe.fileHandleForReading.availableData
+                    if chunk.isEmpty { break }
+                    errCollector.data.append(chunk)
+                    stderrChunk?(chunk)
+                }
                 group.leave()
             }
         }

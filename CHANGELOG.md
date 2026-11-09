@@ -4,6 +4,49 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/). Released
 versions are listed below, newest first. Version 1.3.0 collects the locally
 deployed hardening and clipboard work dated 2026-11-04 through 2026-11-07.
 
+## [Unreleased]
+
+### Added
+- A refreshed four-language website with an independent Traditional Chinese page,
+  the original app icon, system typography and licensed reading photography with source credits.
+- Day Mark-style motion tokens (120 ms micro feedback, critically damped expansion,
+  faster exits) for preview content, guides, disclosure and status changes. The paper
+  frame stays still, Reduce Motion uses short fades, and measured progress never interpolates.
+- Margin/footer changes show a 2.5-second guide on the preview paper, labelled as a
+  settings illustration; the overlay does not render or alter the PDF.
+- Optional Traditional Chinese PDF output converts visible document text and titles locally
+  through Pandoc's AST; original input, code, math and link targets are preserved.
+- Manual delivery reports real curl upload percentage, readback byte counts and hash-read
+  progress. Connection/typesetting/confirmation stages remain indeterminate, and the
+  action stays locked until final verification or failure.
+- Font controls use equal-width native pickers, concise display names and family-name
+  tooltips. One mixed-script specimen resolves explicit Regular/Roman faces, using the
+  selected Chinese font for CJK text and the Latin font for English and numbers.
+- Five additional installed-font choices: Noto Sans CJK SC, LXGW Neo ZhiSong,
+  Kaiti SC, STFangsong and Baskerville. Chinese and Latin font pickers show live
+  specimens with letters, digits and punctuation without starting PDF rendering.
+- A4, A5, ISO B5, Letter and Legal PDF output with portrait/landscape orientation.
+  Paper typography is saved separately from device typography; paper export never updates
+  the shared clipboard-delivery profile. Standard paper prioritises PDF export.
+- Consistent SF Symbols labels for layout settings and refresh/send/save actions.
+
+### Fixed
+- A quieter document workspace uses a continuous sidebar surface, lighter paper edges,
+  unboxed status text and secondary refresh/Markdown actions. Only send or PDF save is
+  prominent. The menu bar's lowercase q uses a smaller regular serif outline.
+- The menu bar uses an 18-point lowercase serif q drawn from a vector font outline,
+  preserving its counter and descender at small sizes with system-managed template tinting.
+- Text previews now track title changes, preserve visible line breaks and recognise lists
+  after a single newline. Edits during rendering queue a fresh render; send/save wait for
+  the latest input. Editing only marks the preview as stale; refresh, send or save explicitly
+  starts typesetting. Unchanged previews are reused.
+- The text editor and settings share a scrollable area above a fixed action footer, so short
+  windows keep all actions reachable. Page controls wrap when narrow, and the main window
+  enforces its 900 × 600 point minimum.
+- Pasting into the Text tab now converts clipboard HTML or RTF to editable Markdown,
+  preserving headings, emphasis, lists, links and tables before PDF rendering. Plain
+  text and Markdown remain editable; selection replacement and undo use native text editing.
+
 ## [1.3.0] — 2026-11-07
 
 ### Fixed

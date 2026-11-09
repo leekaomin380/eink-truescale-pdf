@@ -1,5 +1,47 @@
 import Foundation
 
+struct DeliveryProgress: Decodable, Sendable {
+    var kind = "progress"
+    let phase: String
+    var fraction: Double?
+    var completed: Int64?
+    var total: Int64?
+
+    var title: String {
+        switch phase {
+        case "queued": L("等待投递通道…")
+        case "render": L("正在排版…")
+        case "connect": L("正在连接设备…")
+        case "prepare": L("准备文件并检查设备目录…")
+        case "upload": fraction == 1 ? L("上传完成，等待设备响应…") : L("正在上传文件…")
+        case "readback": L("正在回读文件…")
+        case "verify": L("正在校验文件哈希…")
+        case "open": L("正在请求设备打开…")
+        case "confirm": L("正在确认设备目录…")
+        default: L("正在投递…")
+        }
+    }
+}
+
+/// stderr is a stream: events can span arbitrary chunks or arrive several at a time.
+final class DeliveryProgressDecoder {
+    private var buffer = Data()
+    private let receive: (DeliveryProgress) -> Void
+    init(receive: @escaping (DeliveryProgress) -> Void) { self.receive = receive }
+    func feed(_ chunk: Data) {
+        buffer.append(chunk)
+        while let newline = buffer.firstIndex(of: 10) {
+            let line = Data(buffer[..<newline])
+            buffer.removeSubrange(...newline)
+            if let event = try? JSONDecoder().decode(DeliveryProgress.self, from: line),
+               event.kind == "progress", event.fraction.map({ $0.isFinite && (0...1).contains($0) }) ?? true {
+                receive(event)
+            }
+        }
+        if buffer.count > 1_048_576 { buffer.removeAll() }
+    }
+}
+
 /// FIFO gate for App-side helper calls. Waiting happens *before* a process is started, so a
 /// queued delivery neither hits the cross-process lock nor consumes its 3600 s hard deadline.
 /// Device authentication has mutable session state; two helpers cannot safely overlap.
@@ -29,8 +71,11 @@ enum DirectDelivery {
 
     private static let queue = DeliveryQueue()
 
-    static func run(_ arguments: [String], environment extra: [String: String] = [:]) async -> Result {
+    static func run(_ arguments: [String], environment extra: [String: String] = [:],
+                    onProgress: (@Sendable (DeliveryProgress) -> Void)? = nil) async -> Result {
+        onProgress?(DeliveryProgress(phase: "queued"))
         await queue.acquire()
+        onProgress?(DeliveryProgress(phase: "connect"))
         // defer covers cancellation / early exit too: a forgotten release would wedge the queue.
         defer { Task { await queue.release() } }
         return await Task.detached(priority: .userInitiated) {
@@ -40,10 +85,14 @@ enum DirectDelivery {
             let process = Process()
             process.executableURL = resources.appendingPathComponent("direct/quaderno-direct")
             process.arguments = arguments
-            process.environment = helperEnvironment().merging(extra) { _, new in new }
+            var environment = helperEnvironment().merging(extra) { _, new in new }
+            if onProgress != nil { environment["QUADERNO_PROGRESS"] = "1" }
+            process.environment = environment
+            let decoder = DeliveryProgressDecoder { event in onProgress?(event) }
             // stderr is drained separately: a PyInstaller hint or DeprecationWarning must not
             // corrupt the JSON-over-stdout contract (CFR §3 P2-3).
-            let outcome = ProcessRunner.run(process, mode: .separate, timeout: 3600)
+            let outcome = ProcessRunner.run(process, mode: .separate, timeout: 3600,
+                                            stderrChunk: { decoder.feed($0) })
             let output = String(decoding: outcome.stdout, as: UTF8.self)
             let stderr = String(decoding: outcome.stderr, as: UTF8.self)
             let details = [output, stderr].filter { !$0.isEmpty }.joined(separator: "\n")

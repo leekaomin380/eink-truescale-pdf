@@ -15,11 +15,11 @@ ASSETS = Path(__file__).resolve().parent / "assets"
 OUT = ASSETS / "og-card.png"
 W, H = 1200, 630
 
-GROUND = "#f6f4ee"
-INK = "#1b1b19"
-MUTED = "#5d5c57"
-RULE = "#dedbd2"
-ACCENT = "#1f6b5f"
+GROUND = "#f7f8fa"
+INK = "#26292e"
+MUTED = "#6b717a"
+RULE = "#e0e3e8"
+ACCENT = "#416e9c"
 
 SUPPLEMENTAL = Path("/System/Library/Fonts/Supplemental")
 BOLD = SUPPLEMENTAL / "Arial Bold.ttf"

@@ -70,11 +70,52 @@ struct RenderMetrics {
     var latinVerdict = ""
 }
 
+struct StandardPaper: Identifiable {
+    let id: String
+    let name: String
+    let width: Double
+    let height: Double
+    static let all = [
+        StandardPaper(id: "a4", name: "A4", width: 210, height: 297),
+        StandardPaper(id: "a5", name: "A5", width: 148, height: 210),
+        StandardPaper(id: "b5-iso", name: "B5 (ISO)", width: 176, height: 250),
+        StandardPaper(id: "letter", name: "Letter", width: 215.9, height: 279.4),
+        StandardPaper(id: "legal", name: "Legal", width: 215.9, height: 355.6)
+    ]
+}
+
+private struct OutputTypography: Codable {
+    var cjkFont: String
+    var latinFont: String
+    var bodySize: String
+    var margin: String
+    var leading: String
+    var printTime: Bool
+    var landscape: Bool
+}
+
 class ConversionViewModel: ObservableObject {
     let repoURL: URL
+    private let usesUserPreferences: Bool
 
     @Published var devices: [DeviceInfo] = []
-    @Published var selectedDeviceIndex = 0
+    @Published var selectedDeviceIndex = 0 {
+        didSet { if !loadingPreferences && !isStandardPaper { updatePageGeometry() } }
+    }
+    @Published var pagePresetID = "device" {
+        didSet { if !loadingPreferences && oldValue != pagePresetID { changePagePreset(from: oldValue) } }
+    }
+    @Published var landscape = false {
+        didSet { if !loadingPreferences { updatePageGeometry() } }
+    }
+    private var loadingPreferences = true
+    private var outputLayouts: [String: OutputTypography] = [:]
+    private var calibratedDeviceSize = (width: "157.1mm", height: "209.5mm")
+    var isStandardPaper: Bool { StandardPaper.all.contains { $0.id == pagePresetID } }
+    var pagePresetName: String {
+        StandardPaper.all.first { $0.id == pagePresetID }?.name ?? selectedDevice?.name ?? "QUADERNO"
+    }
+
     @Published var config = ConfigDefaults()
     @Published var cjkFonts: [String] = []
     @Published var latinFonts: [String] = []
@@ -85,9 +126,13 @@ class ConversionViewModel: ObservableObject {
     @Published var leading = "0.85em"
     @Published var docLang = "zh"
     @Published var printTime = true
+    @Published var renderTraditional = false
     @Published var statusMessage = ""
     @Published var statusKind: StatusKind = .info
     @Published var isConverting = false
+    @Published private(set) var isDelivering = false
+    @Published private(set) var deliveryProgress: DeliveryProgress?
+    private var deliveryID: UUID?
 
     @Published var currentPdfURL: URL?
     @Published var totalPages = 0
@@ -185,7 +230,7 @@ class ConversionViewModel: ObservableObject {
             bodySize, margin, leading, docLang,
             selectedLatinFont, selectedCjkFont,
             config.pageW, config.pageH,
-            String(printTime)
+            String(printTime), String(renderTraditional)
         ].joined(separator: "\u{1F}")
     }
 
@@ -217,8 +262,10 @@ class ConversionViewModel: ObservableObject {
     /// 记录本次渲染对应的输入 —— 渲染成功后调用。
     /// 三条渲染路径（EPUB / 文本 / 公众号）都在成功时收敛到这里，
     /// 故世代号在此自增可保证「渲染成功」与「预览刷新」严格一一对应。
+    private var inFlightFingerprint: String?
+
     func markRendered() {
-        renderedFingerprint = currentFingerprint(mode: activeKind)
+        renderedFingerprint = inFlightFingerprint
         renderGeneration += 1
     }
 
@@ -244,21 +291,36 @@ class ConversionViewModel: ObservableObject {
 
     /// 确保产物与当前输入一致；若已脱节则重新渲染，完成后执行 next。
     /// 这是「发送/另存自行保证正确」的入口。
-    func ensureFresh(then next: @escaping () -> Void) {
+    func ensureFresh(onFailure: (() -> Void)? = nil, then next: @escaping () -> Void) {
+        let requestedKind = activeKind
+        if isConverting {
+            pendingRenderCallbacks.append { [weak self] ok in
+                guard let self, ok, self.activeKind == requestedKind else { onFailure?(); return }
+                self.ensureFresh(onFailure: onFailure, then: next)
+            }
+            return
+        }
         guard isStale else { next(); return }
         setStatus(L("内容有变，正在重新渲染…"), .run)
         renderCurrentInput { ok in
-            guard ok else { return }   // 失败时状态已由渲染流程写明
-            next()
+            guard ok, self.activeKind == requestedKind else { onFailure?(); return }
+            self.ensureFresh(onFailure: onFailure, then: next)
         }
     }
 
     var selectedDevice: DeviceInfo? {
-        guard selectedDeviceIndex < devices.count else { return nil }
+        guard devices.indices.contains(selectedDeviceIndex) else { return nil }
         return devices[selectedDeviceIndex]
     }
 
-    init() {
+    /// An explicit repository permits isolated rendering checks without loading user preferences.
+    init(repositoryURL: URL? = nil) {
+        usesUserPreferences = repositoryURL == nil
+        if let repositoryURL {
+            self.repoURL = repositoryURL
+            loadingPreferences = false
+            return
+        }
         if let resourceURL = Bundle.main.resourceURL,
            FileManager.default.fileExists(atPath: resourceURL.appendingPathComponent("book.sh").path) {
             repoURL = resourceURL
@@ -275,6 +337,8 @@ class ConversionViewModel: ObservableObject {
         loadConfig()
         loadDevices()
         applySavedPreferences()
+        loadingPreferences = false
+        updatePageGeometry()
         publishSharedLayout()
         hasQuaderno = FileManager.default.fileExists(
             atPath: repoURL.appendingPathComponent("direct/quaderno-direct").path)
@@ -309,6 +373,7 @@ class ConversionViewModel: ObservableObject {
         }
         config.pageW = grab("PAGE_W", "157.1mm")
         config.pageH = grab("PAGE_H", "209.5mm")
+        calibratedDeviceSize = (config.pageW, config.pageH)
         config.margin = grab("PAGE_MARGIN", "10mm")
         config.bodySize = grab("BODY_SIZE", "10pt")
         config.leading = grab("LEADING", "0.85em")
@@ -360,6 +425,7 @@ class ConversionViewModel: ObservableObject {
     /// 导致中文字体下拉整个空掉）。故所有值取用前都要校验。
     private func applySavedPreferences() {
         let d = UserDefaults.standard
+        renderTraditional = d.bool(forKey: "pref.renderTraditional")
         if d.object(forKey: PrefKey.printTime) != nil { printTime = d.bool(forKey: PrefKey.printTime) }
         // 字号/边距/行距：只接受仍在选项表里的值
         if let v = d.string(forKey: PrefKey.bodySize),
@@ -375,6 +441,14 @@ class ConversionViewModel: ObservableObject {
         // 设备索引：devices 已在 loadDevices 中同步载入，可立即校验
         let idx = d.integer(forKey: PrefKey.deviceIdx)
         if idx > 0 && idx < devices.count { selectedDeviceIndex = idx }
+        if let data = d.data(forKey: "pref.outputLayouts"),
+           let saved = try? JSONDecoder().decode([String: OutputTypography].self, from: data) {
+            outputLayouts = saved
+        }
+        if let id = d.string(forKey: "pref.outputPresetID"), StandardPaper.all.contains(where: { $0.id == id }) {
+            pagePresetID = id
+            if let layout = outputLayouts["paper"] { applyTypography(layout) }
+        }
     }
 
     /// 字体列表异步就绪后，核对已保存的字体是否真的可用；不可用则回退到出厂默认。
@@ -387,9 +461,65 @@ class ConversionViewModel: ObservableObject {
         }
     }
 
+    private var currentTypography: OutputTypography {
+        OutputTypography(cjkFont: selectedCjkFont, latinFont: selectedLatinFont,
+            bodySize: bodySize, margin: margin, leading: leading, printTime: printTime,
+            landscape: landscape)
+    }
+
+    private func applyTypography(_ layout: OutputTypography) {
+        selectedCjkFont = layout.cjkFont
+        selectedLatinFont = layout.latinFont
+        if Self.bodySizeChoices.contains(layout.bodySize) { bodySize = layout.bodySize }
+        if Self.marginChoices.contains(layout.margin) { margin = layout.margin }
+        if Self.leadingChoices.contains(where: { $0.0 == layout.leading }) { leading = layout.leading }
+        printTime = layout.printTime
+        landscape = layout.landscape
+    }
+
+    private func changePagePreset(from oldID: String) {
+        let oldGroup = oldID == "device" ? "device" : "paper"
+        let newGroup = isStandardPaper ? "paper" : "device"
+        outputLayouts[oldGroup] = currentTypography
+        if oldGroup != newGroup {
+            loadingPreferences = true
+            var layout = outputLayouts[newGroup] ?? currentTypography
+            if newGroup == "paper" && outputLayouts[newGroup] == nil {
+                layout.bodySize = "12pt"
+                layout.margin = "16mm"
+                layout.landscape = false
+            }
+            applyTypography(layout)
+            loadingPreferences = false
+        }
+        updatePageGeometry()
+        savePreferences()
+    }
+
+    private func updatePageGeometry() {
+        if let paper = StandardPaper.all.first(where: { $0.id == pagePresetID }) {
+            let width = landscape ? paper.height : paper.width
+            let height = landscape ? paper.width : paper.height
+            config.pageW = "\(width)mm"
+            config.pageH = "\(height)mm"
+        } else if selectedDeviceIndex != 0, let device = selectedDevice {
+            config.pageW = String(format: "%.1fmm", device.displayMm[0])
+            config.pageH = String(format: "%.1fmm", device.displayMm[1])
+        } else {
+            config.pageW = calibratedDeviceSize.width
+            config.pageH = calibratedDeviceSize.height
+        }
+    }
+
     /// 保存当前偏好。由 View 在参数变化时调用。
     func savePreferences() {
+        outputLayouts[isStandardPaper ? "paper" : "device"] = currentTypography
+        guard usesUserPreferences else { return }
         let d = UserDefaults.standard
+        if let data = try? JSONEncoder().encode(outputLayouts) { d.set(data, forKey: "pref.outputLayouts") }
+        d.set(pagePresetID, forKey: "pref.outputPresetID")
+        d.set(renderTraditional, forKey: "pref.renderTraditional")
+        guard !isStandardPaper else { return }
         d.set(selectedCjkFont,   forKey: PrefKey.cjkFont)
         d.set(selectedLatinFont, forKey: PrefKey.latinFont)
         d.set(bodySize,          forKey: PrefKey.bodySize)
@@ -401,6 +531,10 @@ class ConversionViewModel: ObservableObject {
     }
 
     private func publishSharedLayout() {
+        if isStandardPaper {
+            ClipboardLayoutStore.shared.updateCatalog(cjk: cjkFonts, latin: latinFonts, devices: devices)
+            return
+        }
         let profile = ClipboardLayoutProfile(cjkFont: selectedCjkFont, latinFont: selectedLatinFont,
             bodySize: bodySize, margin: margin, leading: leading, pageW: config.pageW, pageH: config.pageH,
             docLang: docLang, printTime: printTime, deviceIndex: selectedDeviceIndex)
@@ -453,10 +587,11 @@ class ConversionViewModel: ObservableObject {
         let allFonts = Set(result.stdout.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
 
         let cjkPref = ["PingFang SC", "Songti SC", "Heiti SC", "STSong",
-                        "Hiragino Sans GB", "Noto Serif CJK SC",
+                        "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Serif CJK SC",
+                        "LXGW Neo ZhiSong", "Kaiti SC", "STFangsong",
                         "Source Han Sans SC", "Source Han Serif SC",
                         "Microsoft YaHei", "SimSun"]
-        let latinPref = ["Charter", "Iowan Old Style", "Georgia", "Palatino",
+        let latinPref = ["Charter", "Iowan Old Style", "Baskerville", "Georgia", "Palatino",
                          "Times New Roman", "Helvetica Neue", "Arial", "Avenir Next",
                          "Calibri"]
 
@@ -498,11 +633,18 @@ class ConversionViewModel: ObservableObject {
     func convertEpub() {
         guard let src = sourceFileURL else {
             setStatus(L("请先选择文件"), .err)
+            finishPendingRender(success: false)
             return
         }
         setStatus(L("渲染中…"), .run)
         isConverting = true
+        inFlightFingerprint = currentFingerprint(mode: activeKind)
 
+        let layoutArguments = ["--size", bodySize, "--margin", margin,
+            "--leading", leading, "--lang", docLang,
+            "--font", "\(selectedLatinFont),\(selectedCjkFont)",
+            "--page", config.pageW, config.pageH,
+            printTime ? "--time" : "--no-time"] + (renderTraditional ? ["--traditional"] : [])
         DispatchQueue.global(qos: .userInitiated).async { [self] in
             let workDir = FileManager.default.temporaryDirectory.appendingPathComponent("p2q_app")
             try? FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
@@ -511,12 +653,7 @@ class ConversionViewModel: ObservableObject {
             let result = runShell([
                 repoURL.appendingPathComponent("book.sh").path,
                 src.path, "-o", outPdf.path,
-                "--size", bodySize, "--margin", margin,
-                "--leading", leading, "--lang", docLang,
-                "--font", "\(selectedLatinFont),\(selectedCjkFont)",
-                "--page", config.pageW, config.pageH,
-                printTime ? "--time" : "--no-time"
-            ], timeout: 1800)
+            ] + layoutArguments, timeout: 1800)
 
             DispatchQueue.main.async { [self] in
                 isConverting = false
@@ -544,24 +681,22 @@ class ConversionViewModel: ObservableObject {
         let text = pasteText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             setStatus(L("请先粘贴文本"), .err)
+            finishPendingRender(success: false)
             return
         }
         setStatus(L("渲染中…"), .run)
         isConverting = true
+        inFlightFingerprint = currentFingerprint(mode: activeKind)
 
-        var finalText = text
         let title = pasteTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !title.isEmpty && !text.hasPrefix("---") {
-            let safeTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
-            finalText = "---\ntitle: \"\(safeTitle)\"\n---\n\n\(text)"
-        }
-        renderMarkdown(finalText, title: title)
+        renderMarkdown(text, title: title, textLayout: true)
     }
 
     func convertWechat(markdownOnly: Bool = false) {
         let raw = wechatURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else {
             setStatus(L("请先粘贴链接"), .err)
+            finishPendingRender(success: false)
             return
         }
         // 放宽为任意 http(s) 网页 —— 抽取器已支持通用容器（article / main /
@@ -573,10 +708,12 @@ class ConversionViewModel: ObservableObject {
               scheme == "http" || scheme == "https",
               url.host?.isEmpty == false else {
             setStatus(L("请粘贴 http(s) 开头的网页链接"), .err)
+            finishPendingRender(success: false)
             return
         }
         setStatus(L("抓取网页…"), .run)
         isConverting = true
+        inFlightFingerprint = currentFingerprint(mode: activeKind)
 
         fetchWechatHTML(url: url) { [weak self] result in
             guard let self = self else { return }
@@ -585,6 +722,7 @@ class ConversionViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self.isConverting = false
                     self.setStatus(L("抓取失败：\(e.localizedDescription)"), .err)
+                    self.finishPendingRender(success: false)
                 }
             case .success(let html):
                 DispatchQueue.main.async { [self] in
@@ -612,6 +750,7 @@ class ConversionViewModel: ObservableObject {
                                     msg = L("抽取失败：\(outcome.reason)")
                                 }
                                 self.setStatus(msg, .err)
+                                self.finishPendingRender(success: false)
                             }
                             return
                         }
@@ -661,7 +800,12 @@ class ConversionViewModel: ObservableObject {
         }.resume()
     }
 
-    private func renderMarkdown(_ markdown: String, title: String) {
+    private func renderMarkdown(_ markdown: String, title: String, textLayout: Bool = false) {
+        let layoutArguments = ["--size", bodySize, "--margin", margin,
+            "--leading", leading, "--lang", docLang,
+            "--font", "\(selectedLatinFont),\(selectedCjkFont)",
+            "--page", config.pageW, config.pageH,
+            printTime ? "--time" : "--no-time"] + (renderTraditional ? ["--traditional"] : [])
         DispatchQueue.global(qos: .userInitiated).async { [self] in
             let workDir = FileManager.default.temporaryDirectory.appendingPathComponent("p2q_app")
             try? FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
@@ -675,13 +819,9 @@ class ConversionViewModel: ObservableObject {
             let result = runShell([
                 repoURL.appendingPathComponent("book.sh").path,
                 mdFile.path, "-o", outPdf.path,
-                "--size", bodySize, "--margin", margin,
-                "--leading", leading, "--lang", docLang,
-                "--font", "\(selectedLatinFont),\(selectedCjkFont)",
-                "--page", config.pageW, config.pageH,
-                printTime ? "--time" : "--no-time",
                 "--plain"
-            ], timeout: 1800)
+            ] + layoutArguments + (textLayout ? ["--text-layout"] : [])
+              + (title.isEmpty ? [] : ["--title", title]), timeout: 1800)
 
             DispatchQueue.main.async { [self] in
                 isConverting = false
@@ -728,9 +868,26 @@ class ConversionViewModel: ObservableObject {
 
     // MARK: - Deliver
 
-    func deliverToDevice() {
+    func requestDelivery() {
+        guard !isDelivering else { return }
+        isDelivering = true
+        deliveryID = UUID()
+        deliveryProgress = DeliveryProgress(phase: isStale ? "render" : "prepare")
+        ensureFresh(onFailure: { [weak self] in self?.finishDelivery() }) { [weak self] in
+            self?.deliverToDevice()
+        }
+    }
+
+    private func finishDelivery() {
+        isDelivering = false
+        deliveryProgress = nil
+        deliveryID = nil
+    }
+
+    private func deliverToDevice() {
         guard let pdfURL = currentPdfURL else {
             setStatus(L("无可投递的内容"), .err)
+            finishDelivery()
             return
         }
         setStatus(L("正在投递到 QUADERNO…"), .run)
@@ -757,11 +914,19 @@ class ConversionViewModel: ObservableObject {
             try FileManager.default.copyItem(at: pdfURL, to: copyURL)
         } catch {
             setStatus(L("创建投递副本失败：\(error.localizedDescription)"), .err)
+            finishDelivery()
             return
         }
 
-        Task { @MainActor in
-            let result = await DirectDelivery.run(["upload", "--file", copyURL.path])
+        let requestID = deliveryID
+        Task { @MainActor [self] in
+            let result = await DirectDelivery.run(["upload", "--file", copyURL.path]) { [weak self] event in
+                Task { @MainActor in
+                    guard let self, self.isDelivering, self.deliveryID == requestID else { return }
+                    self.deliveryProgress = event
+                }
+            }
+            finishDelivery()
             if result.success {
                 try? FileManager.default.removeItem(at: copyURL)
                 setStatus(result.message, .ok)

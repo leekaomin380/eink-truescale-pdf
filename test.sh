@@ -445,32 +445,29 @@ grep -q 'onChange(of: vm.currentPdfURL)' "$CV" \
   || ok "预览不再依赖可能巧合相等的 currentPdfURL"
 
 # ---------------------------------------------------------------------------
-sec "读数时效 · 排版参数改动必须自动重渲，陈旧读数必须显式变暗"
-# 【这个问题的形态】renderMetrics 只在渲染成功时赋值，而控件是即时的。
-# 改了字号却不重渲，左栏「中文 N 字/行」描述的仍是上一次渲染的版面 ——
-# 用户看到的是【描述旧设置的数字，紧挨着新设置的控件】，且无任何标记提示它是旧的。
-# 底栏当时更糟：「页面」「字号」取自当前设置，「版心」「共 N 页」取自 renderMetrics，
-# 会同时显示「字号 13pt」与「共 49 页」（49 页是 10.5pt 的结果），同一行自相矛盾。
+sec "读数时效 · 编辑只标记待更新，操作时保证预览最新"
+# 2026-11-09 用户改为按需排版：编辑不启动渲染；刷新、投递、另存检查指纹。
 VM="$DIR/gui/mac/ConversionViewModel.swift"
 CV="$DIR/gui/mac/ContentView.swift"
 
-grep -q 'private func scheduleAutoRender' "$CV" \
-  && ok "存在防抖重渲染调度" \
-  || no "参数改动后不会自动重渲 —— 读数会长期停留在上一次渲染"
+grep -q 'scheduleAutoRender' "$CV" \
+  && no "仍存在编辑触发的自动渲染调度" \
+  || ok "编辑不再自动启动 PDF 渲染"
 
 for k in bodySize leading margin selectedCjkFont; do
-  grep -qE "onChange\(of: vm\.$k\).*scheduleAutoRender" "$CV" \
-    && ok "$k 变更接入自动重渲" \
-    || no "$k 变更未接自动重渲 —— 该项改动后读数不会跟上"
+  sed -n '/private func currentFingerprint/,/joined(separator:/p' "$VM" | grep -qw "$k" \
+    && ok "$k 纳入指纹，变更会使预览待更新" \
+    || no "$k 未纳入指纹，操作时可能复用旧产物"
 done
 
-grep -q 'guard inputMode != .wechat' "$CV" \
-  && ok "网页模式排除在自动重渲之外（避免输入网址时自动发起抓取）" \
-  || no "网页模式会因键入网址而自动发起网络抓取"
+# 只检查 URL 的 onChange 代码块；onSubmit/刷新按钮仍可显式抓取。
+sed -n '/onChange(of: vm.wechatURL)/,/^                }/p' "$CV" | grep -q 'convertWechat' \
+  && no "网页链接编辑会自动抓取" \
+  || ok "网页链接编辑不自动发起抓取"
 
 grep -q 'opacity(vm.isStale ? 0.4 : 1)' "$CV" \
   && ok "陈旧读数变暗" \
-  || no "陈旧读数无视觉区分 —— 防抖窗口内用户会把旧数字当成新设置的结果"
+  || no "陈旧读数无视觉区分 —— 用户会把旧数字当成新设置的结果"
 
 grep -q '@Published private(set) var renderedFingerprint' "$VM" \
   && ok "renderedFingerprint 可观察（isStale 由它推导）" \
@@ -486,13 +483,13 @@ grep -qF 'Text("字号 \(vm.bodySize)")' "$CV" \
 sec "主按钮层级 · 投递是目的，预览是手段"
 # 「预览」此前是唯一的 borderedProminent 按钮，而右侧面板本就一直显示预览，
 # 等于把视觉重心压在手段上，真正的目的（投递到设备）反而是次要样式。
-# 参数变更已由 scheduleAutoRender 自动跟进后，该按钮不再有存在理由。
+# 刷新是次要操作；投递与保存自行确保产物最新。
 grep -q 'Text(inputMode == .wechat ? "解析并预览" : "预览")' "$CV" \
   && no "「预览」按钮仍在 —— 与右侧常驻预览面板语义重复" \
   || ok "已移除冗余的「预览」按钮"
 
-grep -q 'PrimaryStyled(isPrimary: inputMode != .wechat)' "$CV" \
-  && ok "发送到 Quaderno 在非网页模式下为主按钮" \
+sed -n '/private var deliverButton/,/private var savePDFButton/p' "$CV" | grep -q 'PrimaryStyled(isPrimary: true)' \
+  && ok "设备页面的投递按钮使用主样式" \
   || no "投递按钮未升为主按钮"
 
 grep -q '@ViewBuilder func body(content: Content)' "$CV" \
@@ -526,8 +523,8 @@ sec "底部操作区 · Quaderno 与另存按钮不得被垂直压缩出窗口"
 # 断言检查结构性不变量，不锁按钮文案：文案随本地化/原生重写变化时不应产生假阳性。
 # （2026-11-04 修正：原断言找 Text("发送到 Quaderno")，那是旧 HTML 版 GUI 的字面量。）
 if grep -A8 'sidebarFooter' "$CV" | grep -q 'fixedSize(horizontal: false, vertical: true)' \
-   && grep -A40 'private var actionButtons' "$CV" | grep -q 'deliverToDevice()' \
-   && grep -A40 'private var actionButtons' "$CV" | grep -q 'savePDF()'; then
+   && sed -n '/private var actionButtons/,/private var sidebarFooter/p' "$CV" | grep -q 'requestDelivery()' \
+   && sed -n '/private var actionButtons/,/private var sidebarFooter/p' "$CV" | grep -q 'ensureFresh { vm.savePDF() }'; then
   ok "底部操作区固定其固有高度，投递与另存按钮保持可见"
 else
   no "底部操作区仍可被压缩，投递按钮可能落到窗口外"

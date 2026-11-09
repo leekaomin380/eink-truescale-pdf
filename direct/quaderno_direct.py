@@ -22,6 +22,7 @@ import re
 import ipaddress
 import selectors
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 import sys
 import tempfile
@@ -617,12 +618,95 @@ def transfer_timeout(size):
     return min(MAX_TRANSFER_SECONDS, scaled)
 
 
-def file_sha256(path):
+def emit_progress(phase, *, fraction=None, completed=None, total=None):
+    """Opt-in NDJSON on stderr; never mix progress or credentials into stdout's result."""
+    if os.environ.get('QUADERNO_PROGRESS') != '1':
+        return
+    event = {'kind': 'progress', 'phase': phase}
+    if fraction is not None:
+        event['fraction'] = max(0.0, min(1.0, fraction))
+    if completed is not None:
+        event.update(completed=completed, total=total)
+    print(json.dumps(event), file=sys.stderr, flush=True)
+
+
+def curl_upload_fraction(line):
+    # curl's normal meter: %Total Total %Received Received %Xferd Uploaded ...
+    fields = line.split()
+    if len(fields) < 6:
+        return None
+    try:
+        percent = int(fields[4])
+        if not 0 <= percent <= 100:
+            return None
+        int(fields[0])
+        int(fields[2])
+        return percent / 100.0
+    except ValueError:
+        return None
+
+
+def run_transfer_with_progress(args, config, timeout, *, phase, size, body, meter):
+    """Observe curl's real upload meter or bytes written by its download, with no timer estimate."""
+    stopped = threading.Event()
+    last = [None]
+    pending = ['']
+    offset = [0]
+
+    def observe():
+        if phase == 'readback':
+            try:
+                count = Path(body).stat().st_size
+            except FileNotFoundError:
+                count = 0
+            fraction = min(count / size, 1.0) if size else None
+            value = (fraction, count)
+            if value != last[0]:
+                emit_progress(phase, fraction=fraction, completed=count, total=size)
+                last[0] = value
+        else:
+            with open(meter, encoding='utf-8', errors='replace', newline='') as stream:
+                stream.seek(offset[0])
+                pending[0] += stream.read()
+                offset[0] = stream.tell()
+            lines = re.split(r'[\r\n]', pending[0])
+            pending[0] = lines.pop()
+            for line in lines:
+                fraction = curl_upload_fraction(line)
+                if fraction is not None and fraction != last[0]:
+                    emit_progress(phase, fraction=fraction)
+                    last[0] = fraction
+
+    def watch():
+        while not stopped.wait(0.1):
+            observe()
+
+    # File-backed curl stderr cannot fill a pipe while the monitor drains progress.
+    with open(meter, 'wb') as log:
+        worker = threading.Thread(target=watch, daemon=True)
+        worker.start()
+        emit_progress(phase, fraction=0)
+        try:
+            result = subprocess.run(args, input=config.encode(), stdout=subprocess.PIPE,
+                                    stderr=log, timeout=timeout)
+        finally:
+            stopped.set()
+            worker.join()
+            observe()
+    return result
+
+
+def file_sha256(path, progress=False):
     """Hash a file in 1 MiB chunks: peak memory is bounded, not proportional to file size."""
     digest = hashlib.sha256()
+    size = Path(path).stat().st_size if progress else 0
+    count = 0
     with open(path, 'rb') as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b''):
             digest.update(chunk)
+            if progress:
+                count += len(chunk)
+                emit_progress('verify', fraction=count / size if size else None, completed=count, total=size)
     return digest.hexdigest()
 
 
@@ -697,7 +781,15 @@ class Device:
                 escaped = str(source).replace('\\', '\\\\').replace('"', '\\"')
                 args += ['--form', 'file=@"' + escaped + '";filename=document.pdf;type=application/pdf']
             args += [self.base + endpoint]
-            result = subprocess.run(args, input=config.encode(), capture_output=True, timeout=max_time + 10)
+            progress = os.environ.get('QUADERNO_PROGRESS') == '1' and (source is not None or verify_sha256 is not None)
+            if progress:
+                args.remove('--silent')
+                args.insert(1, '--progress-meter')
+                result = run_transfer_with_progress(args, config, max_time + 10,
+                    phase='upload' if source is not None else 'readback',
+                    size=transfer_size, body=body, meter=directory / 'meter.log')
+            else:
+                result = subprocess.run(args, input=config.encode(), capture_output=True, timeout=max_time + 10)
             if result.returncode:
                 raise ConnectionFailure(result.returncode)
             status = int(result.stdout)
@@ -715,7 +807,9 @@ class Device:
             if verify_sha256 is not None:
                 # curl already wrote the body to disk; verify it there and return no body bytes.
                 # A full readback of a 1 GB PDF must not allocate 1 GB of Python heap.
-                if file_sha256(Path(body)) != verify_sha256:
+                emit_progress('verify')
+                actual = file_sha256(Path(body), progress=True) if progress else file_sha256(Path(body))
+                if actual != verify_sha256:
                     raise DirectError(tr('文件已上传，但回读校验不一致。请保留本地 PDF 并检查设备。'))
                 return Response(status, header_map, b'')
             if output_path is not None:
@@ -946,6 +1040,7 @@ class Device:
                 'message': tr('设备上已有内容相同的文件，未重复投递。')}
 
     def upload(self, source, destination='Document/Received'):
+        emit_progress('prepare')
         if not self.cookie:
             self.authenticate()
         parent = self.resolve(destination)
@@ -990,6 +1085,7 @@ class Device:
             # Earliest point at which the document can appear on screen. Success is
             # still withheld until readback and directory verification finish.
             display_requested = False
+            emit_progress('open')
             try:
                 self.request('PUT', '/viewer/controls/open2',
                              json_body={'document_id': document_id, 'page': 1})
@@ -1006,6 +1102,7 @@ class Device:
             # KeyboardInterrupt / SystemExit must not issue another HTTPS request on their way out.
             self.discard_incomplete(document_id)
             raise
+        emit_progress('confirm')
         info = self.resolve(remote)
         if not info or info['entry_id'] != document_id:
             raise DirectError(tr('回读已通过，但设备目录未确认新文件。'))
