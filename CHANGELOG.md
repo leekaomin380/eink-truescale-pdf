@@ -7,8 +7,6 @@ deployed hardening and clipboard work dated 2026-11-04 through 2026-11-07.
 ## [Unreleased]
 
 ### Added
-- A refreshed four-language website with an independent Traditional Chinese page,
-  the original app icon, system typography and licensed reading photography with source credits.
 - Day Mark-style motion tokens (120 ms micro feedback, critically damped expansion,
   faster exits) for preview content, guides, disclosure and status changes. The paper
   frame stays still, Reduce Motion uses short fades, and measured progress never interpolates.
@@ -46,6 +44,24 @@ deployed hardening and clipboard work dated 2026-11-04 through 2026-11-07.
 - Pasting into the Text tab now converts clipboard HTML or RTF to editable Markdown,
   preserving headings, emphasis, lists, links and tables before PDF rendering. Plain
   text and Markdown remain editable; selection replacement and undo use native text editing.
+
+## Website — 2026-11-10
+
+### Changed
+- Replace the homepage photograph with the user-selected Katya Wolf / Pexels reading
+  scene (photo 8715935). Lift exposure and shadows with AI-assisted tonal retouching;
+  retain the unchanged original, source attribution, Pexels license and exact edit prompt.
+- Adapt portrait cropping and soft image edges for desktop and mobile, and remove the
+  previous strong desaturation so natural skin tones remain visible.
+- Publish the update and its dated changelog in Simplified Chinese, Traditional Chinese,
+  English and Japanese. Add a content hash to the stylesheet URL so returning visitors
+  receive the matching image layout rather than cached styles.
+- This follows the 2026-11-09 website refresh: system typography, the existing app icon
+  as a visual element, an independent Traditional Chinese page and a QUADERNO tribute.
+
+This is a **website deployment**, not an App release. The downloadable App remains
+**1.3.0**; the App changes listed under Unreleased still await a separately signed and
+notarized release.
 
 ## [1.3.0] — 2026-11-07
 

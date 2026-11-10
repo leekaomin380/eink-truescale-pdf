@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import hashlib
 import json
 import re
 import sys
@@ -29,7 +30,8 @@ REPO = "https://github.com/leekaomin380/eink-truescale-pdf"
 RELEASES = REPO + "/releases/latest"
 CHANGELOG = REPO + "/blob/master/CHANGELOG.md"
 LATEST = "1.3.0"
-LASTMOD = "2026-11-09"
+LASTMOD = "2026-11-10"
+CSS_VERSION = hashlib.sha256((SITE / "assets/site.css").read_bytes()).hexdigest()[:12]
 
 LANGS = {
     "en": {"dir": "", "lang": "en", "hreflang": "en", "locale": "en_US", "label": "English"},
@@ -541,6 +543,37 @@ CONTENT["ja"]["meta"]["jsonld_summary"] = "テキスト、Markdown、EPUB を QU
 CONTENT["zh-hant"] = json.loads((SITE / "content-zh-hant.json").read_text(encoding="utf-8"))
 
 
+# Website deployments have their own dated entries; they do not change the App version.
+WEBSITE_UPDATE = {
+    "en": ("Website", "A brighter moment for reading", "Website updates and App releases, newest first.", [
+        "The homepage now uses the selected Katya Wolf / Pexels reading photograph, brightened with AI-assisted tonal editing; the original is retained.",
+        "Portrait cropping and soft edges are adapted for desktop and mobile. Photographer credit, the license and processing notes are included.",
+        "This website update applies to all four languages. The downloadable App remains version 1.3.0.",
+    ]),
+    "zh": ("官网更新", "让阅读画面更明亮", "官网更新与 App 发行记录，按时间倒序排列。", [
+        "首页采用选定的 Katya Wolf / Pexels 阅读照片，经 AI 辅助调亮曝光与阴影，原片保留。",
+        "调整桌面与手机的竖幅裁切和柔和边缘，补齐摄影署名、许可及图片处理记录。",
+        "简体中文、正體中文、English、日本語四语同步；本次为官网更新，App 下载版本仍为 1.3.0。",
+    ]),
+    "zh-hant": ("官網更新", "讓閱讀畫面更明亮", "官網更新與 App 發行紀錄，按時間倒序排列。", [
+        "首頁採用選定的 Katya Wolf / Pexels 閱讀照片，經 AI 輔助調亮曝光與陰影，原片保留。",
+        "調整桌面與手機的直幅裁切和柔和邊緣，補齊攝影署名、授權及圖片處理紀錄。",
+        "簡體中文、正體中文、English、日本語四語同步；本次為官網更新，App 下載版本仍為 1.3.0。",
+    ]),
+    "ja": ("Web サイト", "読書のひとときを、明るく", "Web サイトの更新と App のリリースを、新しい順に掲載しています。", [
+        "トップページの写真を Katya Wolf / Pexels の読書シーンに変更。AI を使って露出と暗部を明るく調整し、元の写真も保存しています。",
+        "パソコンとスマートフォンに合わせて縦長写真の表示範囲と輪郭を調整。撮影者、ライセンス、加工記録を明記しました。",
+        "4 言語のページを同時に更新。今回は Web サイトの更新で、ダウンロードできる App は引き続き 1.3.0 です。",
+    ]),
+}
+for language, (tag, title, intro, items) in WEBSITE_UPDATE.items():
+    CONTENT[language]["releases"]["intro"] = intro
+    CONTENT[language]["releases"]["entries"].insert(0, {
+        "tag": tag, "date": "2026-11-10", "title": title,
+        "link": CHANGELOG, "items": items,
+    })
+
+
 def esc(value: str) -> str:
     return html.escape(str(value), quote=True)
 
@@ -780,11 +813,11 @@ def render(lang: str) -> str:
 <meta name="keywords" content="{esc(m["keywords"])}">
 <meta name="author" content="leekaomin">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
-<meta name="theme-color" content="#f6f4ee">
+<meta name="theme-color" content="#f7f8fa">
 <link rel="canonical" href="{canonical}">
 {hreflang}
 <link rel="icon" href="{base}assets/favicon.png">
-<link rel="stylesheet" href="{base}assets/site.css">
+<link rel="stylesheet" href="{base}assets/site.css?v={CSS_VERSION}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TrueScale for QUADERNO">
 <meta property="og:locale" content="{info["locale"]}">
@@ -820,7 +853,7 @@ def render(lang: str) -> str:
 
   <main>
     <div class="hero">
-      <div class="hero-photo" aria-hidden="true"><img src="{base}assets/reading-by-window.jpg" alt="" width="1600" height="1067" fetchpriority="high"></div>
+      <div class="hero-photo" aria-hidden="true"><img src="{base}assets/reading-coffee-8715935-bright.jpg" alt="" width="1024" height="1536" fetchpriority="high"></div>
       <div class="hero-copy">
       <img class="hero-icon" src="{base}assets/icon.png" alt="TrueScale" width="144" height="144">
       <h1>{esc(hero["title"])}</h1>
@@ -945,7 +978,7 @@ def render(lang: str) -> str:
     <p>{esc(foot["license"])}</p>
     <p><a href="{REPO}">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="{REPO}/issues">{esc(foot["issues"])}</a></p>
     <p>{esc(foot["contact"])}<a href="mailto:leekaomin@foxmail.com">leekaomin@foxmail.com</a></p>
-    <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/young-woman-reading-book-on-couch-7578223/">John Diez / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
+    <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/woman-reading-a-book-and-having-coffee-8715935/">Katya Wolf / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
   </footer>
 </div>
 

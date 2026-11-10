@@ -8,7 +8,7 @@
 <meta name="keywords" content="QUADERNO, FUJITSU QUADERNO A5, FMVDP51, QUADERNO PDF ぼやける, QUADERNO 実寸 PDF, QUADERNO ファイル転送 Mac, QUADERNO EPUB PDF 変換, 電子ペーパー 組版, WeChat 記事, ⌃1, macOS">
 <meta name="author" content="leekaomin">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
-<meta name="theme-color" content="#f6f4ee">
+<meta name="theme-color" content="#f7f8fa">
 <link rel="canonical" href="https://leekaomin380.github.io/eink-truescale-pdf/ja/">
 <link rel="alternate" hreflang="en" href="https://leekaomin380.github.io/eink-truescale-pdf/">
 <link rel="alternate" hreflang="zh-Hans" href="https://leekaomin380.github.io/eink-truescale-pdf/zh/">
@@ -17,7 +17,7 @@
 <link rel="alternate" hreflang="ja" href="https://leekaomin380.github.io/eink-truescale-pdf/ja/">
 <link rel="alternate" hreflang="x-default" href="https://leekaomin380.github.io/eink-truescale-pdf/">
 <link rel="icon" href="../assets/favicon.png">
-<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/site.css?v=deddc1e0eaa4">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TrueScale for QUADERNO">
 <meta property="og:locale" content="ja_JP">
@@ -66,7 +66,7 @@
       "applicationSubCategory": "E-ink / e-paper document tools",
       "operatingSystem": "macOS 14 or later (Apple Silicon)",
       "softwareVersion": "1.3.0",
-      "dateModified": "2026-11-09",
+      "dateModified": "2026-11-10",
       "isAccessibleForFree": true,
       "inLanguage": [
         "en",
@@ -190,7 +190,7 @@
 
   <main>
     <div class="hero">
-      <div class="hero-photo" aria-hidden="true"><img src="../assets/reading-by-window.jpg" alt="" width="1600" height="1067" fetchpriority="high"></div>
+      <div class="hero-photo" aria-hidden="true"><img src="../assets/reading-coffee-8715935-bright.jpg" alt="" width="1024" height="1536" fetchpriority="high"></div>
       <div class="hero-copy">
       <img class="hero-icon" src="../assets/icon.png" alt="TrueScale" width="144" height="144">
       <h1>一ページずつ、
@@ -303,8 +303,9 @@
     <section id="changelog">
       <div class="wrap">
         <h2>更新履歴</h2>
-        <p class="intro">公開済みのバージョンを新しい順に掲載し、各 GitHub Release にリンクしています。 <a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">GitHub で完全な変更履歴を見る</a></p>
+        <p class="intro">Web サイトの更新と App のリリースを、新しい順に掲載しています。 <a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">GitHub で完全な変更履歴を見る</a></p>
         <ol class="releases">
+          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">Web サイト</a></span><time datetime="2026-11-10">2026-11-10</time></div><h3>読書のひとときを、明るく</h3><ul><li>トップページの写真を Katya Wolf / Pexels の読書シーンに変更。AI を使って露出と暗部を明るく調整し、元の写真も保存しています。</li><li>パソコンとスマートフォンに合わせて縦長写真の表示範囲と輪郭を調整。撮影者、ライセンス、加工記録を明記しました。</li><li>4 言語のページを同時に更新。今回は Web サイトの更新で、ダウンロードできる App は引き続き 1.3.0 です。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.3.0">1.3.0</a></span><time datetime="2026-11-07">2026-11-07</time></div><h3>クリップボードの忠実性、表組版、送信の堅牢化</h3><ul><li>「·」を含むファイル名で端末が「ファイルが削除されました」と誤報する問題を修正。厳密な UTF-8 でない応答でも処理が中断しなくなりました。</li><li>⌃1 がクリップボードのリッチ HTML を読み取り、HTML 表・TSV・GFM 表を正規化。プレーンテキストと数式はそのまま保持します。</li><li>複雑な表は内容量に応じた列幅、長い表はヘッダー付きで改ページ、広すぎる表はリストに降级。認証と組版を並列化して遅延を削減し、検証チェーンは短縮していません。</li><li>同時送信はキューで直列化し、USB リンク異常を個別に検出。タイムアウト上界、空 PDF の拒否、重複送信のスキップを追加しました。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.2">1.2.2</a></span><time datetime="2026-11-02">2026-11-02</time></div><h3>ショートカット、静かな Finder 送信、EPUB</h3><ul><li>⌃1 / ⌃2 を内蔵。Finder の右クリックで App のウインドウが開かなくなりました。</li><li>Finder の右クリックから EPUB を書籍組版で送信可能に。</li><li>スクリーンショットを文書名とページ番号で命名。ウインドウを閉じてもメニューバーに常駐。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.1">1.2.1</a></span><time datetime="2026-11-01">2026-11-01</time></div><h3>より静かなアイコン</h3><ul><li>グレースケールの紙と左上の斜体小文字 q に変更。サイトのアイコンと favicon も同じデザインに。</li></ul></li>
@@ -339,7 +340,7 @@
     <p>MIT ライセンス。同梱の pandoc・Typst などはそれぞれのライセンスに従います。詳細は App の「情報」画面をご覧ください。</p>
     <p><a href="https://github.com/leekaomin380/eink-truescale-pdf">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="https://github.com/leekaomin380/eink-truescale-pdf/issues">問題を報告</a></p>
     <p>連絡先：<a href="mailto:leekaomin@foxmail.com">leekaomin@foxmail.com</a></p>
-    <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/young-woman-reading-book-on-couch-7578223/">John Diez / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
+    <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/woman-reading-a-book-and-having-coffee-8715935/">Katya Wolf / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
   </footer>
 </div>
 

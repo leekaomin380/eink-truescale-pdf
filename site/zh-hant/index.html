@@ -8,7 +8,7 @@
 <meta name="keywords" content="QUADERNO, 富士通 QUADERNO A5, FMVDP51, QUADERNO PDF 模糊, QUADERNO 傳檔案 Mac, QUADERNO 1:1 排版, QUADERNO EPUB 轉 PDF, 電子紙 排版, 微信公眾號文章 QUADERNO, 電子書 轉換, 快捷鍵 ⌃1, macOS">
 <meta name="author" content="leekaomin">
 <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
-<meta name="theme-color" content="#f6f4ee">
+<meta name="theme-color" content="#f7f8fa">
 <link rel="canonical" href="https://leekaomin380.github.io/eink-truescale-pdf/zh-hant/">
 <link rel="alternate" hreflang="en" href="https://leekaomin380.github.io/eink-truescale-pdf/">
 <link rel="alternate" hreflang="zh-Hans" href="https://leekaomin380.github.io/eink-truescale-pdf/zh/">
@@ -17,7 +17,7 @@
 <link rel="alternate" hreflang="ja" href="https://leekaomin380.github.io/eink-truescale-pdf/ja/">
 <link rel="alternate" hreflang="x-default" href="https://leekaomin380.github.io/eink-truescale-pdf/">
 <link rel="icon" href="../assets/favicon.png">
-<link rel="stylesheet" href="../assets/site.css">
+<link rel="stylesheet" href="../assets/site.css?v=deddc1e0eaa4">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TrueScale for QUADERNO">
 <meta property="og:locale" content="zh_TW">
@@ -66,7 +66,7 @@
       "applicationSubCategory": "E-ink / e-paper document tools",
       "operatingSystem": "macOS 14 or later (Apple Silicon)",
       "softwareVersion": "1.3.0",
-      "dateModified": "2026-11-09",
+      "dateModified": "2026-11-10",
       "isAccessibleForFree": true,
       "inLanguage": [
         "en",
@@ -190,7 +190,7 @@
 
   <main>
     <div class="hero">
-      <div class="hero-photo" aria-hidden="true"><img src="../assets/reading-by-window.jpg" alt="" width="1600" height="1067" fetchpriority="high"></div>
+      <div class="hero-photo" aria-hidden="true"><img src="../assets/reading-coffee-8715935-bright.jpg" alt="" width="1024" height="1536" fetchpriority="high"></div>
       <div class="hero-copy">
       <img class="hero-icon" src="../assets/icon.png" alt="TrueScale" width="144" height="144">
       <h1>讓每一頁，
@@ -303,8 +303,9 @@
     <section id="changelog">
       <div class="wrap">
         <h2>版本日誌</h2>
-        <p class="intro">已發佈的版本，按時間倒序排列，附對應 GitHub Release 連結。 <a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">在 GitHub 查看完整變更日誌</a></p>
+        <p class="intro">官網更新與 App 發行紀錄，按時間倒序排列。 <a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">在 GitHub 查看完整變更日誌</a></p>
         <ol class="releases">
+          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">官網更新</a></span><time datetime="2026-11-10">2026-11-10</time></div><h3>讓閱讀畫面更明亮</h3><ul><li>首頁採用選定的 Katya Wolf / Pexels 閱讀照片，經 AI 輔助調亮曝光與陰影，原片保留。</li><li>調整桌面與手機的直幅裁切和柔和邊緣，補齊攝影署名、授權及圖片處理紀錄。</li><li>簡體中文、正體中文、English、日本語四語同步；本次為官網更新，App 下載版本仍為 1.3.0。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.3.0">1.3.0</a></span><time datetime="2026-11-07">2026-11-07</time></div><h3>剪貼板保真、表格版式與投遞加固</h3><ul><li>修復檔案名含「·」時設備誤報「檔案已被刪除」；設備響應不再因非嚴格 UTF-8 解碼而中斷。</li><li>⌃1 讀取剪貼板富文字：HTML 表格、TSV 與 GFM 表格歸一化，純文字與公式原樣保留。</li><li>複雜表格按內容分配列寬、長表分頁重復表頭、超寬表降級為列表；設備認證與排版並行以降低延遲，校驗鏈不縮減。</li><li>併發投遞改為隊列串行，USB 鏈路故障單獨識別，上傳增加超時上界、空 PDF 攔截與冪等跳過。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.2">1.2.2</a></span><time datetime="2026-11-02">2026-11-02</time></div><h3>原生快捷鍵、靜默右鍵投遞與 EPUB</h3><ul><li>內置 ⌃1 / ⌃2 快捷鍵；Finder 右鍵不再彈出 App 窗口。</li><li>Finder 右鍵支援 EPUB，按書籍版式排版。</li><li>截屏按當前文檔與頁碼命名；App 關閉窗口後仍常駐菜單欄。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.1">1.2.1</a></span><time datetime="2026-11-01">2026-11-01</time></div><h3>更克制的圖標</h3><ul><li>灰度紙張圖標、左上角斜體小寫 q；站點圖標與 favicon 同步。</li></ul></li>
@@ -339,7 +340,7 @@
     <p>MIT 許可。打包的 pandoc、Typst 等組件遵循各自的許可，詳見 App 的「關於」頁。</p>
     <p><a href="https://github.com/leekaomin380/eink-truescale-pdf">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="https://github.com/leekaomin380/eink-truescale-pdf/issues">問題反饋</a></p>
     <p>聯繫作者：<a href="mailto:leekaomin@foxmail.com">leekaomin@foxmail.com</a></p>
-    <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/young-woman-reading-book-on-couch-7578223/">John Diez / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
+    <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/woman-reading-a-book-and-having-coffee-8715935/">Katya Wolf / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
   </footer>
 </div>
 
