@@ -68,6 +68,16 @@ pbpaste ──► [空检测] ──► pandoc -f markdown --template=deliver.ty
 
 ## 开发日志
 
+### 2026-11-10 · 四语站内 SEO 与首屏性能
+
+最终本地 Lighthouse 13.6.0 移动端：performance 99, accessibility 100, best-practices 100, seo 100；关闭 JavaScript 的四语 × 3 个窗口共 12 组检查通过。属于实验室检查，不能替代线上真实用户性能数据或搜索引擎收录。
+
+用户要求做好 SEO。本轮完善四语独立搜索标题、摘要与可见产品说明，修正 PDF 能力表述；增加 WebPage 与软件/站点的关联，App 发行日期仍为 2026-11-07、下载版本仍为 1.3.0；移除将 PDF 样张当作 App 截图的字段，没有虚构评分。
+
+首屏照片新增 640px / 1024px WebP、图标新增 192px / 384px 无损 WebP；匹配 responsive preload、fetchpriority 与图片尺寸，保留 JPEG 回退。构建检查新增唯一搜索元数据、完整双向语言引用、网页/软件数据时效、响应式图片与 sitemap 互链校验。
+
+发现并记录 GitHub Pages 子路径的 robots.txt 不具备域名根路径效力；根路径实测为 404，没有当前禁止抓取规则。Search Console 无已验证的所有者会话，未虚构提交 sitemap、已收录或排名提升；后续步骤见 `docs/website-seo.md`。部署后使用 `site/check-live.py` 核对四语 HTML、索引响应头、sitemap 与主要资源。
+
 ### 2026-11-10 · 官网首页摄影选定与部署
 
 用户从五张候选照片中选定 01（Katya Wolf / Pexels，8715935），要求整体更明亮，并明确要求提交、远端部署和版本日志。

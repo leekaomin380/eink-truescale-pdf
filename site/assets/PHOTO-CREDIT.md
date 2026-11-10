@@ -8,6 +8,7 @@
 - Unchanged original: `reading-coffee-8715935-original.jpg`.
 - User-selected website derivative: `reading-coffee-8715935-bright.jpg`. Exposure and shadows were brightened using built-in imagegen. The derivative is AI-assisted retouching of a licensed real photograph, not an untouched original. Prompt and processing details are recorded in `reading-coffee-edit.md`.
 - Source page identifies Katya Wolf and links to the exact CDN photo ID. Original photo EXIF listed on Pexels: Canon EOS 5D Mark IV, photographed 2021-06-23.
+- Delivery encodings: `reading-coffee-8715935-bright.webp` (1024px) and `reading-coffee-8715935-bright-640.webp` (640px), produced with cwebp quality 85 from the selected bright JPEG. These are responsive compression variants, not further creative retouching.
 - The footer credits Katya Wolf / Pexels and links to the original photo and license. No endorsement by the model or photographer is implied.
 
 ---

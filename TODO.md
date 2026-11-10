@@ -16,6 +16,12 @@
 - 暂存 `site/assets/app-workspace.png`：从当前 App 实际渲染示例内容后捕获的界面候选图，尚待视觉检查，未加入页面、未提交。`/tmp/truescale-capture.swift` 为临时捕获工具，不属于产品源码。
 - 本次提交只包含选定照片及适配和日志；未选候选图、App 界面候选图、其余六维对标工作继续保留在本地待办。
 
+## SEO 后续：搜索平台所有者验证
+
+- [x] 四语独立元数据、可抓取正文、canonical/hreflang/sitemap 校验、网页/软件结构化数据及首屏 WebP 优化。
+- [ ] 在有实际所有者会话时验证 Google Search Console 的本站 URL-prefix 属性，提交 sitemap，查看收录和搜索表现；可另行接入 Bing Webmaster Tools。当前没有已验证会话，未宣称完成收录。
+- [ ] 如需域名级 robots.txt，在域名根站点单独配置；项目子目录内的 robots.txt 不能替代根路径。本轮未修改其他站点。
+
 ## 下一阶段：AI 文件命名与元数据整理（2026-11-09）
 
 用户反馈：当前自动命名较混乱。计划引入 AI，辅助文件命名、文件整理与元数据归整；尚未实现。

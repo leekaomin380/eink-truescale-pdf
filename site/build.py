@@ -30,6 +30,7 @@ REPO = "https://github.com/leekaomin380/eink-truescale-pdf"
 RELEASES = REPO + "/releases/latest"
 CHANGELOG = REPO + "/blob/master/CHANGELOG.md"
 LATEST = "1.3.0"
+APP_RELEASE_DATE = "2026-11-07"
 LASTMOD = "2026-11-10"
 CSS_VERSION = hashlib.sha256((SITE / "assets/site.css").read_bytes()).hexdigest()[:12]
 
@@ -574,6 +575,60 @@ for language, (tag, title, intro, items) in WEBSITE_UPDATE.items():
     })
 
 
+# Localized search snippets describe released capabilities rather than future PDF reflow.
+SEARCH_COPY = {
+    "en": {
+        "title": "TrueScale for QUADERNO — Mac PDF Transfer & EPUB Typesetting",
+        "description": "Send PDFs from Mac to FUJITSU QUADERNO over USB or Wi-Fi. Typeset EPUB, Markdown and text for e-paper. Free, open-source macOS app with verified delivery.",
+        "label": "PDF transfer & EPUB typesetting for Mac",
+        "intro": "An oversized page can make text too small on e-paper. TrueScale typesets text, Markdown and EPUB for your reader. Existing PDFs are transferred with their original layout.",
+        "answer": "A4 and Letter pages often make text smaller when fitted onto a QUADERNO A5. TrueScale can typeset text, Markdown and EPUB for the reader's page size. Existing PDF files are transferred with their layout preserved; automatic PDF text extraction and reflow are not available in the current release.",
+        "map": "Sitemap",
+    },
+    "zh": {
+        "title": "TrueScale for QUADERNO｜Mac 传 PDF、EPUB 电子纸排版工具",
+        "description": "从 Mac 通过 USB 或 Wi-Fi 向富士通 QUADERNO 传 PDF，为 EPUB、Markdown 和文字按电子纸尺寸排版。免费开源，支持快捷键投递与传输校验。现有 PDF 保留原版式。",
+        "label": "Mac 上的 QUADERNO 文件投递与电子书排版工具",
+        "intro": "过大的页面放到电子纸上，文字容易显得细小。TrueScale 为文本、Markdown 与 EPUB 按阅读页面排版；现有 PDF 则保留原版式直接投递。",
+        "answer": "A4 或 Letter 页面缩放到 QUADERNO A5 时，文字往往会变小。TrueScale 可以为文本、Markdown 与 EPUB 按目标阅读页面重新排版。已有 PDF 保留原版式投递；当前发行版尚不支持自动提取 PDF 正文并重排。",
+        "map": "网站地图",
+    },
+    "zh-hant": {
+        "title": "TrueScale for QUADERNO｜Mac 傳 PDF、EPUB 電子紙排版工具",
+        "description": "從 Mac 透過 USB 或 Wi-Fi 向富士通 QUADERNO 傳 PDF，為 EPUB、Markdown 與文字按電子紙尺寸排版。免費開放原始碼，支援快速鍵傳送與傳輸驗證。現有 PDF 保留原版面。",
+        "label": "Mac 上的 QUADERNO 檔案傳送與電子書排版工具",
+        "intro": "過大的頁面放到電子紙上，文字容易顯得細小。TrueScale 為文字、Markdown 與 EPUB 按閱讀頁面排版；現有 PDF 則保留原版面直接傳送。",
+        "answer": "A4 或 Letter 頁面縮放到 QUADERNO A5 時，文字往往會變小。TrueScale 可以為文字、Markdown 與 EPUB 按目標閱讀頁面重新排版。已有 PDF 保留原版面傳送；目前發行版尚不支援自動擷取 PDF 正文並重新排版。",
+        "map": "網站地圖",
+    },
+    "ja": {
+        "title": "TrueScale for QUADERNO｜Mac から PDF 転送・EPUB 組版",
+        "description": "Mac から富士通 QUADERNO へ USB・Wi-Fi で PDF を転送。EPUB、Markdown、テキストを電子ペーパー向けに組版する無料オープンソースアプリです。既存 PDF のレイアウトを保持し、転送後にデータを照合します。",
+        "label": "Mac から QUADERNO へ。PDF 転送と電子書籍の組版",
+        "intro": "大きな用紙を電子ペーパーに合わせると、文字が小さくなりがちです。TrueScale はテキスト・Markdown・EPUB を読書用のページに組版。既存の PDF はレイアウトを保って転送します。",
+        "answer": "A4 や Letter のページを QUADERNO A5 に合わせると、文字が小さくなることがあります。TrueScale はテキスト、Markdown、EPUB を端末のページサイズに合わせて組版します。既存の PDF はレイアウトを保持して転送します。現在のリリースには PDF 本文の自動抽出・再組版機能はありません。",
+        "map": "サイトマップ",
+    },
+}
+for language, copy in SEARCH_COPY.items():
+    meta = CONTENT[language]["meta"]
+    meta["title"] = copy["title"]
+    meta["description"] = copy["description"]
+    meta["og_desc"] = copy["description"]
+    CONTENT[language]["why"]["intro"] = copy["intro"]
+    question = CONTENT[language]["faq"]["items"][0][0]
+    CONTENT[language]["faq"]["items"][0] = (question, copy["answer"])
+
+
+for language, note in {
+    "en": "Improve localized search snippets, canonical/hreflang validation and page/app structured data. Deliver smaller responsive WebP images while preserving the selected photograph and icon.",
+    "zh": "完善四语搜索摘要、canonical/hreflang 校验及网页/App 结构化数据；首屏照片与图标增加响应式 WebP，减小下载体积。",
+    "zh-hant": "完善四語搜尋摘要、canonical/hreflang 驗證及網頁/App 結構化資料；首屏照片與圖示增加響應式 WebP，減少下載大小。",
+    "ja": "4 言語の検索用メタデータ、canonical・hreflang 検証、Web ページと App の構造化データを改善。写真とアイコンをレスポンシブ WebP で軽量化しました。",
+}.items():
+    CONTENT[language]["releases"]["entries"][0]["items"].append(note)
+
+
 def esc(value: str) -> str:
     return html.escape(str(value), quote=True)
 
@@ -626,11 +681,31 @@ class TagBalance(HTMLParser):
 
 def validate_markup(files: dict[Path, str]) -> None:
     """Assert the SEO invariants on every generated page, not just file equality."""
+    titles, descriptions = set(), set()
+    expected_alternates = {info["hreflang"]: SITE_URL + info["dir"] for info in LANGS.values()}
+    expected_alternates.update({"zh-CN": SITE_URL + "zh/", "x-default": SITE_URL})
     for lang, info in LANGS.items():
         path = SITE / (info["dir"] + "index.html")
         doc = files[path]
         c = CONTENT[lang]
         problems: list[str] = []
+
+        title = re.findall(r"<title>(.*?)</title>", doc)
+        description = re.findall(r'<meta name="description" content="([^"]+)">', doc)
+        if len(title) != 1 or title[0] in titles or "QUADERNO" not in title[0]:
+            problems.append("missing, duplicate or unrelated search title")
+        if len(description) != 1 or description[0] in descriptions:
+            problems.append("missing or duplicate search description")
+        titles.update(title)
+        descriptions.update(description)
+        crawler_directives = re.findall(r'<meta name="(?:robots|googlebot)" content="([^"]+)">', doc, re.I)
+        if any(re.search(r"\b(?:noindex|nofollow|none)\b", value, re.I) for value in crawler_directives):
+            problems.append("page accidentally blocks indexing or link discovery")
+        if doc.count('<link rel="canonical"') != 1:
+            problems.append("canonical must appear exactly once")
+        actual_alternates = dict(re.findall(r'<link rel="alternate" hreflang="([^"]+)" href="([^"]+)">', doc))
+        if actual_alternates != expected_alternates:
+            problems.append("language alternates must point to all canonical locales")
 
         if f'<html lang="{info["lang"]}">' not in doc:
             problems.append("missing html lang")
@@ -668,8 +743,18 @@ def validate_markup(files: dict[Path, str]) -> None:
             problems.append("missing JSON-LD")
         else:
             graph = json.loads(block.group(1))["@graph"]
-            if {n["@type"] for n in graph} != {"WebSite", "SoftwareApplication", "FAQPage"}:
+            if {n["@type"] for n in graph} != {"WebSite", "WebPage", "SoftwareApplication", "FAQPage"}:
                 problems.append("JSON-LD graph types")
+            app = next(n for n in graph if n["@type"] == "SoftwareApplication")
+            page = next(n for n in graph if n["@type"] == "WebPage")
+            if app["softwareVersion"] != LATEST or app["dateModified"] != APP_RELEASE_DATE:
+                problems.append("software metadata must describe the released App")
+            if app.get("screenshot") == SITE_URL + "assets/device-page.png":
+                problems.append("do not describe a PDF sample as an App screenshot")
+            if page["url"] != SITE_URL + info["dir"] or page["inLanguage"] != info["lang"]:
+                problems.append("WebPage locale or URL mismatch")
+            if page["name"] != c["meta"]["title"] or page["description"] != c["meta"]["description"]:
+                problems.append("WebPage metadata differs from visible search metadata")
             faq_node = next(n for n in graph if n["@type"] == "FAQPage")
             if len(faq_node["mainEntity"]) != len(c["faq"]["items"]):
                 problems.append("JSON-LD FAQ count")
@@ -684,16 +769,25 @@ def validate_markup(files: dict[Path, str]) -> None:
             generated = target in files or target / "index.html" in files
             if not target.exists() and not generated:
                 problems.append("missing local asset " + ref)
+        for ref in re.findall(r'(?:srcset|imagesrcset)="([^"]+)"', doc):
+            for candidate in ref.split(","):
+                resource = candidate.strip().split()[0]
+                if not (path.parent / resource).resolve().is_file():
+                    problems.append("missing responsive image " + resource)
 
         if problems:
             raise SystemExit(f"{lang} page failed validation: " + "; ".join(problems))
 
-    ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9", "x": "http://www.w3.org/1999/xhtml"}
     xml_root = ET.fromstring(files[SITE / "sitemap.xml"])
     locs = {node.text for node in xml_root.findall("s:url/s:loc", ns)}
     expected = {SITE_URL + LANGS[l]["dir"] for l in LANGS}
     if locs != expected:
         raise SystemExit("sitemap URLs do not match the localized pages")
+    for node in xml_root.findall("s:url", ns):
+        alternates = {link.attrib["hreflang"]: link.attrib["href"] for link in node.findall("x:link", ns)}
+        if alternates != expected_alternates:
+            raise SystemExit("sitemap language alternates differ from the HTML pages")
     if f"Sitemap: {SITE_URL}sitemap.xml" not in files[SITE / "robots.txt"]:
         raise SystemExit("robots.txt does not advertise the sitemap")
     if not (SITE / "assets" / "og-card.png").exists():
@@ -725,18 +819,34 @@ def json_ld(lang: str) -> str:
             "applicationSubCategory": "E-ink / e-paper document tools",
             "operatingSystem": "macOS 14 or later (Apple Silicon)",
             "softwareVersion": LATEST,
-            "dateModified": LASTMOD,
+            "dateModified": APP_RELEASE_DATE,
             "isAccessibleForFree": True,
-            "inLanguage": ["en", "zh-Hans", "zh-Hant", "ja"],
+            "inLanguage": ["en", "zh-Hans", "ja"],
             "license": REPO + "/blob/master/LICENSE",
+            "releaseNotes": REPO + "/releases/tag/v" + LATEST,
             "downloadUrl": RELEASES,
             "installUrl": RELEASES,
             "image": SITE_URL + "assets/icon.png",
-            "screenshot": SITE_URL + "assets/device-page.png",
             "featureList": [g[0] for g in c["caps"]["groups"]],
             "author": {"@type": "Person", "name": "leekaomin", "email": "leekaomin@foxmail.com"},
             "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock"},
             "sameAs": [REPO, REPO + "/releases", CHANGELOG],
+        },
+        {
+            "@type": "WebPage",
+            "@id": canonical + "#webpage",
+            "url": canonical,
+            "name": c["meta"]["title"],
+            "description": c["meta"]["description"],
+            "inLanguage": LANGS[lang]["lang"],
+            "isPartOf": {"@id": SITE_URL + "#website"},
+            "mainEntity": {"@id": SITE_URL + "#app"},
+            "hasPart": {"@id": canonical + "#faq"},
+            "dateModified": LASTMOD,
+            "primaryImageOfPage": {
+                "@type": "ImageObject", "url": SITE_URL + "assets/og-card.png",
+                "width": 1200, "height": 630,
+            },
         },
         {
             "@type": "FAQPage",
@@ -810,14 +920,15 @@ def render(lang: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(m["title"])}</title>
 <meta name="description" content="{esc(m["description"])}">
-<meta name="keywords" content="{esc(m["keywords"])}">
 <meta name="author" content="leekaomin">
-<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <meta name="theme-color" content="#f7f8fa">
 <link rel="canonical" href="{canonical}">
 {hreflang}
 <link rel="icon" href="{base}assets/favicon.png">
 <link rel="stylesheet" href="{base}assets/site.css?v={CSS_VERSION}">
+<link rel="preload" as="image" type="image/webp" href="{base}assets/reading-coffee-8715935-bright.webp" imagesrcset="{base}assets/reading-coffee-8715935-bright-640.webp 640w, {base}assets/reading-coffee-8715935-bright.webp 1024w" imagesizes="(max-width: 860px) calc(100vw - 32px), (max-width: 1200px) 58vw, 672px" fetchpriority="high">
+<link rel="sitemap" type="application/xml" href="{base}sitemap.xml">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TrueScale for QUADERNO">
 <meta property="og:locale" content="{info["locale"]}">
@@ -840,7 +951,7 @@ def render(lang: str) -> str:
 <body>
 <div class="wrap">
   <header>
-    <a class="brand" href="{base}index.html"><img src="{base}assets/icon.png" alt="" width="32" height="32"><span>TrueScale for QUADERNO</span></a>
+    <a class="brand" href="{base}index.html"><img src="{base}assets/favicon.png" alt="" width="32" height="32"><span>TrueScale for QUADERNO</span></a>
     <nav class="topnav" aria-label="{esc(m["nav_label"])}">
       <a href="#features">{esc(nav["features"])}</a>
       <a href="#changelog">{esc(nav["changelog"])}</a>
@@ -853,9 +964,13 @@ def render(lang: str) -> str:
 
   <main>
     <div class="hero">
-      <div class="hero-photo" aria-hidden="true"><img src="{base}assets/reading-coffee-8715935-bright.jpg" alt="" width="1024" height="1536" fetchpriority="high"></div>
+      <div class="hero-photo" aria-hidden="true"><picture>
+        <source type="image/webp" srcset="{base}assets/reading-coffee-8715935-bright-640.webp 640w, {base}assets/reading-coffee-8715935-bright.webp 1024w" sizes="(max-width: 860px) calc(100vw - 32px), (max-width: 1200px) 58vw, 672px">
+        <img src="{base}assets/reading-coffee-8715935-bright.jpg" alt="" width="1024" height="1536" fetchpriority="high" decoding="async">
+      </picture></div>
       <div class="hero-copy">
-      <img class="hero-icon" src="{base}assets/icon.png" alt="TrueScale" width="144" height="144">
+      <img class="hero-icon" src="{base}assets/icon-384.webp" srcset="{base}assets/icon-192.webp 192w, {base}assets/icon-384.webp 384w" sizes="(max-width: 860px) 112px, 144px" alt="TrueScale" width="144" height="144">
+      <p class="product-label">{esc(SEARCH_COPY[lang]["label"])}</p>
       <h1>{esc(hero["title"])}</h1>
       <p class="lead">{esc(hero["lead"])}</p>
       <div class="flow" aria-hidden="true">
@@ -976,7 +1091,7 @@ def render(lang: str) -> str:
   <footer>
     <p>{esc(foot["independent"])}</p>
     <p>{esc(foot["license"])}</p>
-    <p><a href="{REPO}">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="{REPO}/issues">{esc(foot["issues"])}</a></p>
+    <p><a href="{REPO}">github.com/leekaomin380/eink-truescale-pdf</a> · <a href="{REPO}/issues">{esc(foot["issues"])}</a> · <a href="{base}sitemap.xml">{esc(SEARCH_COPY[lang]["map"])}</a></p>
     <p>{esc(foot["contact"])}<a href="mailto:leekaomin@foxmail.com">leekaomin@foxmail.com</a></p>
     <p class="photo-credit">Photo: <a href="https://www.pexels.com/photo/woman-reading-a-book-and-having-coffee-8715935/">Katya Wolf / Pexels</a> · <a href="https://www.pexels.com/license/">Pexels License</a></p>
   </footer>

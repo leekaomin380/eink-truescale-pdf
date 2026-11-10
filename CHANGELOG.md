@@ -48,6 +48,11 @@ deployed hardening and clipboard work dated 2026-11-04 through 2026-11-07.
 ## Website — 2026-11-10
 
 ### Changed
+- Improve localized search titles/descriptions and visible product labels. Clearly distinguish
+  PDF transfer from text/EPUB typesetting, preserve reciprocal canonical/hreflang mappings,
+  and separate WebPage metadata from the actual released App version/date.
+- Add responsive WebP photo and icon variants with correctly matched high-priority preload;
+  extend the deployment gate for metadata, structured data, sitemap and image integrity.
 - Replace the homepage photograph with the user-selected Katya Wolf / Pexels reading
   scene (photo 8715935). Lift exposure and shadows with AI-assisted tonal retouching;
   retain the unchanged original, source attribution, Pexels license and exact edit prompt.

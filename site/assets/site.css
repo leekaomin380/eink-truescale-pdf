@@ -180,3 +180,7 @@ a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outli
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* The product description remains visible to readers and crawlers. */
+.product-label { font-size: 13px; color: var(--muted); letter-spacing: .025em; margin: 0 0 14px; max-width: 38em; }
+.hero-photo picture { display: block; width: 100%; height: 100%; }
