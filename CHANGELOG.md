@@ -29,6 +29,11 @@ deployed hardening and clipboard work dated 2026-11-04 through 2026-11-07.
 - Consistent SF Symbols labels for layout settings and refresh/send/save actions.
 
 ### Fixed
+- USB connection recovery now follows observed readiness instead of caching serial-port
+  writes. Monitor and delivery share one transport path, with registry-session identity,
+  bounded retries/timeouts, nonblocking delivery locks and a bounded diagnostic log.
+  Serial writes handle partial/busy writes and use a drain deadline; stale link snapshots
+  cannot reset a recovered link, and failed Bonjour browsers are restarted automatically.
 - A quieter document workspace uses a continuous sidebar surface, lighter paper edges,
   unboxed status text and secondary refresh/Markdown actions. Only send or PDF save is
   prominent. The menu bar's lowercase q uses a smaller regular serif outline.
@@ -44,6 +49,21 @@ deployed hardening and clipboard work dated 2026-11-04 through 2026-11-07.
 - Pasting into the Text tab now converts clipboard HTML or RTF to editable Markdown,
   preserving headings, emphasis, lists, links and tables before PDF rendering. Plain
   text and Markdown remain editable; selection replacement and undo use native text editing.
+
+## Source update — 2026-11-12
+
+### Fixed
+- USB mode-switch commands no longer suppress retries before the device is ready.
+  Connection monitoring and delivery now share recovery, bounded retries and process
+  deadlines. Recovery yields to active transfers and records bounded diagnostics.
+- Serial writes handle partial writes and temporary busy conditions, with a drain deadline.
+  Stale link snapshots cannot reset a recovered link; failed service browsers restart.
+
+### Verification and availability
+- 113 Python tests, 36 recovery-policy assertions, subprocess timeout/queue integration
+  and window-layout checks passed; device authentication and directory reading passed.
+- Source changes and the local installation include the fix. The downloadable App remains
+  **1.3.0** and does not include these changes; no new binary release was created.
 
 ## Website — 2026-11-10
 

@@ -49,11 +49,13 @@ struct DeliveryRecord: Decodable, Identifiable {
 final class QuickSendMonitor: ObservableObject {
     static let shared = QuickSendMonitor()
     @Published private(set) var usbModel: String?
+    @Published private(set) var usbNetworkReady = false
     /// 正在发布 _dp_fujitsu._tcp 的设备型号（USB 或 Wi-Fi）。只有设备网络可用时才会出现。
     @Published private(set) var advertisedModel: String?
     @Published private(set) var history: [DeliveryRecord] = []
     private var timer: Timer?
     private var browser: NWBrowser?
+    private var browserRetryAt: TimeInterval = 0
 
     /// 只看 USB 总线会把「插着线但网络未就绪」误报为已连接（实测：休眠后链路 inactive）。
     enum Link: Equatable {
@@ -63,8 +65,8 @@ final class QuickSendMonitor: ObservableObject {
     }
 
     var link: Link {
-        if let model = advertisedModel ?? usbModel, advertisedModel != nil {
-            return .ready(model: model, usb: usbModel != nil)
+        if let model = advertisedModel {
+            return .ready(model: model, usb: usbNetworkReady && usbModel == model)
         }
         if let model = usbModel { return .usbNotReady(model: model) }
         return .disconnected
@@ -97,47 +99,22 @@ final class QuickSendMonitor: ObservableObject {
         }
     }
 
-    /// 已尝试切换过的串口；同一次插入只切换一次，拔掉后清空。
-    private var switchedPort: String?
-    /// 串口扫描与 tcdrain 都在后台执行；同一时刻只允许一个切换任务在途。
-    private var serialSwitchInFlight = false
-    private var switchFailures = 0
-    private var switchNotBefore: Date = .distantPast
+    private var recovery = USBRecoveryPolicy()
 
     func refresh() {
-        let model = QuadernoUSB.connectedModel()
-        if model != usbModel { usbModel = model }
-        // 插上后设备先以串口模式出现，需要主机发切换命令才会变成网卡（以前由 QUADERNO PC App 代做）。
-        // IOKit 扫描和 tcdrain 都可能阻塞数十秒：整条串口路径移出主 actor，界面不再被拖住。
-        // 切换失败不记住端口，按 3/6/12/24/30 s 退避重试，避免 18:05 实测的 80 s 停留窗口。
-        if !serialSwitchInFlight && Date() >= switchNotBefore {
-            serialSwitchInFlight = true
-            let knownPort = switchedPort
-            let deviceGone = (model == nil)
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                let port = QuadernoUSB.serialModePort()
-                let shouldSwitch = port != nil && port != knownPort
-                let switched = shouldSwitch ? QuadernoUSB.switchToNetworkMode(port: port!) : true
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    self.serialSwitchInFlight = false
-                    if shouldSwitch {
-                        if switched {
-                            self.switchedPort = port
-                            self.switchFailures = 0
-                            self.switchNotBefore = .distantPast
-                        } else {
-                            self.switchFailures += 1
-                            let backoff = 3 * pow(2, Double(min(self.switchFailures - 1, 3)))
-                            self.switchNotBefore = Date().addingTimeInterval(min(30, backoff))
-                        }
-                    }
-                    if port == nil && deviceGone {
-                        self.switchedPort = nil
-                        self.switchFailures = 0
-                        self.switchNotBefore = .distantPast
-                    }
-                }
+        startBrowsing()
+        let device = QuadernoUSB.connectedDevice()
+        usbModel = device?.model
+        usbNetworkReady = device?.networkReady ?? false
+        // Observe the outcome, never cache a successful write or a reusable /dev/cu.* name.
+        // The shared helper owns switching, sleep/wake recovery and the cross-process lock.
+        if recovery.observe(identity: device?.identity, ready: usbNetworkReady && advertisedModel == device?.model,
+                            now: ProcessInfo.processInfo.systemUptime) {
+            let observation = "registry=\(device?.identity ?? 0) product=\(device?.product ?? 0) link=\(device?.linkStatus ?? -1)"
+            Task {
+                let result = await DirectDelivery.run(["usb-prepare"], timeout: 45, background: true)
+                recovery.finished(now: ProcessInfo.processInfo.systemUptime)
+                USBRecoveryLog.record(observation + " " + (result.details.isEmpty ? result.message : result.details))
             }
         }
         let records = loadHistory()
@@ -168,7 +145,7 @@ final class QuickSendMonitor: ObservableObject {
 
     /// 事件驱动，无需轮询；首次使用时 macOS 会请求「本地网络」权限。
     private func startBrowsing() {
-        guard browser == nil else { return }
+        guard browser == nil, ProcessInfo.processInfo.systemUptime >= browserRetryAt else { return }
         let browser = NWBrowser(for: .bonjour(type: "_dp_fujitsu._tcp", domain: "local."), using: .tcp)
         browser.browseResultsChangedHandler = { results, _ in
             let names: [String] = results.compactMap {
@@ -178,6 +155,17 @@ final class QuickSendMonitor: ObservableObject {
             // 实例名形如「Digital Paper FMVDP51」，取最后的型号。
             let model = names.first.map { $0.split(separator: " ").last.map(String.init) ?? $0 }
             Task { @MainActor in QuickSendMonitor.shared.advertisedModel = model }
+        }
+        browser.stateUpdateHandler = { [weak self] state in
+            guard case let .failed(error) = state else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.advertisedModel = nil
+                self.browser?.cancel()
+                self.browser = nil
+                self.browserRetryAt = ProcessInfo.processInfo.systemUptime + 30
+                USBRecoveryLog.record("Service discovery failed; retry in 30s: \(error)")
+            }
         }
         browser.start(queue: .main)
         self.browser = browser
@@ -204,25 +192,16 @@ final class QuickSendMonitor: ObservableObject {
 }
 
 enum QuadernoUSB {
-    /// Guards the single bounded drain slot below (Swift 6 concurrency-safe holder).
-    private final class DrainState: @unchecked Sendable {
-        private let lock = NSLock()
-        private var pending = false
-        func tryBegin() -> Bool {
-            lock.lock(); defer { lock.unlock() }
-            guard !pending else { return false }
-            pending = true
-            return true
-        }
-        func end() {
-            lock.lock(); defer { lock.unlock() }
-            pending = false
-        }
-    }
-    private static let drain = DrainState()
-
     /// Fujitsu（0x04c5）FMVDP 系列在 USB 总线上时返回型号，例如 FMVDP51。
-    static func connectedModel() -> String? {
+    struct Device {
+        let model: String
+        let identity: UInt64
+        let product: Int
+        let linkStatus: Int?
+        var networkReady: Bool { product == 0x1657 && (linkStatus ?? 0) & 3 == 3 }
+    }
+
+    static func connectedDevice() -> Device? {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &iterator) == KERN_SUCCESS else {
             return nil
@@ -238,64 +217,17 @@ enum QuadernoUSB {
                 .takeRetainedValue() as? Int
             let name = IORegistryEntryCreateCFProperty(service, "USB Product Name" as CFString, kCFAllocatorDefault, 0)?
                 .takeRetainedValue() as? String
-            if vendor == 0x04c5, let name, name.hasPrefix("FMVDP") { return name }
-        }
-        return nil
-    }
-
-    /// 处于串口模式（产品 0x1656）的 QUADERNO 的 /dev/cu.* 路径。
-    static func serialModePort() -> String? {
-        var iterator: io_iterator_t = 0
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOSerialBSDClient"), &iterator) == KERN_SUCCESS else {
-            return nil
-        }
-        defer { IOObjectRelease(iterator) }
-        let parents = IOOptionBits(kIORegistryIterateRecursively | kIORegistryIterateParents)
-        var service = IOIteratorNext(iterator)
-        while service != 0 {
-            defer {
-                IOObjectRelease(service)
-                service = IOIteratorNext(iterator)
-            }
-            let vendor = IORegistryEntrySearchCFProperty(service, kIOServicePlane, "idVendor" as CFString, kCFAllocatorDefault, parents) as? Int
-            let product = IORegistryEntrySearchCFProperty(service, kIOServicePlane, "idProduct" as CFString, kCFAllocatorDefault, parents) as? Int
-            if vendor == 0x04c5, product == 0x1656,
-               let path = IORegistryEntryCreateCFProperty(service, "IOCalloutDevice" as CFString, kCFAllocatorDefault, 0)?
-                .takeRetainedValue() as? String {
-                return path
+            if vendor == 0x04c5, let name, name.hasPrefix("FMVDP") {
+                var identity: UInt64 = 0
+                guard IORegistryEntryGetRegistryEntryID(service, &identity) == KERN_SUCCESS else { continue }
+                let product = IORegistryEntryCreateCFProperty(service, "idProduct" as CFString, kCFAllocatorDefault, 0)?
+                    .takeRetainedValue() as? Int ?? 0
+                let link = IORegistryEntrySearchCFProperty(service, kIOServicePlane, "IOLinkStatus" as CFString,
+                    kCFAllocatorDefault, IOOptionBits(kIORegistryIterateRecursively)) as? Int
+                return Device(model: name, identity: identity, product: product, linkStatus: link)
             }
         }
         return nil
-    }
-
-    /// 写入 dpt-rp1-py 文档记载的 CDC/ECM 切换序列；设备约 1–2 秒后以网卡模式重新出现（实测）。
-    @discardableResult
-    static func switchToNetworkMode(port: String) -> Bool {
-        let descriptor = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK)
-        guard descriptor >= 0 else { return false }
-        defer { close(descriptor) }
-        var attributes = termios()
-        guard tcgetattr(descriptor, &attributes) == 0 else { return false }
-        cfmakeraw(&attributes)
-        attributes.c_cflag |= tcflag_t(CLOCAL | CREAD)
-        guard tcsetattr(descriptor, TCSANOW, &attributes) == 0 else { return false }
-        let sequence: [UInt8] = [0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x04]
-        let written = sequence.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
-        guard written == sequence.count else { return false }
-        // O_NONBLOCK does not apply to tcdrain: a device that stops reading can block it
-        // indefinitely (P2-5). Drain on a duplicated descriptor and join with a 2 s deadline;
-        // the original fd may close while the helper thread still holds its duplicate.
-        guard drain.tryBegin() else { return false }  // an earlier drain is still stuck
-        let drainDescriptor = dup(descriptor)
-        guard drainDescriptor >= 0 else { drain.end(); return false }
-        let finished = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .utility).async {
-            tcdrain(drainDescriptor)
-            close(drainDescriptor)
-            finished.signal()
-            QuadernoUSB.drain.end()
-        }
-        return finished.wait(timeout: .now() + 2) == .success
     }
 
     static func displayName(for model: String) -> String {

@@ -5,6 +5,7 @@ Delivery only reads folders and adds documents; it never deletes or overwrites a
 Deleting, moving and creating folders happen only as explicit actions from the App's file manager.
 """
 import argparse
+import array
 import fcntl
 import functools
 import glob
@@ -299,6 +300,34 @@ def serial_mode_port(ioreg_output):
     return None
 
 
+def write_serial_switch(descriptor, timeout=2):
+    """Bounded nonblocking write/drain; tcdrain can hang even with O_NONBLOCK.
+
+    A completed write only means the command was sent, never that the device is ready.
+    Readiness is established later by device enumeration and service discovery.
+    """
+    deadline = time.monotonic() + timeout
+    pending = memoryview(CDC_ECM_SWITCH)
+    while pending:
+        if time.monotonic() >= deadline:
+            raise TimeoutError('USB serial switch write timed out')
+        try:
+            count = os.write(descriptor, pending)
+            if count:
+                pending = pending[count:]
+            else:
+                time.sleep(0.01)
+        except (BlockingIOError, InterruptedError):
+            time.sleep(0.01)
+    while time.monotonic() < deadline:
+        queued = array.array('i', [0])
+        fcntl.ioctl(descriptor, termios.TIOCOUTQ, queued, True)
+        if queued[0] == 0:
+            return
+        time.sleep(0.01)
+    raise TimeoutError('USB serial switch drain timed out')
+
+
 def switch_to_network_mode(wait=10):
     """Switch a serial-mode QUADERNO to Ethernet-over-USB. False when nothing needed switching."""
     try:
@@ -315,8 +344,7 @@ def switch_to_network_mode(wait=10):
         attributes[0] = attributes[1] = attributes[3] = 0  # raw: no processing, no echo
         attributes[2] |= termios.CLOCAL | termios.CREAD
         termios.tcsetattr(descriptor, termios.TCSANOW, attributes)
-        os.write(descriptor, CDC_ECM_SWITCH)
-        termios.tcdrain(descriptor)
+        write_serial_switch(descriptor)
     finally:
         os.close(descriptor)
     deadline = time.monotonic() + wait
@@ -460,6 +488,10 @@ def recover_usb_link(wait=12):
             if advertising_interfaces(dns_sd_output(['-B', '_dp_fujitsu._tcp', 'local.'], duration=0.5)):
                 return False
             time.sleep(0.5)
+    # The observation above may have outlived driver negotiation. Re-read the state
+    # before resetting hardware; an earlier idle snapshot is not permission to reset now.
+    if not (usb_link_stuck_now() or usb_link_idle_now()):
+        return False
     try:
         if not reenumerate_quaderno():
             return False
@@ -479,11 +511,14 @@ def recover_usb_link(wait=12):
 
 def prepare_usb():
     """Bring a USB-attached QUADERNO to a reachable state; failures are left to discovery to report."""
+    diagnostics = {}
     try:
-        switch_to_network_mode()
-    except OSError:
-        pass  # port busy or gone: the official app may be switching it; carry on and let discovery decide
-    recover_usb_link()
+        diagnostics['switch_requested'] = switch_to_network_mode()
+    except OSError as error:
+        # Keep the failure observable; a busy/disappearing port must remain retryable.
+        diagnostics['switch_error'] = {'type': type(error).__name__, 'errno': error.errno}
+    diagnostics['recovery_requested'] = recover_usb_link()
+    return diagnostics
 
 
 def quaderno_on_usb():
@@ -1995,7 +2030,7 @@ def book_upload(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['check', 'import-pairing', 'upload', 'prepare', 'render-upload', 'book-upload', 'text',
-                                           'browse', 'open-doc', 'download', 'delete', 'mkdir', 'move', 'usb-switch',
+                                           'browse', 'open-doc', 'download', 'delete', 'mkdir', 'move', 'usb-switch', 'usb-prepare',
                                            'screenshot', 'layout'])
     parser.add_argument('--address', default='Android.local')
     parser.add_argument('--file')
@@ -2050,8 +2085,16 @@ def main():
             result = book_upload(args)
             print(json.dumps(result, ensure_ascii=False))
             return
-        with connection_lock():
-            if args.action == 'import-pairing':
+        # A background health check must never wait behind or interfere with a delivery.
+        with connection_lock(timeout=0 if args.action == 'usb-prepare' else LOCK_WAIT_SECONDS):
+            if args.action == 'usb-prepare':
+                actions = prepare_usb()
+                output = ioreg_devices()
+                result = {'ok': True, 'message': 'USB preparation completed; readiness requires service discovery',
+                          'usb_present': quaderno_in_ioreg(output),
+                          'serial_mode': serial_mode_port(output) is not None,
+                          'link_status': network_link_status(output), 'actions': actions}
+            elif args.action == 'import-pairing':
                 result = import_pairing(args.address)
             elif args.action == 'check':
                 prepare_usb()

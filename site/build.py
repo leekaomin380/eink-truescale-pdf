@@ -31,7 +31,7 @@ RELEASES = REPO + "/releases/latest"
 CHANGELOG = REPO + "/blob/master/CHANGELOG.md"
 LATEST = "1.3.0"
 APP_RELEASE_DATE = "2026-11-07"
-LASTMOD = "2026-11-10"
+LASTMOD = "2026-11-12"
 CSS_VERSION = hashlib.sha256((SITE / "assets/site.css").read_bytes()).hexdigest()[:12]
 
 LANGS = {
@@ -572,6 +572,36 @@ for language, (tag, title, intro, items) in WEBSITE_UPDATE.items():
     CONTENT[language]["releases"]["entries"].insert(0, {
         "tag": tag, "date": "2026-11-10", "title": title,
         "link": CHANGELOG, "items": items,
+    })
+
+
+# Source changes are explicitly separated from downloadable App releases.
+USB_SOURCE_UPDATE = {
+    "en": ("Source update", "USB connection recovery", [
+        "Fixes a yellow connection status that could persist after a USB mode-switch command. Recovery now follows observed readiness and retries with backoff.",
+        "Shares recovery between connection monitoring and delivery, adds serial-write and process deadlines, and yields to active deliveries.",
+        "Verified locally with automated fault scenarios and a connected QUADERNO. These changes are in the source; the downloadable App remains 1.3.0 and does not yet include this fix.",
+    ]),
+    "zh": ("源码更新", "USB 连接自动恢复", [
+        "修复发送 USB 模式切换命令后可能一直显示黄色的问题：按实际就绪状态确认连接，失败后退避重试。",
+        "连接监视与投递共用恢复逻辑，串口发送及恢复进程均设超时，后台恢复会避让正在进行的投递。",
+        "已通过本地故障场景测试和 QUADERNO 实机连接验证。修复已更新至源码；当前下载仍为 1.3.0，尚未包含本次修复。",
+    ]),
+    "zh-hant": ("原始碼更新", "USB 連線自動復原", [
+        "修正送出 USB 模式切換指令後可能持續顯示黃色的問題：依實際就緒狀態確認連線，失敗後逐步延長重試間隔。",
+        "連線監視與傳送共用復原邏輯，序列埠傳送及復原程序均設逾時，背景復原會避開正在進行的傳送。",
+        "已通過本機故障情境測試及 QUADERNO 實機連線驗證。修正已更新至原始碼；目前下載仍為 1.3.0，尚未包含本次修正。",
+    ]),
+    "ja": ("ソース更新", "USB 接続の自動復旧", [
+        "USB モード切替コマンドの送信後も接続表示が黄色のままになる問題を修正。実際の接続状態を確認し、失敗時は間隔を延ばして再試行します。",
+        "接続監視と送信で復旧処理を共通化。シリアル送信と復旧プロセスにタイムアウトを設け、送信中はバックグラウンド復旧を見送ります。",
+        "ローカルの障害テストと QUADERNO 実機で検証済みです。修正はソースに反映されています。ダウンロード版は引き続き 1.3.0 で、今回の修正はまだ含まれません。",
+    ]),
+}
+for language, (tag, title, items) in USB_SOURCE_UPDATE.items():
+    CONTENT[language]["releases"]["entries"].insert(0, {
+        "tag": tag, "date": "2026-11-12", "title": title,
+        "link": CHANGELOG + "#source-update--2026-11-12", "items": items,
     })
 
 

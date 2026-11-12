@@ -785,6 +785,83 @@ class SerialModeTests(unittest.TestCase):
         self.assertEqual(direct.CDC_ECM_SWITCH, bytes([1, 0, 0, 1, 0, 0, 0, 1, 1, 4]))
 
 
+class UsbRecoveryFaultTests(unittest.TestCase):
+    def test_serial_switch_handles_partial_write_and_temporary_busy(self):
+        received = bytearray()
+        counts = iter([BlockingIOError(), 3, InterruptedError(), 7])
+        def write(fd, data):
+            result = next(counts)
+            if isinstance(result, Exception):
+                raise result
+            received.extend(data[:result])
+            return result
+        with patch.object(direct.os, 'write', side_effect=write), \
+             patch.object(direct.fcntl, 'ioctl'), patch.object(direct.time, 'sleep'):
+            direct.write_serial_switch(99)
+        self.assertEqual(bytes(received), direct.CDC_ECM_SWITCH)
+
+    def test_serial_switch_has_deadline_for_stalled_write_and_drain(self):
+        for stalled_write in (True, False):
+            clock = iter([0, 0, 0, 1, 3, 4])
+            def ioctl(fd, command, queued, mutate):
+                queued[0] = 10
+            with self.subTest(stalled_write=stalled_write), \
+                 patch.object(direct.os, 'write', side_effect=BlockingIOError() if stalled_write else None,
+                              return_value=10), \
+                 patch.object(direct.fcntl, 'ioctl', side_effect=ioctl), \
+                 patch.object(direct.time, 'monotonic', side_effect=lambda: next(clock)), \
+                 patch.object(direct.time, 'sleep'):
+                with self.assertRaises(TimeoutError):
+                    direct.write_serial_switch(99)
+
+    def test_serial_switch_against_real_pseudoterminal(self):
+        import pty
+        master, slave = pty.openpty()
+        try:
+            attributes = direct.termios.tcgetattr(slave)
+            attributes[0] = attributes[1] = attributes[3] = 0
+            direct.termios.tcsetattr(slave, direct.termios.TCSANOW, attributes)
+            import select
+            received = []
+            def read_peer():
+                if select.select([master], [], [], 3)[0]:
+                    received.append(os.read(master, 10))
+            reader = threading.Thread(target=read_peer)
+            reader.start()
+            try:
+                direct.write_serial_switch(slave)
+            finally:
+                reader.join(timeout=4)
+            self.assertEqual(received, [direct.CDC_ECM_SWITCH])
+        finally:
+            os.close(master)
+            os.close(slave)
+
+    def test_background_preparation_does_not_authenticate_or_claim_ready(self):
+        output = io.StringIO()
+        with patch.object(sys, 'argv', ['helper', 'usb-prepare']), \
+             patch.object(direct, 'connection_lock', return_value=contextlib.nullcontext()) as lock, \
+             patch.object(direct, 'prepare_usb', return_value={}) as prepare, \
+             patch.object(direct, 'ioreg_devices', return_value=''), \
+             patch.object(direct, 'load_device', side_effect=AssertionError('background authentication')), \
+             contextlib.redirect_stdout(output):
+            direct.main()
+        lock.assert_called_once_with(timeout=0)
+        prepare.assert_called_once_with()
+        result = json.loads(output.getvalue())
+        self.assertFalse(result['usb_present'])
+        self.assertNotIn('ready', result)
+
+    def test_background_recovery_skips_busy_cross_process_lock(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(direct, 'ROOT', Path(temp)):
+            with direct.connection_lock():
+                started = time.monotonic()
+                with self.assertRaises(direct.DirectError):
+                    with direct.connection_lock(timeout=0):
+                        self.fail('concurrent recovery acquired delivery lock')
+                self.assertLess(time.monotonic() - started, .5)
+
+
 class UsbLinkTests(unittest.TestCase):
     NETWORK = ('+-o FMVDP51@00100000  <class IOUSBHostDevice>\n  "idProduct" = 5719\n  "USB Product Name" = "FMVDP51"\n'
                '  "idVendor" = 1221\n  +-o CDC Ethernet Control Model (ECM)@0\n  | +-o AppleUserECM\n'
@@ -843,6 +920,14 @@ class UsbLinkTests(unittest.TestCase):
              patch.object(direct.time, 'sleep'):
             self.assertTrue(REAL_RECOVER_USB_LINK(wait=0))
         reenumerate.assert_called_once_with()
+
+    def test_idle_snapshot_cannot_reset_a_link_that_recovers_during_observation(self):
+        with patch.object(direct, 'usb_link_stuck_now', return_value=False), \
+             patch.object(direct, 'usb_link_idle_now', side_effect=[True, False]), \
+             patch.object(direct, 'dns_sd_output', return_value=''), \
+             patch.object(direct.time, 'sleep'), \
+             patch.object(direct, 'reenumerate_quaderno', side_effect=AssertionError('recovered link reset')):
+            self.assertFalse(REAL_RECOVER_USB_LINK(wait=0))
 
     def test_connecting_switches_and_recovers_before_authenticating(self):
         order = []

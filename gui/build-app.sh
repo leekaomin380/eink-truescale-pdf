@@ -63,6 +63,7 @@ swiftc \
     "$MAC_DIR/FontSettings.swift" \
     "$MAC_DIR/MarkdownPasteEditor.swift" \
     "$MAC_DIR/QuickSendView.swift" \
+    "$MAC_DIR/USBRecovery.swift" \
     "$MAC_DIR/DeviceFilesView.swift" \
     "$MAC_DIR/GlobalHotkeys.swift" \
     "$MAC_DIR/DirectDelivery.swift" \

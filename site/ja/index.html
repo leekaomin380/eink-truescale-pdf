@@ -120,7 +120,7 @@
       "hasPart": {
         "@id": "https://leekaomin380.github.io/eink-truescale-pdf/ja/#faq"
       },
-      "dateModified": "2026-11-10",
+      "dateModified": "2026-11-12",
       "primaryImageOfPage": {
         "@type": "ImageObject",
         "url": "https://leekaomin380.github.io/eink-truescale-pdf/assets/og-card.png",
@@ -333,7 +333,8 @@
         <h2>更新履歴</h2>
         <p class="intro">Web サイトの更新と App のリリースを、新しい順に掲載しています。 <a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">GitHub で完全な変更履歴を見る</a></p>
         <ol class="releases">
-          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">Web サイト</a></span><time datetime="2026-11-10">2026-11-10</time></div><h3>読書のひとときを、明るく</h3><ul><li>トップページの写真を Katya Wolf / Pexels の読書シーンに変更。AI を使って露出と暗部を明るく調整し、元の写真も保存しています。</li><li>パソコンとスマートフォンに合わせて縦長写真の表示範囲と輪郭を調整。撮影者、ライセンス、加工記録を明記しました。</li><li>4 言語のページを同時に更新。今回は Web サイトの更新で、ダウンロードできる App は引き続き 1.3.0 です。</li><li>4 言語の検索用メタデータ、canonical・hreflang 検証、Web ページと App の構造化データを改善。写真とアイコンをレスポンシブ WebP で軽量化しました。</li></ul></li>
+          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md#source-update--2026-11-12">ソース更新</a></span><time datetime="2026-11-12">2026-11-12</time></div><h3>USB 接続の自動復旧</h3><ul><li>USB モード切替コマンドの送信後も接続表示が黄色のままになる問題を修正。実際の接続状態を確認し、失敗時は間隔を延ばして再試行します。</li><li>接続監視と送信で復旧処理を共通化。シリアル送信と復旧プロセスにタイムアウトを設け、送信中はバックグラウンド復旧を見送ります。</li><li>ローカルの障害テストと QUADERNO 実機で検証済みです。修正はソースに反映されています。ダウンロード版は引き続き 1.3.0 で、今回の修正はまだ含まれません。</li><li>4 言語の検索用メタデータ、canonical・hreflang 検証、Web ページと App の構造化データを改善。写真とアイコンをレスポンシブ WebP で軽量化しました。</li></ul></li>
+          <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md">Web サイト</a></span><time datetime="2026-11-10">2026-11-10</time></div><h3>読書のひとときを、明るく</h3><ul><li>トップページの写真を Katya Wolf / Pexels の読書シーンに変更。AI を使って露出と暗部を明るく調整し、元の写真も保存しています。</li><li>パソコンとスマートフォンに合わせて縦長写真の表示範囲と輪郭を調整。撮影者、ライセンス、加工記録を明記しました。</li><li>4 言語のページを同時に更新。今回は Web サイトの更新で、ダウンロードできる App は引き続き 1.3.0 です。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.3.0">1.3.0</a></span><time datetime="2026-11-07">2026-11-07</time></div><h3>クリップボードの忠実性、表組版、送信の堅牢化</h3><ul><li>「·」を含むファイル名で端末が「ファイルが削除されました」と誤報する問題を修正。厳密な UTF-8 でない応答でも処理が中断しなくなりました。</li><li>⌃1 がクリップボードのリッチ HTML を読み取り、HTML 表・TSV・GFM 表を正規化。プレーンテキストと数式はそのまま保持します。</li><li>複雑な表は内容量に応じた列幅、長い表はヘッダー付きで改ページ、広すぎる表はリストに降级。認証と組版を並列化して遅延を削減し、検証チェーンは短縮していません。</li><li>同時送信はキューで直列化し、USB リンク異常を個別に検出。タイムアウト上界、空 PDF の拒否、重複送信のスキップを追加しました。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.2">1.2.2</a></span><time datetime="2026-11-02">2026-11-02</time></div><h3>ショートカット、静かな Finder 送信、EPUB</h3><ul><li>⌃1 / ⌃2 を内蔵。Finder の右クリックで App のウインドウが開かなくなりました。</li><li>Finder の右クリックから EPUB を書籍組版で送信可能に。</li><li>スクリーンショットを文書名とページ番号で命名。ウインドウを閉じてもメニューバーに常駐。</li></ul></li>
           <li class="release"><div class="release-head"><span class="tag"><a href="https://github.com/leekaomin380/eink-truescale-pdf/releases/tag/v1.2.1">1.2.1</a></span><time datetime="2026-11-01">2026-11-01</time></div><h3>より静かなアイコン</h3><ul><li>グレースケールの紙と左上の斜体小文字 q に変更。サイトのアイコンと favicon も同じデザインに。</li></ul></li>

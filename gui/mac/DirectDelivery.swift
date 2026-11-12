@@ -54,6 +54,12 @@ private actor DeliveryQueue {
         await withCheckedContinuation { waiters.append($0) }
     }
 
+    func tryAcquire() -> Bool {
+        guard !busy else { return false }
+        busy = true
+        return true
+    }
+
     func release() {
         guard !waiters.isEmpty else { busy = false; return }
         waiters.removeFirst().resume()  // the slot passes directly to the next waiter
@@ -72,9 +78,16 @@ enum DirectDelivery {
     private static let queue = DeliveryQueue()
 
     static func run(_ arguments: [String], environment extra: [String: String] = [:],
+                    timeout: TimeInterval = 3600, background: Bool = false,
                     onProgress: (@Sendable (DeliveryProgress) -> Void)? = nil) async -> Result {
         onProgress?(DeliveryProgress(phase: "queued"))
-        await queue.acquire()
+        if background {
+            guard await queue.tryAcquire() else {
+                return Result(success: false, message: "USB recovery deferred: device operation in progress", details: "")
+            }
+        } else {
+            await queue.acquire()
+        }
         onProgress?(DeliveryProgress(phase: "connect"))
         // defer covers cancellation / early exit too: a forgotten release would wedge the queue.
         defer { Task { await queue.release() } }
@@ -91,7 +104,7 @@ enum DirectDelivery {
             let decoder = DeliveryProgressDecoder { event in onProgress?(event) }
             // stderr is drained separately: a PyInstaller hint or DeprecationWarning must not
             // corrupt the JSON-over-stdout contract (CFR §3 P2-3).
-            let outcome = ProcessRunner.run(process, mode: .separate, timeout: 3600,
+            let outcome = ProcessRunner.run(process, mode: .separate, timeout: timeout,
                                             stderrChunk: { decoder.feed($0) })
             let output = String(decoding: outcome.stdout, as: UTF8.self)
             let stderr = String(decoding: outcome.stderr, as: UTF8.self)
@@ -101,7 +114,7 @@ enum DirectDelivery {
             }
             if outcome.timedOut {
                 return Result(success: false, message: L("直连失败，请检查设备连接"),
-                              details: details + "\n[timeout 3600s]")
+                              details: details + "\n[timeout \(timeout)s]")
             }
             // The helper normally prints exactly one JSON object. A device file name may itself
             // contain a newline, so parse the whole stdout first; only if a helper prepends
