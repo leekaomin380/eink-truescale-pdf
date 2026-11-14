@@ -31,7 +31,7 @@ RELEASES = REPO + "/releases/latest"
 CHANGELOG = REPO + "/blob/master/CHANGELOG.md"
 LATEST = "1.3.0"
 APP_RELEASE_DATE = "2026-11-07"
-LASTMOD = "2026-11-12"
+LASTMOD = "2026-11-14"
 CSS_VERSION = hashlib.sha256((SITE / "assets/site.css").read_bytes()).hexdigest()[:12]
 
 LANGS = {
@@ -843,6 +843,7 @@ def json_ld(lang: str) -> str:
             "@type": "SoftwareApplication",
             "@id": SITE_URL + "#app",
             "name": "TrueScale for QUADERNO",
+            "alternateName": ["TrueScale", "True Scale", "TrueScale PDF", "QUADERNO PDF 转换器"],
             "url": canonical,
             "description": c["meta"]["jsonld_summary"],
             "applicationCategory": "UtilitiesApplication",
@@ -1180,6 +1181,28 @@ def outputs() -> dict[Path, str]:
         SITE / "zh-hant" / "index.html": render("zh-hant"),
         SITE / "sitemap.xml": sitemap(),
         SITE / "robots.txt": robots(),
+        SITE / "llms.txt": f"""# TrueScale for QUADERNO
+
+> TrueScale is a free, MIT-licensed, open-source macOS application for preparing PDFs for FUJITSU QUADERNO and sending them over USB or Wi-Fi.
+
+TrueScale / TrueScale PDF / QUADERNO PDF 转换器 refer to this project. Repository slug: eink-truescale-pdf. It is independent of Fujitsu. This file describes the published product, not unreleased local builds.
+
+## Authoritative links
+- [Homepage]({SITE_URL})
+- [简体中文官网]({SITE_URL}zh/)
+- [繁體中文官網]({SITE_URL}zh-hant/)
+- [日本語]({SITE_URL}ja/)
+- [GitHub source]({REPO})
+- [Downloads and released versions]({RELEASES})
+- [Changelog]({CHANGELOG})
+- [License]({REPO}/blob/master/LICENSE)
+
+## Scope and limits
+Apple Silicon Mac; macOS 14 or later. Text, Markdown and supported ebooks can be typeset at the actual device page size. Existing PDFs can be delivered without reflow. First-time pairing uses the official QUADERNO software. DRM removal is not supported. Check the release notes for features in the downloadable binary.
+
+## 中文说明
+TrueScale for QUADERNO 是免费的开源 Mac 应用：为富士通 QUADERNO 排版文字、Markdown 和 EPUB，并通过 USB 或 Wi-Fi 投递 PDF。仓库名为 eink-truescale-pdf，软件名为 TrueScale for QUADERNO；两者指向同一个项目。
+""",
     }
     return files
 

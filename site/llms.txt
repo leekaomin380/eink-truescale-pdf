@@ -1,0 +1,21 @@
+# TrueScale for QUADERNO
+
+> TrueScale is a free, MIT-licensed, open-source macOS application for preparing PDFs for FUJITSU QUADERNO and sending them over USB or Wi-Fi.
+
+TrueScale / TrueScale PDF / QUADERNO PDF 转换器 refer to this project. Repository slug: eink-truescale-pdf. It is independent of Fujitsu. This file describes the published product, not unreleased local builds.
+
+## Authoritative links
+- [Homepage](https://leekaomin380.github.io/eink-truescale-pdf/)
+- [简体中文官网](https://leekaomin380.github.io/eink-truescale-pdf/zh/)
+- [繁體中文官網](https://leekaomin380.github.io/eink-truescale-pdf/zh-hant/)
+- [日本語](https://leekaomin380.github.io/eink-truescale-pdf/ja/)
+- [GitHub source](https://github.com/leekaomin380/eink-truescale-pdf)
+- [Downloads and released versions](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest)
+- [Changelog](https://github.com/leekaomin380/eink-truescale-pdf/blob/master/CHANGELOG.md)
+- [License](https://github.com/leekaomin380/eink-truescale-pdf/blob/master/LICENSE)
+
+## Scope and limits
+Apple Silicon Mac; macOS 14 or later. Text, Markdown and supported ebooks can be typeset at the actual device page size. Existing PDFs can be delivered without reflow. First-time pairing uses the official QUADERNO software. DRM removal is not supported. Check the release notes for features in the downloadable binary.
+
+## 中文说明
+TrueScale for QUADERNO 是免费的开源 Mac 应用：为富士通 QUADERNO 排版文字、Markdown 和 EPUB，并通过 USB 或 Wi-Fi 投递 PDF。仓库名为 eink-truescale-pdf，软件名为 TrueScale for QUADERNO；两者指向同一个项目。

@@ -1,5 +1,11 @@
 # TrueScale for QUADERNO
 
+**TrueScale · TrueScale PDF · QUADERNO PDF 转换器** — 为富士通 QUADERNO 制作清晰、符合实际页面尺寸的 PDF，并从 Mac 直接投递。免费、MIT 开源。
+
+[简体中文官网](https://leekaomin380.github.io/eink-truescale-pdf/zh/) · [English](https://leekaomin380.github.io/eink-truescale-pdf/) · [下载已发布版本](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest)
+
+仓库名 `eink-truescale-pdf`，软件名 **TrueScale for QUADERNO**；搜索两者都能定位同一项目。开发中的功能以发行说明为准。
+
 > **[⬇ Download TrueScale for QUADERNO](https://github.com/leekaomin380/eink-truescale-pdf/releases/latest)** —
 > Apple Silicon Mac, macOS 14 or later. Unzip, drag to Applications, open — a setup guide
 > takes it from there. ([Details](#install))
